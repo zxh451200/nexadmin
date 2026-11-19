@@ -48,8 +48,11 @@ const (
 	errChannelNotFound        = errNotFound
 	errChannelInvalid         = "pay.PAY_INVALID_AMOUNT"
 	errChannelUnknownProvider = "pay.PAY_CHANNEL_UNAVAILABLE"
-	errChannelCodeTaken       = errStateConflict
-	errTenantRequired         = errTenantMismatch
+	// errChannelCodeTaken 是「新建渠道撞了已有编码」：与 PAY_STATE_CONFLICT（资金单
+	// 状态机冲突）是两码事——把渠道配置冲突报成资金单错误，用户会被引向完全错误的
+	// 排障方向（实际应该换编码或去编辑现有渠道）。
+	errChannelCodeTaken = "pay.PAY_CHANNEL_CODE_TAKEN"
+	errTenantRequired   = errTenantMismatch
 )
 
 // 回调审计 result 取值（契约 Callback.result）。

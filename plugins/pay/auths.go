@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -591,8 +592,8 @@ func (s *Service) QueryAuth(ctx context.Context, authNo string) (*Authorization,
 	return &a, nil
 }
 
-// ListAuths 分页列出预授权。
-func (s *Service) ListAuths(ctx context.Context, status, keyword string, page, pageSize int) ([]Authorization, int64, error) {
+// ListAuths 分页列出预授权（sort/desc 是表头排序参数，白名单：状态/时间）。
+func (s *Service) ListAuths(ctx context.Context, status, keyword, sort string, desc bool, page, pageSize int) ([]Authorization, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Authorization{})
 	if status != "" {
 		db = db.Where("status = ?", status)
@@ -606,7 +607,10 @@ func (s *Service) ListAuths(ctx context.Context, status, keyword string, page, p
 		return nil, 0, err
 	}
 	var rows []Authorization
-	if err := db.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	if err := db.Order(core.OrderBy(sort, desc, map[string]string{
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

@@ -11,6 +11,7 @@ import { DatePicker } from '@/framework/components/DatePicker'
 import { toDate } from '@/framework/components/pickers/dates'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import type { Column } from '@/framework/components/table/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -46,6 +47,8 @@ export default function RecyclePage() {
   const [appliedRange, setAppliedRange] = useState<{ from?: string; to?: string }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：默认删除时间倒序（与后端回退一致），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('deleted_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
 
   const { data, isLoading } = useRecycleList({
@@ -55,6 +58,8 @@ export default function RecyclePage() {
     type: typeApplied,
     from: appliedRange.from || undefined,
     to: appliedRange.to || undefined,
+    sort,
+    desc,
   })
   const restore = useRestore()
   const restoreBatch = useRestoreBatch()
@@ -117,6 +122,7 @@ export default function RecyclePage() {
     {
       key: 'name',
       title: t('recycle.col.name'),
+      sortKey: 'name',
       mobile: 'title',
       // 名称来自被删的任意实体（公告标题/字典标签/昵称）——截断 + 悬停看全名
       render: (r) => (
@@ -128,6 +134,7 @@ export default function RecyclePage() {
     {
       key: 'type',
       title: t('recycle.col.type'),
+      sortKey: 'type',
       mobile: 'sub',
       render: (r) => <Badge variant="secondary">{t(`recycle.type.${r.type}`)}</Badge>,
     },
@@ -135,6 +142,7 @@ export default function RecyclePage() {
     {
       key: 'deletedAt',
       title: t('recycle.col.deletedAt'),
+      sortKey: 'deleted_at',
       render: (r) => <span className="num">{fmtDateTime(r.deletedAt, i18n.language)}</span>,
     },
   ]
@@ -200,6 +208,7 @@ export default function RecyclePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="recycle"
         selection={{ selected, onChange: setSelected }}
         batchActions={(_ids) => (

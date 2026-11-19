@@ -15,6 +15,8 @@ import {
 } from '@/framework/components/i18n'
 import { FieldHint } from '@/framework/components/FieldHint'
 import { ConstantPicker } from '@/framework/components/ConstantPicker'
+import { LocationField } from '@/framework/map/LocationField'
+import '@/plugins/maps/map-provider'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
@@ -40,6 +42,7 @@ import {
   type SiteSettingsForm,
   type SocialLink,
   type SocialPlatform,
+  type WebsiteOffice,
 } from './api'
 
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
@@ -48,9 +51,10 @@ type SharedTextKey =
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme' | 'defaultLang'
   | 'defaultCurrency' | 'currencyRates'
   | 'staffCount' | 'annualRevenue' | 'mainMarkets' | 'responseTime'
-type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent' | 'establishedYear'> & {
+type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'purchaseEnabled' | 'messageNotifyEmail' | 'contactConsent' | 'establishedYear'> & {
   socials: SocialLink[]
   friendLinks: FriendLink[]
+  offices: WebsiteOffice[]
 }
 
 /** 社交平台下拉的顺序与文案；值集合与后端 socialPlatforms 一致。 */
@@ -306,6 +310,9 @@ function SettingsFormBody({
   const removeFriend = (i: number) =>
     onSharedChange({ ...shared, friendLinks: shared.friendLinks.filter((_, idx) => idx !== i) })
 
+  const patchOffice = (i: number, patch: Partial<WebsiteOffice>) =>
+    onSharedChange({ ...shared, offices: shared.offices.map((o, idx) => (idx === i ? { ...o, ...patch } : o)) })
+
   // 邮箱格式校验：设置侧此前没有（投稿侧有）；留空合法——联系邮箱选填
   const emailInvalid = shared.contactEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.contactEmail.trim())
   // 留言同意开着时政策地址必填，格式与后端 footerURLValid 同规则：站内路径/锚点或完整 http(s) 地址。
@@ -481,7 +488,7 @@ function SettingsFormBody({
                   crop="free"
                   disabled={sharedDisabled}
                   placeholder={t('plugin_website.placeholder.logoUrl', { defaultValue: '' })}
-                  previewClassName="size-9"
+                  previewBelow
                   aria-label={t('plugin_website.fields.logoUrl')}
                 />
               </SharedFieldShell>
@@ -493,7 +500,7 @@ function SettingsFormBody({
                   crop="free"
                   disabled={sharedDisabled}
                   placeholder={t('plugin_website.placeholder.faviconUrl', { defaultValue: '' })}
-                  previewClassName="size-9"
+                  previewBelow
                   aria-label={t('plugin_website.fields.faviconUrl')}
                 />
               </SharedFieldShell>
@@ -540,7 +547,7 @@ function SettingsFormBody({
                   crop={{ width: 1200, height: 630 }}
                   disabled={sharedDisabled}
                   placeholder={t('plugin_website.placeholder.ogImageUrl', { defaultValue: '' })}
-                  previewClassName="h-24 w-40 object-cover"
+                  previewBelow
                   aria-label={t('plugin_website.fields.ogImageUrl')}
                 />
                 {ogInvalid ? <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span> : null}
@@ -697,6 +704,55 @@ function SettingsFormBody({
                     />
                   </SharedFieldShell>
                 </div>
+                {/* 办公地点：联系页地点卡 + 地图打点（厂商按访客语言判定，Key 在「系统设置 → 地图服务」）。
+                    坐标用地图插件的位置字段选点，没装插件也能手填经纬度。 */}
+                <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium">{t('plugin_website.settings.offices')}</span>
+                      <span className="text-xs text-muted-foreground">{t('plugin_website.settings.officesHint')}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={sharedDisabled || shared.offices.length >= 10}
+                      onClick={() => onSharedChange({ ...shared, offices: [...shared.offices, { name: '', address: '', lng: 0, lat: 0 }] })}
+                    >
+                      <Plus aria-hidden="true" />
+                      {t('plugin_website.settings.officeAdd')}
+                    </Button>
+                  </div>
+                  {shared.offices.map((o, i) => (
+                    <div key={i} className="flex flex-col gap-2 rounded-md border border-border p-2.5">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={o.name}
+                          disabled={sharedDisabled}
+                          maxLength={100}
+                          placeholder={t('plugin_website.placeholder.officeName', { defaultValue: '' })}
+                          aria-label={t('plugin_website.fields.officeName')}
+                          onChange={(e) => patchOffice(i, { name: e.target.value })}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={sharedDisabled}
+                          aria-label={t('common.delete')}
+                          onClick={() => onSharedChange({ ...shared, offices: shared.offices.filter((_, j) => j !== i) })}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </Button>
+                      </div>
+                      <LocationField
+                        value={{ lng: o.lng, lat: o.lat, address: o.address }}
+                        onChange={(p) => patchOffice(i, { lng: p.lng, lat: p.lat, address: p.address ?? '' })}
+                        disabled={sharedDisabled}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
               <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl" hint={t('plugin_website.hint.qrCodeUrl', mediaHint)}>
                 <ImageUrlField
@@ -706,7 +762,8 @@ function SettingsFormBody({
                   crop="free"
                   disabled={sharedDisabled}
                   placeholder={t('plugin_website.placeholder.qrCodeUrl', { defaultValue: '' })}
-                  previewClassName="size-9 bg-background"
+                  previewClassName="bg-background"
+                  previewBelow
                   aria-label={t('plugin_website.fields.qrCodeUrl')}
                 />
               </SharedFieldShell>
@@ -838,6 +895,15 @@ function SettingsFormBody({
                 disabled={sharedDisabled}
                 onCheckedChange={(v) => onSharedChange({ ...shared, marketEnabled: v })}
               />
+              <SwitchRow
+                bare
+                className="px-3 py-2.5"
+                label={t('plugin_website.purchase.enabled')}
+                description={t('plugin_website.purchase.enabledHint')}
+                checked={shared.purchaseEnabled}
+                disabled={sharedDisabled}
+                onCheckedChange={(v) => onSharedChange({ ...shared, purchaseEnabled: v })}
+              />
             </div>
           ) : null}
         </section>
@@ -886,6 +952,7 @@ export default function SettingsPage() {
         qrCodeCaption: data.qrCodeCaption,
         icp: data.icp,
         marketEnabled: data.marketEnabled,
+        purchaseEnabled: data.purchaseEnabled ?? false,
         messageNotifyEmail: data.messageNotifyEmail,
         contactConsent: data.contactConsent,
         contactConsentUrl: data.contactConsentUrl ?? '',
@@ -896,6 +963,7 @@ export default function SettingsPage() {
         responseTime: data.responseTime ?? '',
         socials: data.socials ?? [],
         friendLinks: data.friendLinks ?? [],
+        offices: data.offices ?? [],
       })
     }
   }, [data, shared])

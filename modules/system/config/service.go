@@ -128,7 +128,7 @@ func checkKeyRange(key, v string) error {
 	return nil
 }
 
-// List 分页查询参数，按创建时间升序。
+// List 分页查询参数；未指定排序时按创建时间升序。
 func (s *Service) List(ctx context.Context, q ListQuery, page, size int) ([]Config, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Config{})
 	if kw := strings.ToLower(strings.TrimSpace(q.Keyword)); kw != "" {
@@ -149,7 +149,13 @@ func (s *Service) List(ctx context.Context, q ListQuery, page, size int) ([]Conf
 		return nil, 0, err
 	}
 	list := []Config{}
-	err := db.Order("created_at, id").Offset((page - 1) * size).Limit(size).Find(&list).Error
+	// 排序白名单：键名/类型/创建时间，白名单外回退 created_at
+	err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"name":       "name",
+		"key":        "config_key",
+		"type":       "config_type",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * size).Limit(size).Find(&list).Error
 	return list, total, err
 }
 

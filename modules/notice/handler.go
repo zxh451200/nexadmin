@@ -64,9 +64,11 @@ func (h *Handler) guard(c *gin.Context, ids ...idgen.ID) bool {
 // List GET /notices
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	q := ListQuery{Keyword: strings.TrimSpace(c.Query("keyword")),
 		Type: response.ParseList(c.Query("type"), response.MaxFilterValues), Level: response.ParseList(c.Query("level"), response.MaxFilterValues),
-		Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size}
+		Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
+		Sort: sortField, Desc: desc}
 	sc, ok := h.scope(c)
 	if !ok {
 		return

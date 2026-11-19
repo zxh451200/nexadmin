@@ -22,6 +22,10 @@
     "replyPlaceholder": "输入回复，回车发送，Shift+回车换行",
     "send": "发送",
     "attach": "发送图片或文件",
+    "kbd": {
+      "send": "发送",
+      "newline": "换行"
+    },
     "uploadFailed": "附件上传失败",
     "transfer": "转接",
     "transferTitle": "转接到坐席",
@@ -136,6 +140,7 @@
       "off": "开启桌面提醒",
       "unsupported": "当前浏览器不支持桌面通知",
       "denied": "未获得通知权限，可在浏览器设置里开启",
+      "test": "测试通知：桌面提醒已就绪",
       "from": "{{name}}：{{preview}}",
       "multi": "{{count}} 个会话有新消息",
       "view": "查看"

@@ -471,6 +471,7 @@ var pageTmpl = map[string]*template.Template{
 	"post":       mustPage("post"),
 	"products":   mustPage("products"),
 	"product":    mustPage("product"),
+	"order":      mustPage("order"),
 	"page":       mustPage("page"),
 	"sitemap":    mustPage("sitemap"),
 	"contact":    mustPage("contact"),
@@ -624,6 +625,23 @@ type siteView struct {
 	ContactSent  bool
 	ContactError string
 
+	// PurchaseEnabled：站点开关「产品在线购买」——产品详情页据此渲染「立即购买」；
+	// 订单状态页也用它（轮询前端只在开启时轮询，避免下线购买功能后旧链接死循环）。
+	PurchaseEnabled bool
+	// Order 是订单状态页的当前订单（/orders/:no）；其余页面为 nil。
+	Order *orderView
+	// OrderError 是无 JS 表单下单失败后 303 回商品页的错误码文案（orderErrorText 翻译）。
+	OrderError string
+	// Offices 是站点设置的办公地点列表（联系页渲染地点卡 + 地图）。
+	Offices []Office
+	// Faqs 是启用中的常见问题（首页 FAQ 板块）。
+	Faqs []Faq
+	// MapProvider 是联系页地图厂商：按访客语言判定（zh 系→天地图，其他→谷歌），
+	// 对应厂商未启用则回退另一个；"" = 不渲染地图（无配置或无地点）。
+	MapProvider string
+	// TiandituTK 是天地图浏览器端 tk（MapProvider = tianditu 时非空），公开站 JS 初始化用。
+	TiandituTK string
+
 	// Consent / ConsentURL：站点开启隐私同意勾选时的勾选项与政策地址。
 	Consent    bool
 	ConsentURL string
@@ -712,6 +730,22 @@ func (v *siteView) FxMoney(amount float64, from string) string {
 		return compactMoney(amount)
 	}
 	return v.fx.money(amount, from)
+}
+
+// CurrencyName 返回币种的本地化名称（zh 界面「美元」、en 界面 "US Dollar"）：
+// 语言-币种触发钮显示名称而不是代码（「简体中文-美元」/「English - US Dollar」）。
+func (v *siteView) CurrencyName(code string) string {
+	return currencyName(code, v.Lang.Code)
+}
+
+// orderView 是订单状态页（/orders/:no）的当前订单快照；金额是展示换算后的文本。
+type orderView struct {
+	OrderNo      string
+	ProductTitle string
+	Qty          int
+	AmountText   string
+	Status       string
+	PayURL       string
 }
 
 // TN 是按数量选单复数的文案：n==1 用 <key>.one，其余用 <key>.other。
@@ -902,6 +936,8 @@ func (v *siteView) JSStrings() template.JS {
 		// 或该国/州没有清单，退回手写」时的提示语，chatCardPhoneInvalid 是电话校验提示：
 		// 漏在清单外，英文站会退化成中文兜底
 		"chatCardCountryInput", "chatCardRegionInput", "chatCardCityInput", "chatCardPhoneInvalid",
+		// 产品在线购买：下单失败的提示语（msg('buyFailed', …) 的键）
+		"buyFailed",
 	} {
 		m[k] = v.T("site.js." + k)
 	}

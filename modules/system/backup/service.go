@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core"
 	"nexadmin/core/config"
 	"nexadmin/core/ctl"
 	logmod "nexadmin/modules/log"
@@ -276,14 +277,20 @@ func (s *Service) Status(ctx context.Context) (Status, error) {
 // ---- 列表 / 删除 ----
 
 // List 分页列出备份记录（新的在前）。
-func (s *Service) List(ctx context.Context, page, size int) ([]Record, int64, error) {
+func (s *Service) List(ctx context.Context, page, size int, sort string, desc bool) ([]Record, int64, error) {
 	var total int64
 	q := s.db.WithContext(ctx).Model(&Record{})
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var list []Record
-	err := q.Order("created_at DESC").Order("id DESC").Limit(size).Offset((page - 1) * size).Find(&list).Error
+	// 排序白名单：时间/大小/来源/状态，白名单外回退 created_at
+	err := q.Order(core.OrderBy(sort, desc, map[string]string{
+		"created_at": "created_at",
+		"size":       "size",
+		"source":     "source",
+		"status":     "status",
+	}, "created_at")).Limit(size).Offset((page - 1) * size).Find(&list).Error
 	return list, total, err
 }
 

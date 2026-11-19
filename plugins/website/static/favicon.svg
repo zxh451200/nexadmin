@@ -6,5 +6,11 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="16" fill="url(#g)"/>
-  <path d="M20 46V18l24 28V18" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 能量核心标：六边形容器 + 闪电核 + 轨道弧与卫星点（与后台 BrandMark 同一枚设计） -->
+  <g fill="none" stroke="#fff">
+    <path d="M54.2 19.2A25.6 25.6 0 0 1 50.1 50.1" stroke-opacity="0.45" stroke-width="2.25" stroke-linecap="round"/>
+    <path d="M32 13.5 48 22.8 48 41.3 32 50.5 16 41.3 16 22.8Z" stroke-width="3.25" stroke-linejoin="round"/>
+  </g>
+  <path d="M16 6l4 10h-4l3 10-9-12h5l-3-8z" fill="#fff" transform="translate(15.1 14) scale(1.125)"/>
+  <circle cx="50.1" cy="50.1" r="2.5" fill="#fff"/>
 </svg>

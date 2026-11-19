@@ -822,9 +822,11 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
   return (
     <div className="space-y-3">
       <Can perm="devicehub:control">
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="block space-y-1">
-            <span className="text-xs font-medium text-foreground">{t('plugin_devicehub.command.point')}</span>
+        {/* items-start：两列按标签顶部对齐。原来 items-end 让底边对齐，而左列多一行「当前值」、
+            右列出错时多一行校验提示，两列高度不等，控件与「下发」按钮就被顶成错位的一排。 */}
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-3">
+          <div className="shrink-0 space-y-1">
+            <span className="block text-xs font-medium text-foreground">{t('plugin_devicehub.command.point')}</span>
             <SimpleSelect
               className="w-56"
               aria-label={t('plugin_devicehub.command.point')}
@@ -832,8 +834,9 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
               onChange={setPickedId}
               options={writable.map((p) => ({ value: p.id, label: p.name }))}
             />
-            {/* 下达前得看见「现在是多少」：否则只能凭记忆填一个数，填错就是一台设备跑飞 */}
-            <span className="block text-[11px] text-muted-foreground">
+            {/* 下达前得看见「现在是多少」：否则只能凭记忆填一个数，填错就是一台设备跑飞。
+                min-h 占位，切换测点时整块高度不跳动 */}
+            <span className="block min-h-4 text-[11px] text-muted-foreground">
               {target
                 ? t('plugin_devicehub.command.current', {
                     value: target.lastTs
@@ -842,39 +845,43 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
                   })
                 : null}
             </span>
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs font-medium text-foreground">
+          </div>
+          <div className="shrink-0 space-y-1">
+            <span className="block text-xs font-medium text-foreground">
               {t('plugin_devicehub.command.value')}
               <RequiredMark />
             </span>
-            {target?.dataType === 'bool' ? (
-              // 开关量不给自由输入：只能填 0/1，让用户手打纯属制造一次报错
-              <SimpleSelect
-                className="w-32"
-                aria-label={t('plugin_devicehub.command.value')}
-                value={value}
-                onChange={setValue}
-                options={[
-                  { value: '1', label: '1 · ON' },
-                  { value: '0', label: '0 · OFF' },
-                ]}
-              />
-            ) : (
-              <Input
-                className="w-32"
-                value={value}
-                aria-invalid={showErrors && (valueMissing || valueNotBool)}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={t('plugin_devicehub.command.valuePlaceholder')}
-              />
-            )}
+            {/* 按钮与输入框同排：按钮跟着控件走，不会被下方的校验提示顶偏 */}
+            <div className="flex items-center gap-2">
+              {target?.dataType === 'bool' ? (
+                // 开关量不给自由输入：只能填 0/1，让用户手打纯属制造一次报错
+                <SimpleSelect
+                  className="w-32"
+                  aria-label={t('plugin_devicehub.command.value')}
+                  value={value}
+                  onChange={setValue}
+                  options={[
+                    { value: '1', label: '1 · ON' },
+                    { value: '0', label: '0 · OFF' },
+                  ]}
+                />
+              ) : (
+                <Input
+                  className="w-32"
+                  aria-label={t('plugin_devicehub.command.value')}
+                  value={value}
+                  aria-invalid={showErrors && (valueMissing || valueNotBool)}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder={t('plugin_devicehub.command.valuePlaceholder')}
+                />
+              )}
+              <Button onClick={() => void submit()} disabled={create.isPending}>
+                {t('plugin_devicehub.command.send')}
+              </Button>
+            </div>
             {showErrors && valueMissing ? <span className="block text-xs text-destructive">{t('plugin_devicehub.command.required')}</span> : null}
             {showErrors && valueNotBool ? <span className="block text-xs text-destructive">{t('plugin_devicehub.command.boolOnly')}</span> : null}
-          </label>
-          <Button onClick={() => void submit()} disabled={create.isPending}>
-            {t('plugin_devicehub.command.send')}
-          </Button>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">{t('plugin_devicehub.command.hint')}</p>
       </Can>

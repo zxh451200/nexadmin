@@ -49,8 +49,10 @@ func (h *handler) handlers(c *gin.Context) {
 // GET /plugins/cron/jobs?keyword=&handler=&enabled=&page=&pageSize=
 func (h *handler) listJobs(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	list, total, err := h.svc.ListJobs(c.Request.Context(), JobQuery{
 		Keyword: strings.TrimSpace(c.Query("keyword")), Handler: response.ParseList(c.Query("handler"), response.MaxFilterValues), Enabled: c.Query("enabled"),
+		Sort: sortField, Desc: desc,
 		Page: page, PageSize: size,
 	})
 	if err != nil {
@@ -151,8 +153,10 @@ func (h *handler) setJobsEnabled(c *gin.Context) {
 // GET /plugins/cron/logs?jobId=&status=&page=&pageSize=
 func (h *handler) listLogs(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	list, total, err := h.svc.ListLogs(c.Request.Context(), LogQuery{
-		JobIDs: response.ParseFilterIDs(c.Query("jobId"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
+		JobIDs: response.ParseFilterIDs(c.Query("jobId"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Sort: sortField, Desc: desc, Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)

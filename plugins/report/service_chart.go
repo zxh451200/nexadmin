@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -155,8 +156,8 @@ func (s *Service) SaveChart(ctx context.Context, id idgen.ID, f ChartForm) (*Cha
 	return &v, nil
 }
 
-// ListCharts 分页列出图表；datasetID 非 0 时按数据集过滤。
-func (s *Service) ListCharts(ctx context.Context, keyword string, datasetID idgen.ID, page, size int) ([]ChartView, int64, error) {
+// ListCharts 分页列出图表；datasetID 非 0 时按数据集过滤。表头排序白名单外回退默认的 id DESC。
+func (s *Service) ListCharts(ctx context.Context, keyword string, datasetID idgen.ID, sort string, desc bool, page, size int) ([]ChartView, int64, error) {
 	tx, err := s.scoped(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -174,7 +175,13 @@ func (s *Service) ListCharts(ctx context.Context, keyword string, datasetID idge
 	}
 	off, lim := pageOf(page, size)
 	var rows []Chart
-	if err := tx.Order("id DESC").Offset(off).Limit(lim).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/创建/更新时间，白名单外回退 id（与既有默认序一致）
+	if err := tx.Order(core.OrderBy(sort, desc, map[string]string{
+		"name":       "name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+		"id":         "id",
+	}, "id")).Offset(off).Limit(lim).Find(&rows).Error; err != nil {
 		return nil, 0, dbErr(err)
 	}
 	out := make([]ChartView, len(rows))

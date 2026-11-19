@@ -27,6 +27,30 @@
         {{end}}
       </ul>
 
+      {{/* 办公地点（站点设置可配，多个）：地点卡纯 HTML 可被收录；地图按访客语言
+          判定厂商（zh 系→天地图，其他→谷歌），对应厂商未启用时只渲染地点卡。 */}}
+      {{if .Offices}}
+      <div class="contact-offices">
+        <span class="contact-label contact-offices-title">{{.T "contact.offices"}}</span>
+        {{range .Offices}}
+        <div class="office-card">
+          {{if .Name}}<strong class="office-name">{{.Name}}</strong>{{end}}
+          {{if .Address}}<p class="office-address">{{.Address}}</p>{{end}}
+        </div>
+        {{end}}
+        {{if and .MapProvider (index .Offices 0).HasCoords}}
+        {{if eq .MapProvider "google"}}
+        {{/* 谷歌 iframe embed 无需 Key，访客直接可拖拽缩放 */}}
+        <iframe class="office-map" src="https://maps.google.com/maps?q={{(index .Offices 0).Lat}},{{(index .Offices 0).Lng}}&hl={{.Lang.HTMLLang}}&z=15&output=embed" loading="lazy" title="{{.T "contact.officeMap"}}"></iframe>
+        {{else}}
+        {{/* 天地图：浏览器 tk 由 maps 插件配置下发，API 脚本同步加载后 site.js 打点 */}}
+        <div class="office-map" data-office-map data-lng="{{(index .Offices 0).Lng}}" data-lat="{{(index .Offices 0).Lat}}" data-label="{{(index .Offices 0).Name}}"></div>
+        {{end}}
+        {{end}}
+      </div>
+      {{if eq .MapProvider "tianditu"}}<script src="https://api.tianditu.gov.cn/api?v=4.0&tk={{.TiandituTK}}"></script>{{end}}
+      {{end}}
+
       {{if .Socials}}
       <ul class="footer-social contact-social" aria-label="{{.T "layout.social"}}">
         {{range .Socials}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" aria-label="{{$.SocialLabel .Platform}}" data-tip="{{$.SocialLabel .Platform}}">{{socialIcon .Platform}}</a></li>{{end}}

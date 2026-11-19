@@ -68,8 +68,10 @@ func (h *handler) ctxActor(c *gin.Context) Actor {
 // GET /forms?keyword=&status=&page=&pageSize=
 func (h *handler) listForms(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	list, total, err := h.svc.ListForms(c.Request.Context(), FormQuery{
-		Keyword: strings.TrimSpace(c.Query("keyword")), Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
+		Keyword: strings.TrimSpace(c.Query("keyword")), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Sort: sortField, Desc: desc, Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)
@@ -283,10 +285,12 @@ func parseTime(s string, endOfDay bool) *time.Time {
 
 func subQuery(c *gin.Context, formID idgen.ID) SubQuery {
 	ver, _ := strconv.Atoi(c.Query("version"))
+	sortField, desc := response.ParseSort(c)
 	return SubQuery{
 		FormID: formID, Version: max(ver, 0), Username: strings.TrimSpace(c.Query("username")),
 		Field: c.Query("field"), Value: strings.TrimSpace(c.Query("value")),
 		From: parseTime(c.Query("from"), false), To: parseTime(c.Query("to"), true),
+		Sort: sortField, Desc: desc,
 	}
 }
 

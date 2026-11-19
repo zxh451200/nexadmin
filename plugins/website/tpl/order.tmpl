@@ -1,0 +1,27 @@
+{{define "content"}}
+{{/* 订单状态页：支付完成跳回这里，site.js 轮询状态端点直到终态。
+    pending 且有收银台地址时渲染「继续支付」；主题缺这张模板时回退 default。 */}}
+<article class="order-page" data-order-status data-order-no="{{.Order.OrderNo}}">
+  <div class="pd-wrap">
+    <nav class="pd-crumb" aria-label="{{.T "product.crumbAria"}}">
+      <a href="{{.Home}}">{{.T "layout.home"}}</a><span aria-hidden="true">›</span>
+      <a href="{{.URL "/products"}}">{{.T "products.title"}}</a>
+      <span aria-hidden="true">›</span><span aria-current="page">{{.TF "order.pageTitle" .Order.OrderNo}}</span>
+    </nav>
+
+    <h1 class="order-title">{{.TF "order.pageTitle" .Order.OrderNo}}</h1>
+    <dl class="order-meta">
+      <div><dt>{{.T "order.product"}}</dt><dd>{{.Order.ProductTitle}} × {{.Order.Qty}}</dd></div>
+      <div><dt>{{.T "order.amount"}}</dt><dd class="num">{{.Order.AmountText}}</dd></div>
+    </dl>
+
+    <p class="order-status" data-order-status-text>{{.T (print "order.status." .Order.Status)}}</p>
+
+    {{if and .Order.PayURL (eq .Order.Status "pending")}}
+    <a class="pd-cta pd-cta-primary order-pay" data-order-pay href="{{.Order.PayURL}}">{{.T "order.payNow"}}</a>
+    {{end}}
+
+    <p class="order-poll-hint" data-order-poll-hint hidden>{{.T "order.pollHint"}}</p>
+  </div>
+</article>
+{{end}}

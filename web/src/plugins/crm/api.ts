@@ -107,10 +107,6 @@ export interface CustomerQuery extends PageQuery {
   /** 建档时间范围（YYYY-MM-DD，含端点）。 */
   createdFrom?: string
   createdTo?: string
-  /** 排序字段（后端白名单：created_at / name / code / level / owner），空 = 默认 id DESC。 */
-  sortKey?: string
-  /** 排序方向；false = 倒序（默认）。 */
-  sort?: 'asc' | 'desc'
   /** 只看我的：owner = 当前账号（与角色数据范围叠加）。 */
   mine?: boolean
 }
@@ -125,8 +121,6 @@ export interface CustomerDraft {
   tag?: string[]
   createdFrom?: string
   createdTo?: string
-  sortKey?: string
-  sort?: 'asc' | 'desc'
 }
 
 export function toCustomerQuery(d: CustomerDraft): Omit<CustomerQuery, 'page' | 'pageSize'> {
@@ -139,8 +133,6 @@ export function toCustomerQuery(d: CustomerDraft): Omit<CustomerQuery, 'page' | 
     tag: d.tag?.length ? d.tag.join(',') : undefined,
     createdFrom: d.createdFrom,
     createdTo: d.createdTo,
-    sortKey: d.sortKey,
-    sort: d.sort,
   }
 }
 

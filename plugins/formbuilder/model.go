@@ -74,15 +74,19 @@ type PublishMeta struct {
 }
 
 // FormQuery 是表单列表的查询条件。
+// Sort/Desc 是表头排序参数（白名单见 store.ListForms）。
 type FormQuery struct {
 	Keyword string
 	// Status 逗号拼接多值（?status=draft,published），空 = 不限
 	Status   []string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }
 
 // SubQuery 是提交列表/导出的查询条件。Field/Value 是按字段内容筛选（在内存里匹配，见 service）。
+// Sort/Desc 是表头排序参数（白名单见 store.PageSubmissions）。
 type SubQuery struct {
 	FormID   idgen.ID
 	Version  int
@@ -91,6 +95,8 @@ type SubQuery struct {
 	To       *time.Time
 	Field    string
 	Value    string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }

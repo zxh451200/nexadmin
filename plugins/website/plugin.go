@@ -96,6 +96,19 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
 
+	// 站点订单（官网商品页在线购买）：管理端业务记录列表，资金状态在 pay 中台按 bizNo 对账。
+	g.GET("/site-orders", core.Perm("website:order"), core.Desc("站点订单列表"), h.listSiteOrders)
+	g.POST("/site-orders/export-async", core.Perm("website:order"), core.Desc("提交订单异步导出任务"), h.SiteOrderExportAsync)
+	g.DELETE("/site-orders", core.Perm("website:order"), core.Desc("批量删除订单"), h.deleteSiteOrders)
+
+	// 常见问题（FAQ）：首页板块的问答条目，与特性卡片同一范式。
+	g.GET("/faqs", core.Perm("website:faq"), core.Desc("常见问题列表"), h.listFaqs)
+	g.POST("/faqs/export-async", core.Perm("website:faq"), core.Desc("提交常见问题异步导出任务"), h.FaqExportAsync)
+	g.POST("/faqs", core.Perm("website:faq"), core.Desc("新增常见问题"), h.createFaq)
+	g.DELETE("/faqs", core.Perm("website:faq"), core.Desc("批量删除常见问题"), h.deleteFaqs)
+	g.PUT("/faqs/:id", core.Perm("website:faq"), core.Desc("更新常见问题"), h.updateFaq)
+	g.DELETE("/faqs/:id", core.Perm("website:faq"), core.Desc("删除常见问题"), h.deleteFaq)
+
 	// 主题：公开站外观由主题插件注册（RegisterTheme），设置页下拉切换；
 	// 演示内容导入挂在主题 id 上（insert-only，可重复调用）。
 	g.GET("/themes", core.Perm("website:setting"), core.Desc("已注册主题清单"), h.listThemes)
@@ -185,6 +198,13 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	job.Register(jobTypeMessageExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 		return m.service(d).RunMessageExportJob(ctx, j, report)
 	})
+	// 订单 / FAQ 异步导出：与商品/新闻/留言同一套机制（列与页面列表一致，进度在导出中心）。
+	job.Register(jobTypeOrderExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunSiteOrderExportJob(ctx, j, report)
+	})
+	job.Register(jobTypeFaqExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunFaqExportJob(ctx, j, report)
+	})
 	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
 	// 官网不再重复提供一份，否则又变成两份互不可见的清单。
@@ -201,6 +221,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if d.RootGroup != nil {
 		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log), previewKey: previewKeyOf(d), gw: h.gw}
 		site.uploadLocal = newIPLimiter(20, time.Minute)
+		// 在线购买的 IP 计数（每 IP 每分钟 10 次）：匿名资金入口，单独限流。
+		site.orderLocal = newIPLimiter(10, time.Minute)
 		// 留言是匿名写入口：阈值比普通页面紧（每 IP 每分钟 5 条），和页面浏览分开计数。
 		// 计数走共享 cache，多实例部署时是同一个桶；cache 没装配才退回进程内滑动窗口。
 		if d.Cache != nil {
@@ -300,6 +322,13 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.GET("/contact", h.contact)
 	g.HEAD("/contact", h.contact)
 	g.POST("/contact", h.contactSubmit)
+	// 产品在线购买（站点开关 PurchaseEnabled gating 在 handler 内）：匿名资金入口，
+	// 每 IP 单独限流（限流器在站点装配处建，跨语言分组共享）。POST 建单并返回收银台
+	// 地址；GET 是订单状态页（轮询自己的 JSON）。
+	g.POST("/website/orders", h.orderLocal.Middleware(), h.purchaseCreate)
+	g.GET("/website/orders/:no/status", h.purchaseStatus)
+	g.GET("/orders/:no", h.purchasePage)
+	g.HEAD("/orders/:no", h.purchasePage)
 	// 文档区：渲染 nexadmin/docs 内嵌的框架使用文档，内容中文为主，随语言分组走前缀。
 	g.GET("/docs", h.docsIndex)
 	g.HEAD("/docs", h.docsIndex)
@@ -345,6 +374,11 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 		}
 		event.Subscribe(event.SubscriberFunc(n.handle))
 		go n.run()
+		// 站点订单的支付结果：订阅 pay.* 按 bizType 过滤翻转本地状态；
+		// 事件丢失靠管理端 by-biz 补查（SyncSiteOrder）收敛。
+		event.Subscribe(event.SubscriberFunc(func(e event.Event) {
+			svc.handlePayEvent(e)
+		}))
 	})
 	return nil
 }

@@ -8,6 +8,7 @@ import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { StatCard } from '@/framework/components/StatCard'
 import { usePageLive, useRefreshOnResume } from '@/framework/hooks/use-page-active'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -42,13 +43,15 @@ export default function BackupPage() {
   const live = usePageLive()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：默认创建时间倒序（与后端回退一致），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [downloading, setDownloading] = useState<string | null>(null)
   const [selected, setSelected] = useState<string[]>([])
 
   // 有备份在进行时才轮询；页面不可见（切走标签 / 浏览器后台）时暂停，回来时立即刷新一次
   const status = useBackupStatus(live)
-  const list = useBackupList(page, pageSize, live)
+  const list = useBackupList(page, pageSize, sort, desc, live)
   const config = useBackupConfig()
   const create = useCreateBackup()
   const del = useDeleteBackup()
@@ -139,6 +142,7 @@ export default function BackupPage() {
     {
       key: 'createdAt',
       title: t('backup.col.time'),
+      sortKey: 'created_at',
       mobile: 'title',
       render: (r) => (
         <div className="min-w-0">
@@ -147,8 +151,8 @@ export default function BackupPage() {
         </div>
       ),
     },
-    { key: 'size', title: t('backup.col.size'), align: 'end', render: (r) => <span className="num">{r.status === 'success' ? formatSize(r.size) : '-'}</span> },
-    { key: 'source', title: t('backup.col.source'), mobile: 'sub', render: (r) => t(`backup.source.${r.source}`) },
+    { key: 'size', title: t('backup.col.size'), sortKey: 'size', align: 'end', render: (r) => <span className="num">{r.status === 'success' ? formatSize(r.size) : '-'}</span> },
+    { key: 'source', title: t('backup.col.source'), sortKey: 'source', mobile: 'sub', render: (r) => t(`backup.source.${r.source}`) },
     { key: 'status', title: t('backup.col.status'), render: statusBadge },
     {
       key: 'sha256',
@@ -234,6 +238,7 @@ export default function BackupPage() {
         data={rows}
         rowKey="id"
         loading={list.isLoading}
+        sort={sortProp}
         columnSettingsKey="backup-records"
         emptyText={restoreHelp}
         pagination={{

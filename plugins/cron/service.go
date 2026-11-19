@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -324,10 +325,13 @@ func view(j Job, now time.Time) JobView {
 
 // JobQuery 是任务列表筛选条件。
 // Handler 是逗号拼接多值（?handler=a,b），空切片 = 不限；Enabled 是 bool 三态参数。
+// Sort/Desc 是表头排序参数（白名单见 ListJobs）。
 type JobQuery struct {
 	Keyword        string
 	Handler        []string
 	Enabled        string
+	Sort           string
+	Desc           bool
 	Page, PageSize int
 }
 
@@ -350,7 +354,12 @@ func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, e
 		return nil, 0, err
 	}
 	var rows []Job
-	if err := tx.Order("created_at DESC, id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/处理器/时间，白名单外回退 created_at
+	if err := tx.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"name":       "name",
+		"handler":    "handler",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	now := time.Now()
@@ -485,9 +494,12 @@ func (s *Service) SetJobsEnabled(ctx context.Context, ids []idgen.ID, enabled bo
 
 // LogQuery 是执行日志筛选条件。
 // Status 逗号拼接多值；JobID 同样支持逗号多选（非法项忽略），空 = 不限。
+// Sort/Desc 是表头排序参数（白名单见 ListLogs）。
 type LogQuery struct {
 	JobIDs         []int64
 	Status         []string
+	Sort           string
+	Desc           bool
 	Page, PageSize int
 }
 
@@ -518,7 +530,14 @@ func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error
 		return nil, 0, err
 	}
 	var rows []Log
-	err = tx.Select(logListColumns).Order("started_at DESC, id DESC").
+	// 排序白名单：任务名/状态/尝试次数/耗时/时间，白名单外回退 started_at
+	err = tx.Select(logListColumns).Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"job_name":   "job_name",
+		"status":     "status",
+		"attempts":   "attempts",
+		"cost_ms":    "cost_ms",
+		"started_at": "started_at",
+	}, "started_at")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error
 	return rows, total, err
 }

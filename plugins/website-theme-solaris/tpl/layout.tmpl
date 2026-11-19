@@ -77,7 +77,7 @@
       {{/* 「设置语言和币种」弹层（对标阿里）：保存走共享 site.js，币种写 cookie
            由服务端换算价格，语言跳 Switch 地址。汇率表为空时回退纯语言菜单。 */}}
       <details class="sl-locale" data-locale-pop>
-        <summary aria-label="{{.T "locale.title"}}" data-locale-trigger>{{icon "globe"}}<span>{{.Lang.Short}}-{{.DisplayCurrency}}</span></summary>
+        <summary aria-label="{{.T "locale.title"}}" data-locale-trigger>{{icon "globe"}}<span>{{.Lang.Label}}-{{.CurrencyName .DisplayCurrency}}</span></summary>
         <div class="sl-pop" data-locale-menu>
           <h4>{{.T "locale.title"}}</h4>
           <p class="sl-pop-hint">{{.T "locale.hint"}}</p>
@@ -98,7 +98,7 @@
       </details>
       {{else}}
       <details class="sl-lang">
-        <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Short}}</summary>
+        <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Label}}</summary>
         <div class="sl-langmenu">
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>
@@ -134,13 +134,14 @@
     <nav class="sl-footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.URL "/products"}}">{{.T "theme.solaris.allProducts"}}</a>
-      <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
+      {{if .Posts}}<a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>{{end}}
     </nav>
     <nav class="sl-footer-col" aria-label="{{.T "layout.company"}}">
       <h4>{{.T "layout.company"}}</h4>
       {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
       <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
       <a href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
+      {{if .Posts}}<a href="{{.BaseURL}}/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>{{end}}
     </nav>
     <nav class="sl-footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>

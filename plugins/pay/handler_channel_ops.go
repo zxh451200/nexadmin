@@ -51,7 +51,8 @@ func (h *handler) syncRefund(c *gin.Context) {
 // GET /plugins/pay/outbox —— 出站箱分页列表（载荷只在详情接口回显）。
 func (h *handler) listOutbox(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	rows, total, err := h.svc.ListOutbox(c.Request.Context(), c.Query("status"), c.Query("keyword"), page, size)
+	sortField, desc := response.ParseSort(c)
+	rows, total, err := h.svc.ListOutbox(c.Request.Context(), c.Query("status"), c.Query("keyword"), sortField, desc, page, size)
 	if err != nil {
 		fail(c, err)
 		return

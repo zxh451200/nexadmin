@@ -22,6 +22,10 @@
     "replyPlaceholder": "Type a reply, Enter to send, Shift+Enter for a new line",
     "send": "Send",
     "attach": "Send an image or file",
+    "kbd": {
+      "send": "Send",
+      "newline": "New line"
+    },
     "uploadFailed": "Attachment upload failed",
     "transfer": "Transfer",
     "transferTitle": "Transfer to an agent",
@@ -136,6 +140,7 @@
       "off": "Enable desktop alerts",
       "unsupported": "This browser does not support desktop notifications",
       "denied": "Notification permission was not granted; enable it in browser settings",
+      "test": "Test notification: desktop alerts are ready",
       "from": "{{name}}: {{preview}}",
       "multi": "{{count}} conversations have new messages",
       "view": "View"

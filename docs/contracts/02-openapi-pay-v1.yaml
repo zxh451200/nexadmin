@@ -1336,7 +1336,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
     Conflict:
-      description: 当前状态不允许该操作（PAY_STATE_CONFLICT / PAY_REFUND_EXCEEDS / PAY_CHANNEL_ERROR / PAY_PAYOUT_SETTLEMENT_TAKEN）
+      description: 当前状态不允许该操作（PAY_STATE_CONFLICT / PAY_REFUND_EXCEEDS / PAY_CHANNEL_ERROR / PAY_PAYOUT_SETTLEMENT_TAKEN）；渠道编码重复为 PAY_CHANNEL_CODE_TAKEN
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -1383,6 +1383,7 @@ components:
             - PAY_SIGN_INVALID
             - PAY_CHANNEL_UNAVAILABLE
             - PAY_CHANNEL_ERROR
+            - PAY_CHANNEL_CODE_TAKEN
             - PAY_NOT_FOUND
             - PAY_TENANT_MISMATCH
             - PAY_IDEMPOTENCY_CONFLICT

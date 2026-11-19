@@ -201,6 +201,7 @@ type settingView struct {
 	Setting
 	Socials     []SocialLink `json:"socials"`
 	FriendLinks []FriendLink `json:"friendLinks"`
+	Offices     []Office     `json:"offices"`
 }
 
 func newSettingView(row *Setting) settingView {
@@ -208,7 +209,49 @@ func newSettingView(row *Setting) settingView {
 		Setting:     *row,
 		Socials:     parseSocials(row.SocialsJSON),
 		FriendLinks: parseFriendLinks(row.FriendLinksJSON),
+		Offices:     parseOffices(row.OfficesJSON),
 	}
+}
+
+// normalizeOffices 清洗办公地点列表：trim、上限 10 个、坐标钳到合法范围；
+// 名称与地址全空的行直接丢弃。
+func normalizeOffices(in []Office) ([]Office, error) {
+	const maxOffices = 10
+	out := make([]Office, 0, len(in))
+	for _, o := range in {
+		o.Name = strings.TrimSpace(o.Name)
+		o.Address = strings.TrimSpace(o.Address)
+		if o.Name == "" && o.Address == "" {
+			continue
+		}
+		if o.Name == "" {
+			return nil, response.BadRequest("website.office_name_required")
+		}
+		if o.Lat < -90 || o.Lat > 90 || o.Lng < -180 || o.Lng > 180 {
+			return nil, response.BadRequest("website.office_coords_invalid")
+		}
+		if !o.HasCoords() {
+			o.Lat, o.Lng = 0, 0
+		}
+		o.Address = trimLen(o.Address, 300)
+		out = append(out, o)
+	}
+	if len(out) > maxOffices {
+		return nil, response.BadRequest("website.office_too_many", maxOffices)
+	}
+	return out, nil
+}
+
+// parseOffices 从 JSON 文本解析办公地点（坏数据当空，不让一条脏 JSON 挡住渲染）。
+func parseOffices(raw string) []Office {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out []Office
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // ---- 站点设置（单行） ----
@@ -337,6 +380,18 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	row.AnnualRevenue = trimLen(f.AnnualRevenue, 64)
 	row.MainMarkets = trimLen(f.MainMarkets, 200)
 	row.ResponseTime = trimLen(f.ResponseTime, 32)
+	if f.PurchaseEnabled != nil {
+		row.PurchaseEnabled = *f.PurchaseEnabled
+	}
+	offices, err := normalizeOffices(f.Offices)
+	if err != nil {
+		return nil, err
+	}
+	if raw, merr := json.Marshal(offices); merr != nil {
+		return nil, merr
+	} else {
+		row.OfficesJSON = string(raw)
+	}
 	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
 		return nil, err
 	}
@@ -621,8 +676,25 @@ type ContentQuery struct {
 	Missings []string
 	// CategoryIDs 是新闻分类筛选（多选取并集）；页面列表不消费这个字段。
 	CategoryIDs []idgen.ID
-	Page        int
-	PageSize    int
+	// Sort/Desc 是表头排序参数（白名单各列表自定，见 ListPages/ListPosts/ListProducts）。
+	Sort     string
+	Desc     bool
+	Page     int
+	PageSize int
+}
+
+// contentOrder 把表头排序收口成安全片段：命中白名单用「列 + 方向」，未命中退回
+// 各列表的默认口径（保持既有排序语义不变）。列名永远从白名单出，查询值只当键用。
+func contentOrder(sort string, desc bool, allow map[string]string, fallback string) string {
+	col, ok := allow[strings.ToLower(strings.TrimSpace(sort))]
+	if !ok {
+		return fallback
+	}
+	dir := "DESC"
+	if !desc {
+		dir = "ASC"
+	}
+	return col + " " + dir + ", id DESC"
 }
 
 // contentStatusTx 追加页面/新闻的状态筛选：三种状态 SQL 语义各不同，多选时按 OR 组合。
@@ -697,8 +769,15 @@ func (s *Service) ListPages(ctx context.Context, q ContentQuery) ([]Page, int64,
 		return nil, 0, err
 	}
 	var rows []Page
-	// 排序字段在前（0 = 未设置排在最后），同序号内按更新时间倒序。
-	if err := tx.Order("CASE WHEN sort > 0 THEN 0 ELSE 1 END, sort ASC, updated_at DESC, id DESC").
+	// 默认口径：排序权重在前（0 = 未设置排在最后），同序号内按更新时间倒序。
+	// 表头排序（标题/状态/权重/时间）命中白名单时覆盖默认。
+	if err := tx.Order(contentOrder(q.Sort, q.Desc, map[string]string{
+		"title":      "title",
+		"status":     "published",
+		"sort":       "sort",
+		"updated_at": "updated_at",
+		"created_at": "created_at",
+	}, "CASE WHEN sort > 0 THEN 0 ELSE 1 END, sort ASC, updated_at DESC, id DESC")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
@@ -853,7 +932,14 @@ func (s *Service) ListPosts(ctx context.Context, q ContentQuery) ([]Post, int64,
 	}
 	var rows []Post
 	// 列表要展示分类徽标，整页一次带出；关联行数远小于页面行数，不构成 N+1。
-	if err := tx.Preload("Categories").Preload("Tags").Order("updated_at DESC").
+	// 表头排序（标题/状态/浏览量/时间）命中白名单时覆盖默认「最近更新在前」。
+	if err := tx.Preload("Categories").Preload("Tags").Order(contentOrder(q.Sort, q.Desc, map[string]string{
+		"title":      "title",
+		"status":     "published",
+		"views":      "views",
+		"updated_at": "updated_at",
+		"created_at": "created_at",
+	}, "updated_at DESC, id DESC")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
@@ -942,9 +1028,9 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	// 正文与关联一起写：分类挂一半算保存失败，界面上重新来一遍比解释一半成功容易。
 	// 标签也在事务里找或建：新闻没存上却长出一个新标签，是没人会来清理的脏数据。
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 覆盖前留档（同 workflow 定义版本）：旧行进版本历史表，正文没变不重复存。
+		// 覆盖前留档（同 workflow 定义版本）：旧行进版本历史表，正文与译文都没变不重复存。
 		if updating {
-			if _, err := archivePostVersion(ctx, tx, &prev, row.Content); err != nil {
+			if _, err := archivePostVersion(ctx, tx, &prev, row.Content, row.I18nJSON); err != nil {
 				return err
 			}
 		}
@@ -1245,8 +1331,10 @@ func editorName(ctx context.Context) string {
 // 正文指纹没变就不重复存——只挪标题/分类的历史没有回看价值，还会白占保留额度；
 // 版本号 = 该新闻现有最大 version+1（滚动丢弃后表行数不等于最大版本号，不能拿行号或下标发号）。
 // 超过上限时删掉最旧的整段，保留最近 maxPostVersions 条。返回本次落的版本号（没存给 0）。
-func archivePostVersion(ctx context.Context, tx *gorm.DB, prev *Post, newContent string) (int, error) {
-	if contentFingerprint(prev.Content) == contentFingerprint(newContent) {
+func archivePostVersion(ctx context.Context, tx *gorm.DB, prev *Post, newContent, newI18n string) (int, error) {
+	// 指纹同时覆盖原文与译文（双语站改的是译文正文时也要留档）；
+	// 只挪标题/分类的历史没有回看价值，仍不重复存。
+	if contentFingerprint(prev.Content+"\x00"+prev.I18nJSON) == contentFingerprint(newContent+"\x00"+newI18n) {
 		return 0, nil
 	}
 	var maxVer int
@@ -2041,7 +2129,11 @@ func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, 
 		return nil, 0, err
 	}
 	var rows []Message
-	if err := tx.Order("created_at DESC, id DESC").
+	// 表头排序（状态/时间）命中白名单时覆盖默认「最新留言在前」。
+	if err := tx.Order(contentOrder(q.Sort, q.Desc, map[string]string{
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at DESC, id DESC")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}

@@ -133,7 +133,7 @@ export default function OperLogPage() {
     { key: 'type', title: t('operLog.col.type'), render: (r) => <DictTag dict="oper_type" value={r.type} />, mobile: 'sub' },
     { key: 'operator', title: t('operLog.col.operator'), sortKey: 'operator' },
     { key: 'ip', title: t('operLog.col.ip'), render: (r) => <span className="num">{r.ip}</span> },
-    { key: 'status', title: t('operLog.col.status'), sortKey: 'status', render: (r) => <DictTag dict="login_status" value={r.status} /> },
+    { key: 'status', title: t('operLog.col.status'), render: (r) => <DictTag dict="login_status" value={r.status} /> },
     { key: 'costMs', title: t('operLog.col.cost'), sortKey: 'cost_ms', align: 'end', render: (r) => <span className="num">{r.costMs} ms</span> },
     { key: 'createdAt', title: t('operLog.col.time'), sortKey: 'created_at', render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
   ]

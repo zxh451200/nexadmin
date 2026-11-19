@@ -27,7 +27,11 @@ export function SharedFieldShell({
   const { t } = useTranslation()
   const { isSource } = useLocaleForm()
   return (
-    <label className={cn('flex flex-col gap-1 text-sm', className)}>
+    // 用 div 而非 label：children 里是 input + 多个 button/a + 说明文字（VideoUrlField、
+    // ImagesField 等复合控件），label 内嵌交互元素既是无效 HTML，又会把说明文字上的
+    // 鼠标按下转发给内部 input，导致这段提示文字拖选时焦点跳进输入框、复制不到。
+    // 各控件都自带 aria-label，不依赖 label 关联，改 div 不影响可访问性。
+    <div className={cn('flex flex-col gap-1 text-sm', className)}>
       {/* min-h-7：与 LocalizedField 的标签行等高，两列表单的输入框才能对齐 */}
       <span className={cn('inline-flex min-h-7 items-center gap-1.5', !isSource && 'text-muted-foreground')}>
         <span className="inline-flex items-baseline">
@@ -42,6 +46,6 @@ export function SharedFieldShell({
         ) : null}
       </span>
       {children}
-    </label>
+    </div>
   )
 }

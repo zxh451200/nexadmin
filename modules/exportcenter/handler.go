@@ -143,9 +143,11 @@ func (h *handler) list(c *gin.Context) {
 		return
 	}
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	rows, total, err := h.m.List(c.Request.Context(), a, job.Filter{
 		Types:    response.ParseList(c.Query("type"), response.MaxFilterValues),
 		Statuses: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Sort:     sortField, Desc: desc,
 		Page:     page, PageSize: size,
 	}, all)
 	if err != nil {

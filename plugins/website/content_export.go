@@ -23,6 +23,8 @@ import (
 const (
 	jobTypePostExport    = "website.post-export"
 	jobTypeMessageExport = "website.message-export"
+	jobTypeOrderExport   = "website.order-export"
+	jobTypeFaqExport     = "website.faq-export"
 	// contentExportMax 是单次导出的行数上限（任务内上限：超过整个任务失败并提示缩小范围）。
 	contentExportMax = 50000
 	xlsxContentType  = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -183,7 +185,134 @@ func messageStatusText(st string) string {
 	return st
 }
 
-// submitContentExport 是新闻 / 留言导出提交端点共用的流程。
+// orderExportParams 是订单导出任务参数（筛选与列表 query 同契约）。
+type orderExportParams struct {
+	Keyword string `json:"keyword,omitempty"`
+	Status  string `json:"status,omitempty"`
+	ActorID int64  `json:"actorId"`
+}
+
+func (p orderExportParams) query() SiteOrderQuery {
+	statuses := response.ParseList(p.Status, response.MaxFilterValues)
+	for _, st := range statuses {
+		if !ValidOrderStatus(st) {
+			return SiteOrderQuery{}
+		}
+	}
+	return SiteOrderQuery{Keyword: p.Keyword, Status: statuses}
+}
+
+// faqExportParams 是 FAQ 导出任务参数（筛选与列表 query 同契约）。
+type faqExportParams struct {
+	Keyword string `json:"keyword,omitempty"`
+	Enabled string `json:"enabled,omitempty"`
+	ActorID int64  `json:"actorId"`
+}
+
+func (p faqExportParams) query() FaqQuery {
+	return FaqQuery{Keyword: p.Keyword, Enabled: p.Enabled}
+}
+
+// RunSiteOrderExportJob 把筛选后的订单写成 xlsx：列与订单列表一致。
+func (s *Service) RunSiteOrderExportJob(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+	var p orderExportParams
+	if err := j.Decode(&p); err != nil {
+		return job.ResultFile{}, job.Errorf("任务参数无效")
+	}
+	tx := siteOrderFilter(s.db.WithContext(ctx).Model(&SiteOrder{}), p.query())
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return job.ResultFile{}, err
+	}
+	if total > contentExportMax {
+		return job.ResultFile{}, job.Errorf("匹配到 %d 条订单，超过导出上限 %d 条，请缩小筛选范围后重试", total, contentExportMax)
+	}
+	var rows []SiteOrder
+	if err := tx.Order("id DESC").Limit(contentExportMax).Find(&rows).Error; err != nil {
+		return job.ResultFile{}, err
+	}
+	report(0, fmt.Sprintf("共 %d 行", len(rows)))
+	return job.WriteResult(ctx, j, fmt.Sprintf("site-orders-%s.xlsx", time.Now().Format("20060102")), xlsxContentType, func(w io.Writer) error {
+		x := excel.NewWriter(w)
+		sh, err := x.NewSheet("站点订单", excel.SheetOptions{Header: []string{
+			"订单号", "商品", "数量", "定价币种", "定价金额", "收款币种", "收款金额", "买家邮箱", "买家电话", "状态", "下单时间",
+		}})
+		if err != nil {
+			return err
+		}
+		for i := range rows {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			o := &rows[i]
+			status := o.Status
+			switch o.Status {
+			case OrderPending:
+				status = "待支付"
+			case OrderPaid:
+				status = "已支付"
+			case OrderFailed:
+				status = "支付失败"
+			case OrderClosed:
+				status = "已关闭"
+			}
+			if err := sh.WriteRow(
+				o.OrderNo, o.ProductTitle, o.Qty,
+				o.Currency, float64(o.AmountMinor)/100, o.PayCurrency, float64(o.PayAmountMinor)/100,
+				o.BuyerEmail, o.BuyerPhone, status, o.CreatedAt.In(time.Local),
+			); err != nil {
+				return err
+			}
+			report((i+1)*100/max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
+		}
+		return x.Close()
+	})
+}
+
+// RunFaqExportJob 把筛选后的 FAQ 写成 xlsx：列与 FAQ 列表一致。
+func (s *Service) RunFaqExportJob(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+	var p faqExportParams
+	if err := j.Decode(&p); err != nil {
+		return job.ResultFile{}, job.Errorf("任务参数无效")
+	}
+	tx := faqFilter(s.db.WithContext(ctx).Model(&Faq{}), p.query())
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return job.ResultFile{}, err
+	}
+	if total > contentExportMax {
+		return job.ResultFile{}, job.Errorf("匹配到 %d 条常见问题，超过导出上限 %d 条，请缩小筛选范围后重试", total, contentExportMax)
+	}
+	var rows []Faq
+	if err := tx.Order("sort ASC, id DESC").Limit(contentExportMax).Find(&rows).Error; err != nil {
+		return job.ResultFile{}, err
+	}
+	report(0, fmt.Sprintf("共 %d 行", len(rows)))
+	return job.WriteResult(ctx, j, fmt.Sprintf("faqs-%s.xlsx", time.Now().Format("20060102")), xlsxContentType, func(w io.Writer) error {
+		x := excel.NewWriter(w)
+		sh, err := x.NewSheet("常见问题", excel.SheetOptions{Header: []string{"问题", "答案", "排序", "状态", "更新时间"}})
+		if err != nil {
+			return err
+		}
+		for i := range rows {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			f := &rows[i]
+			status := "已停用"
+			if f.Enabled {
+				status = "展示中"
+			}
+			if err := sh.WriteRow(f.Question, f.Answer, f.Sort, status, f.UpdatedAt.In(time.Local)); err != nil {
+				return err
+			}
+			report((i+1)*100/max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
+		}
+		return x.Close()
+	})
+}
+
+// submitContentExport 是新闻 / 留言 / 订单 / FAQ 导出提交端点共用的流程。
 func submitContentExport(c *gin.Context, jobType string, owner idgen.ID, params any) {
 	m := job.Default()
 	if m == nil {
@@ -223,4 +352,24 @@ func (h *handler) MessageExportAsync(c *gin.Context) {
 		p.ActorID, owner = int64(cl.UserID), cl.UserID
 	}
 	submitContentExport(c, jobTypeMessageExport, owner, p)
+}
+
+// SiteOrderExportAsync POST /site-orders/export-async
+func (h *handler) SiteOrderExportAsync(c *gin.Context) {
+	p := orderExportParams{Keyword: c.Query("keyword"), Status: c.Query("status")}
+	var owner idgen.ID
+	if cl := auth.ClaimsFrom(c); cl != nil {
+		p.ActorID, owner = int64(cl.UserID), cl.UserID
+	}
+	submitContentExport(c, jobTypeOrderExport, owner, p)
+}
+
+// FaqExportAsync POST /faqs/export-async
+func (h *handler) FaqExportAsync(c *gin.Context) {
+	p := faqExportParams{Keyword: c.Query("keyword"), Enabled: c.Query("enabled")}
+	var owner idgen.ID
+	if cl := auth.ClaimsFrom(c); cl != nil {
+		p.ActorID, owner = int64(cl.UserID), cl.UserID
+	}
+	submitContentExport(c, jobTypeFaqExport, owner, p)
 }

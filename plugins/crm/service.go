@@ -526,8 +526,8 @@ type CustomerQuery struct {
 	Tag         []string // 标签（逗号边界匹配，多个取并集）
 	CreatedFrom string   // 建档时间下限（YYYY-MM-DD，含端点）
 	CreatedTo   string   // 建档时间上限（YYYY-MM-DD，含端点）
-	SortKey     string   // 排序字段（白名单见 customerSortCols，空 = 默认 id DESC）
-	SortAsc     bool
+	Sort        string   // 排序字段（白名单见 customerSortCols，空 = 默认 id DESC），与全站 ?sort=&desc= 同约定
+	Desc        bool
 	Scope       *datascope.Scope
 	Mine        bool // 只看我的：owner = 当前账号（与角色范围叠加）
 	Page        int
@@ -546,12 +546,12 @@ var customerSortCols = map[string]string{
 
 // orderOf 把排序参数收口成安全片段：未知键退回默认 id DESC（新建的在前，历史口径不变）。
 func (q CustomerQuery) orderOf() string {
-	col, ok := customerSortCols[q.SortKey]
+	col, ok := customerSortCols[q.Sort]
 	if !ok {
 		return "id DESC"
 	}
 	dir := " DESC"
-	if q.SortAsc {
+	if !q.Desc {
 		dir = " ASC"
 	}
 	return col + dir + ", id DESC"
@@ -877,10 +877,33 @@ type OpportunityQuery struct {
 	Keyword    string
 	CustomerID idgen.ID
 	Stage      []string // 逗号拼接多值，空 = 不限
+	Sort       string   // 排序字段（白名单见 opportunitySortCols，空 = 默认 id DESC），与全站 ?sort=&desc= 同约定
+	Desc       bool
 	Scope      *datascope.Scope
 	Mine       bool // 只看我的：owner = 当前账号（与角色范围叠加）
 	Page       int
 	PageSize   int
+}
+
+// opportunitySortCols 是商机列表排序白名单：列名永远从这里出，查询参数只当键用。
+var opportunitySortCols = map[string]string{
+	"title":        "title",
+	"amount_minor": "amount_minor",
+	"owner":        "owner",
+	"created_at":   "created_at",
+}
+
+// orderOf 把排序参数收口成安全片段：未知键退回默认 id DESC（新建的在前，历史口径不变）。
+func (q OpportunityQuery) orderOf() string {
+	col, ok := opportunitySortCols[q.Sort]
+	if !ok {
+		return "id DESC"
+	}
+	dir := " DESC"
+	if !q.Desc {
+		dir = " ASC"
+	}
+	return col + dir + ", id DESC"
 }
 
 // ListOpportunities 分页列出线索/商机。受限操作者按 owner（账号）+ 所属部门裁剪。
@@ -910,7 +933,7 @@ func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]
 		return nil, 0, err
 	}
 	var rows []Opportunity
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	if err := db.Order(q.orderOf()).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	if err := s.fillCustomerBrief(ctx, rows); err != nil {

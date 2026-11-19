@@ -86,6 +86,27 @@ menus:
     icon: Inbox
     sort: 6
     keep_alive: true
+  # 常见问题：首页 FAQ 板块的数据源。
+  - parent: /website
+    type: menu
+    title: plugin_website.menu.faq
+    path: /website/faq
+    component: plugins/website/FaqPage
+    perm: website:faq
+    icon: CircleHelp
+    sort: 6
+    keep_alive: true
+  # 站点订单：官网商品页在线购买（PurchaseEnabled 开关）的成交记录；资金状态
+  # 在「支付中台」按业务单号（SO…）对账，这里只管业务侧列表。
+  - parent: /website
+    type: menu
+    title: plugin_website.menu.orders
+    path: /website/orders
+    component: plugins/website/SiteOrdersPage
+    perm: website:order
+    icon: ReceiptText
+    sort: 4
+    keep_alive: true
   # 外链菜单：在新标签页打开公开官网（生产为同源根路径；开发由前端拼后端端口）。
   # 不经过前端路由，所以不需要 component；perm 决定哪些角色能看到这个入口。
   # sort 排在第一：进官网组先看到「打开网站」这个出口，再进内容管理。

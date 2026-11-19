@@ -74,7 +74,15 @@ func (s *Service) ListProducts(ctx context.Context, q ContentQuery) ([]Product, 
 	}
 	var rows []Product
 	// 列表要展示类目徽标，整页一次带出；关联行数远小于产品行数，不构成 N+1。
-	if err := tx.Preload("Categories").Order("updated_at DESC, id DESC").
+	// 表头排序（标题/状态/浏览量/价格/时间）命中白名单时覆盖默认「最近更新在前」。
+	if err := tx.Preload("Categories").Order(contentOrder(q.Sort, q.Desc, map[string]string{
+		"title":      "title",
+		"status":     "status",
+		"views":      "views",
+		"price":      "price_min",
+		"updated_at": "updated_at",
+		"created_at": "created_at",
+	}, "updated_at DESC, id DESC")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
@@ -1245,6 +1253,7 @@ func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLin
 			markSeen(id)
 			return
 		}
+		parentIdx := len(out)
 		out = append(out, productCatLink{
 			Name:        c.Title,
 			Slug:        c.Slug,
@@ -1252,11 +1261,17 @@ func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLin
 			ActiveTrail: trail[id],
 			Depth:       depth,
 			Parent:      parent,
-			HasChildren: len(children[id]) > 0,
+			// 先留空，等子节点走完再回填：有子类目记录 ≠ 有子类目露出。
+			HasChildren: false,
 			Count:       c.ProductCount,
 		})
 		for _, child := range children[id] {
 			walk(child, depth+1, c.Slug)
+		}
+		// 子类目全是空类目时上面会整枝跳过（不挂空节点），此时若还标 HasChildren，
+		// 前台就是「有个 › 箭头、点开/悬停是空的」——按实际渲染出的子节点数回填。
+		if len(out) > parentIdx+1 {
+			out[parentIdx].HasChildren = true
 		}
 	}
 	for _, idx := range top {

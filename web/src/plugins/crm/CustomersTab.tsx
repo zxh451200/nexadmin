@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDownUp, CalendarClock, ChevronDown, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, SlidersHorizontal, Tag as TagIcon, Trash2, Upload, UserMinus, X } from 'lucide-react'
+import { CalendarClock, ChevronDown, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, SlidersHorizontal, Tag as TagIcon, Trash2, Upload, UserMinus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -79,7 +79,7 @@ const STATUSES = ['active', 'inactive'] as const
 // 等级是收口过的三档；历史/导入数据里的其它值在编辑时仍原样保留。
 const LEVELS = ['A', 'B', 'C'] as const
 
-// 排序白名单与后端 customerSortCols 同一套键；created_at 是默认口径（新建在前），仍列出可选
+// 表头排序字段与后端 customerSortCols 同一套键；不在白名单里的值后端回退默认 id DESC
 const SORT_KEYS = ['created_at', 'name', 'code', 'level', 'owner'] as const
 
 // 客户类型与证件类型：与后端 TypeSet / IdTypeSet 同一套码。
@@ -919,9 +919,10 @@ export function CustomersTab() {
   const [params, setParams] = useSearchParams()
   // URL 是筛选/排序/页码的真源初值：深链与刷新都从 ?keyword=…&mine=1&page=2 恢复同一份视图。
   // 之后状态变化写回 URL（replace，不压历史栈）。
+  // 兼容旧链接：?sortKey=<字段>&sort=asc 是表头排序之前的旧参数形态，照旧解析。
   const initial = useMemo(() => {
     const d: CustomerDraft = {}
-    for (const key of ['keyword', 'createdFrom', 'createdTo', 'sortKey'] as const) {
+    for (const key of ['keyword', 'createdFrom', 'createdTo'] as const) {
       const v = params.get(key)
       if (v) d[key] = v
     }
@@ -929,9 +930,12 @@ export function CustomersTab() {
       const v = params.get(key)
       if (v) d[key] = v.split(',').filter(Boolean)
     }
-    if (params.get('sort') === 'asc') d.sort = 'asc'
+    const newSort = params.get('sort')
+    const legacyKey = params.get('sortKey')
+    const sort = newSort && (SORT_KEYS as readonly string[]).includes(newSort) ? newSort : legacyKey || ''
+    const desc = legacyKey ? params.get('sort') !== 'asc' : params.get('desc') !== 'false'
     const owner = params.get('pool') === '1' ? POOL : params.get('mine') === '1' ? MINE : ALL
-    return { d, owner, page: Math.max(1, Number(params.get('page')) || 1) }
+    return { d, owner, page: Math.max(1, Number(params.get('page')) || 1), sort, desc }
     // 只在挂载时读一次：之后 URL 跟着状态走，不再反向驱动状态
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -944,6 +948,9 @@ export function CustomersTab() {
   const [moreOpen, setMoreOpen] = useState(false)
   const [page, setPage] = useState(initial.page)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存（改排序不重置筛选条件）；空 = 默认 id DESC（新建在前）
+  const [sort, setSort] = useState(initial.sort)
+  const [desc, setDesc] = useState(initial.desc)
   const [formOpen, setFormOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -978,6 +985,8 @@ export function CustomersTab() {
     mine: ownerFilter === MINE,
     page,
     pageSize,
+    sort: sort || undefined,
+    desc,
   })
   const { data: pool, isLoading: poolLoading } = useCustomerPool({
     keyword: filters.keyword, type: filters.type, status: filters.status, source: filters.source,
@@ -986,7 +995,7 @@ export function CustomersTab() {
   })
   const inPool = ownerFilter === POOL
   // 「更多筛选」上的数字：收起时也能看出低频条件里还有生效项，避免以为筛选被重置了。
-  const moreActive = [draft.source, draft.level, draft.tag, draft.createdFrom, draft.createdTo, draft.sortKey].filter((v) => (Array.isArray(v) ? v.length : v)).length
+  const moreActive = [draft.source, draft.level, draft.tag, draft.createdFrom, draft.createdTo].filter((v) => (Array.isArray(v) ? v.length : v)).length
   const data = inPool ? pool : owned
   const isLoading = inPool ? poolLoading : ownedLoading
   const remove = useDeleteCustomer()
@@ -1004,16 +1013,17 @@ export function CustomersTab() {
   // 状态 → URL（replace 不压历史栈）：分享/刷新/切页回来都是同一份视图
   useEffect(() => {
     const p = new URLSearchParams()
-    for (const key of ['keyword', 'type', 'status', 'source', 'level', 'tag', 'createdFrom', 'createdTo', 'sortKey'] as const) {
+    for (const key of ['keyword', 'type', 'status', 'source', 'level', 'tag', 'createdFrom', 'createdTo'] as const) {
       const v = filters[key]
       if (typeof v === 'string' && v) p.set(key, v)
     }
-    if (filters.sort === 'asc') p.set('sort', 'asc')
+    if (sort) p.set('sort', sort)
+    if (sort) p.set('desc', String(desc))
     if (ownerFilter === MINE) p.set('mine', '1')
     if (ownerFilter === POOL) p.set('pool', '1')
     if (page > 1) p.set('page', String(page))
     setParams(p, { replace: true })
-  }, [filters, ownerFilter, page, setParams])
+  }, [filters, ownerFilter, page, sort, desc, setParams])
 
   // 批量改动作共用一个提交壳：成功提示实改数（范围外的 id 后端静默跳过，不是全成功）。
   const runBatch = async (run: () => Promise<{ updated: number }>) => {
@@ -1053,7 +1063,7 @@ export function CustomersTab() {
   const onExport = async () => {
     setExporting(true)
     try {
-      const rows = await fetchCustomersForExport({ ...filters })
+      const rows = await fetchCustomersForExport({ ...filters, sort: sort || undefined, desc })
       const stamp = new Date().toISOString().slice(0, 10)
       // 自定义字段按定义顺序追加在固定列之后；国家/国籍导出 ISO 代码而非译名，
       // 导出的文件才能按同一张导入模板原样回灌（导入只认两字母代码）。
@@ -1118,6 +1128,7 @@ export function CustomersTab() {
     {
       key: 'name',
       title: t('plugin_crm.fields.name'),
+      sortKey: 'name',
       mobile: 'title',
       render: (cu) => (
         <div className="min-w-0">
@@ -1147,6 +1158,7 @@ export function CustomersTab() {
     {
       key: 'level',
       title: t('plugin_crm.fields.level'),
+      sortKey: 'level',
       render: (cu) =>
         cu.level ? (
           <Badge variant="outline">{t(`plugin_crm.level.${cu.level}`, { defaultValue: cu.level })}</Badge>
@@ -1219,10 +1231,11 @@ export function CustomersTab() {
           <Badge variant="outline">{t('plugin_crm.status.inactive')}</Badge>
         ),
     },
-    { key: 'owner', title: t('plugin_crm.fields.owner'), render: (cu) => cu.owner || '-' },
+    { key: 'owner', title: t('plugin_crm.fields.owner'), sortKey: 'owner', render: (cu) => cu.owner || '-' },
     {
       key: 'createdAt',
       title: t('plugin_crm.fields.createdAt'),
+      sortKey: 'created_at',
       render: (cu) => <span className="num text-xs text-muted-foreground">{formatTime(cu.createdAt, i18n.language)}</span>,
     },
   ]
@@ -1343,35 +1356,6 @@ export function CustomersTab() {
                 className="md:w-40"
               />
             </div>
-            {/* 排序：白名单字段 + 方向切换（与工单筛选同款交互，不用点列头） */}
-            <div className="flex items-center gap-1.5">
-              <Select value={draft.sortKey ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, sortKey: v === ALL ? undefined : v }))}>
-                <SelectTrigger className="md:w-48" aria-label={t('plugin_crm.filter.sortKey')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>{t('plugin_crm.filter.sortDefault')}</SelectItem>
-                  {SORT_KEYS.map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {t(`plugin_crm.sort.${k}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {draft.sortKey ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-9"
-                  aria-label={t('plugin_crm.filter.sortDir', { dir: draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc') })}
-                  title={draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc')}
-                  onClick={() => setDraft((d) => ({ ...d, sort: d.sort === 'asc' ? 'desc' : 'asc' }))}
-                >
-                  <ArrowDownUp aria-hidden="true" className="size-4" />
-                </Button>
-              ) : null}
-            </div>
           </div>
         ) : null}
       </FilterBar>
@@ -1380,6 +1364,20 @@ export function CustomersTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={
+          // 公海走独立接口（不支持排序参数），切到公海时表头退回纯展示
+          inPool
+            ? undefined
+            : {
+                key: sort,
+                desc,
+                onChange: (key, d) => {
+                  setSort(key)
+                  setDesc(d)
+                  setPage(1)
+                },
+              }
+        }
         columnSettingsKey="plugin-crm-customers"
         pagination={{
           page,

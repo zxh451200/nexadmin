@@ -13,6 +13,7 @@ import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Textarea } from '@/framework/ui/textarea'
 import { errMsg } from '@/lib/errMsg'
 import {
@@ -318,8 +319,10 @@ export default function KbPage() {
   // 后端没有这个状态值，拉全量后在前端过滤。
   const [statusFilter, setStatusFilter] = useState<'all' | 'ready' | 'failed' | 'reembed'>('all')
   const [selected, setSelected] = useState<string[]>([])
+  // 表头排序：默认新文档在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true)
 
-  const docs = useDocuments(statusFilter === 'ready' || statusFilter === 'failed' ? statusFilter : undefined)
+  const docs = useDocuments(statusFilter === 'ready' || statusFilter === 'failed' ? statusFilter : undefined, sort, desc)
   const status = useKbStatus()
   const settings = useKbSettings()
   const remove = useDeleteDocument()
@@ -431,6 +434,7 @@ export default function KbPage() {
     {
       key: 'title',
       title: t('plugin_kb.fields.title'),
+      sortKey: 'title',
       mobile: 'title',
       render: (d) => (
         <div className="min-w-0">
@@ -474,6 +478,7 @@ export default function KbPage() {
     {
       key: 'createdAt',
       title: t('plugin_kb.fields.createdAt'),
+      sortKey: 'created_at',
       render: (d) => <span className="num text-xs text-muted-foreground">{formatTime(d.createdAt, i18n.language)}</span>,
     },
     {
@@ -548,6 +553,7 @@ export default function KbPage() {
         data={rows}
         rowKey="id"
         loading={docs.isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-kb-documents"
         emptyText={t('plugin_kb.empty')}
         selection={{ selected, onChange: setSelected }}

@@ -91,9 +91,12 @@ func (s *Service) jobGet(ctx context.Context, id idgen.ID) (*Job, []RowError, er
 
 // JobQuery 是导入台账过滤条件。
 // Source/Status 逗号拼接多值（?status=running,failed），空 = 不限。
+// Sort/Desc 是表头排序参数（白名单见 ListJobs）。
 type JobQuery struct {
 	Source   []string
 	Status   []string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }
@@ -112,7 +115,13 @@ func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, e
 		return nil, 0, err
 	}
 	var rows []Job
-	if err := base.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：来源/状态/时间，白名单外回退 created_at（默认口径由 id DESC 变为按时间，
+	// 与其它台账一致；同秒创建的行由 id DESC 兜底）
+	if err := base.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"source":     "source",
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out := make([]JobView, len(rows))

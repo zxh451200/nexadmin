@@ -52,10 +52,10 @@ const CONFIG_KEY = ['backups', 'config'] as const
 const POLL_MS = 3000
 
 /** 列表里有“进行中”的备份且页面可见（live）时每 3 秒刷新，其余时候不轮询 */
-export function useBackupList(page: number, pageSize: number, live: boolean) {
+export function useBackupList(page: number, pageSize: number, sort: string | undefined, desc: boolean | undefined, live: boolean) {
   return useQuery({
-    queryKey: [...KEY, 'list', page, pageSize],
-    queryFn: () => api.get<Page<BackupRecord>>('/backups', { page, pageSize }),
+    queryKey: [...KEY, 'list', page, pageSize, sort, desc],
+    queryFn: () => api.get<Page<BackupRecord>>('/backups', { page, pageSize, sort, desc }),
     refetchInterval: (q) => (live && q.state.data?.list.some((r) => r.status === 'running') ? POLL_MS : false),
   })
 }

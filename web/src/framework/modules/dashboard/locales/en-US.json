@@ -17,15 +17,28 @@
     },
     "kpi": {
       "delta": "{{value}}%",
-      "storageDetail": "of {{total}} GB total"
+      "storageDetail": "of {{total}} GB total",
+      "prevDetail": "prev. {{base}}"
     },
     "onlineTitle": "Live users",
     "onlineNow": "online now",
     "onlineJustNow": "just now",
     "onlineEmpty": "No users online right now",
     "storageValue": "{{used}} / {{total}} GB",
-    "loginTrend": "Logins, last 30 days",
-    "requestTrend": "Requests, last 30 days",
+    "loginTrend": "Login trend",
+    "requestTrend": "Request trend",
+    "trendRange": {
+      "d7": "7d",
+      "d14": "14d",
+      "d30": "30d"
+    },
+    "trendSummary": {
+      "logins": "total logins",
+      "failures": "total failures",
+      "requests": "total requests",
+      "errors": "total errors",
+      "window": "last {{days}} days"
+    },
     "operRatio": "Operation types",
     "series": {
       "logins": "Successful",
@@ -53,6 +66,7 @@
     "recentNotices": "Recent announcements",
     "noNotices": "No announcements",
     "viewMore": "View more",
+    "viewReport": "View report",
     "important": "Important",
     "loadFailed": "Failed to load data",
     "cardFailed": "This card failed to load",

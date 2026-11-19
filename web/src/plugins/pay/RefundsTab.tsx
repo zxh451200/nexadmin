@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -105,6 +106,8 @@ export function RefundsTab() {
   const [filters, setFilters] = useState<RefundQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [formOpen, setFormOpen] = useState(false)
 
   useEffect(() => {
@@ -117,7 +120,7 @@ export function RefundsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedNo])
 
-  const { data, isLoading, isError, refetch } = useRefunds({ ...filters, page, pageSize })
+  const { data, isLoading, isError, refetch } = useRefunds({ ...filters, page, pageSize, sort, desc })
   const create = useCreateRefund()
 
   const columns: Column<PayRefund>[] = [
@@ -146,6 +149,7 @@ export function RefundsTab() {
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
+      sortKey: 'created_at',
       mobile: 'hidden',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
@@ -191,6 +195,7 @@ export function RefundsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-pay-refunds"
         pagination={{
           page,

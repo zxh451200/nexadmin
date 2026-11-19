@@ -144,6 +144,7 @@ func (h *handler) listCustomers(c *gin.Context) {
 
 // customerQueryFrom 把列表/导出共用的查询参数收拢。
 func customerQueryFrom(c *gin.Context, sc *datascope.Scope) CustomerQuery {
+	sortField, desc := response.ParseSort(c)
 	return CustomerQuery{
 		Keyword: c.Query("keyword"),
 		Type:    response.ParseList(c.Query("type"), response.MaxFilterValues),
@@ -152,7 +153,8 @@ func customerQueryFrom(c *gin.Context, sc *datascope.Scope) CustomerQuery {
 		Level:   response.ParseList(c.Query("level"), response.MaxFilterValues),
 		Tag:     response.ParseList(c.Query("tag"), response.MaxFilterValues),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
-		SortKey: c.Query("sortKey"), SortAsc: c.Query("sort") == "asc",
+		// 排序参数与全站同一套约定（response.ParseSort）：?sort=<字段>&desc=true|false
+		Sort: sortField, Desc: desc,
 		Scope: sc, Mine: c.Query("mine") == "1",
 	}
 }
@@ -403,8 +405,10 @@ func (h *handler) listOpportunities(c *gin.Context) {
 	}
 	page, size := response.ParsePage(c)
 	customerID, _ := strconv.ParseInt(c.Query("customerId"), 10, 64)
+	sortField, desc := response.ParseSort(c)
 	rows, total, err := h.svc.ListOpportunities(c.Request.Context(), OpportunityQuery{
 		Keyword: c.Query("keyword"), CustomerID: idgen.ID(customerID), Stage: response.ParseList(c.Query("stage"), response.MaxFilterValues),
+		Sort: sortField, Desc: desc,
 		Scope: sc, Mine: c.Query("mine") == "1", Page: page, PageSize: size,
 	})
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/database"
 	"nexadmin/core/event"
 	coreoa "nexadmin/core/openapi"
@@ -65,6 +66,7 @@ func (h *handler) hookList(c *gin.Context) {
 	if c.Query("pageSize") == "" {
 		size = 200
 	}
+	sortField, desc := response.ParseSort(c)
 	q := h.db.WithContext(c.Request.Context()).Model(&Webhook{})
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
 		q = q.Where("LOWER(name) LIKE LOWER(?) OR LOWER(url) LIKE LOWER(?)", "%"+kw+"%", "%"+kw+"%")
@@ -75,7 +77,11 @@ func (h *handler) hookList(c *gin.Context) {
 		return
 	}
 	var rows []Webhook
-	if err := q.Order("created_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/时间，白名单外回退 created_at
+	if err := q.Order(core.OrderBy(sortField, desc, map[string]string{
+		"name":       "name",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
 		response.Fail(c, err)
 		return
 	}
@@ -307,6 +313,7 @@ func (h *handler) hookTest(c *gin.Context) {
 // webhookId/status 支持逗号拼接多值；status 任一项不在白名单就整体拒绝（与旧单值语义一致）。
 func (h *handler) deliveryList(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	q := h.db.WithContext(c.Request.Context()).Model(&Delivery{})
 	if ids := response.ParseFilterIDs(c.Query("webhookId"), response.MaxFilterValues); len(ids) > 0 {
 		q = q.Where("webhook_id IN ?", ids)
@@ -331,7 +338,12 @@ func (h *handler) deliveryList(c *gin.Context) {
 		return
 	}
 	var rows []Delivery
-	if err := q.Order("created_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
+	// 排序白名单：事件/状态/时间，白名单外回退 created_at
+	if err := q.Order(core.OrderBy(sortField, desc, map[string]string{
+		"event":      "event",
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
 		response.Fail(c, err)
 		return
 	}

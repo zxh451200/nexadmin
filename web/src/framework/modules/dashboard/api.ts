@@ -5,6 +5,8 @@ import type { SavedLayout } from './types'
 export interface StatValue {
   value: number
   delta?: number
+  /** 上一期的绝对值（users=上期总数、todayLogin=昨日数）：涨跌徽章旁显示「上期 N」 */
+  base?: number
   /** 上期基线太小时后端返回 false：百分比没有意义，隐藏涨跌标签。 */
   comparable?: boolean
 }
@@ -21,8 +23,15 @@ export interface DashboardStats {
   recentNotices: Array<{ id: string; title: string; type: string; level: string; publishAt: string }>
 }
 
-export function useDashboardStats() {
-  return useQuery({ queryKey: ['dashboard', 'stats'], queryFn: () => api.get<DashboardStats>('/dashboard/stats') })
+/** 趋势窗口天数（后端白名单：7/14/30）；不传 = 默认 30 */
+export type TrendDays = 7 | 14 | 30
+
+export function useDashboardStats(days?: TrendDays) {
+  return useQuery({
+    // days 进 key：不同窗口各自缓存，KPI 卡（默认窗口）与趋势卡（切换窗口）互不踩
+    queryKey: ['dashboard', 'stats', days ?? 'default'],
+    queryFn: () => api.get<DashboardStats>(`/dashboard/stats${days ? `?days=${days}` : ''}`),
+  })
 }
 
 const layoutKey = ['dashboard', 'layout'] as const

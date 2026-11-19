@@ -41,6 +41,14 @@ export interface FriendLink {
   url: string
 }
 
+/** 办公地点（联系页地点卡 + 地图打点）：坐标经后台地图选点或手填。 */
+export interface WebsiteOffice {
+  name: string
+  address: string
+  lng: number
+  lat: number
+}
+
 export interface SiteSettings {
   id: string
   siteName: string
@@ -80,6 +88,10 @@ export interface SiteSettings {
   icp: string
   footerNote: string
   marketEnabled: boolean
+  /** 产品在线购买开关：开启后有定价的产品详情页出「立即购买」，匿名访客下单走 pay 中台收款 */
+  purchaseEnabled: boolean
+  /** 办公地点列表（联系页地点卡 + 地图打点）；坐标经后台地图选点或手填 */
+  offices: WebsiteOffice[]
   /** 新留言是否抄送一封到 contactEmail（SMTP 未配置时自动跳过） */
   messageNotifyEmail: boolean
   /** 留言是否必须先勾选「已阅读并同意隐私政策」 */
@@ -607,6 +619,66 @@ export function useDeleteNavs() {
   })
 }
 
+// ---- 常见问题（FAQ） ----
+
+/** FAQ 列表项：问题必填、答案纯文本（公开页保留换行），sort 小的在前。 */
+export interface FaqItem {
+  id: string
+  question: string
+  answer: string
+  sort: number
+  enabled: boolean
+}
+
+export interface FaqQuery extends PageQuery {
+  /** "true" | "false"；省略 = 全部 */
+  enabled?: string
+}
+
+/** FAQ 列表（分页 + 关键词/启用状态过滤 + 表头排序）。 */
+export function useFaqs(query: FaqQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'faqs', query],
+    queryFn: () => api.get<Page<FaqItem>>(`${BASE}/faqs`, query),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** 创建 FAQ 导出任务：按当前筛选提交到导出中心；进度与下载见导出中心。 */
+export function createFaqExportJob(query: Pick<FaqQuery, 'keyword' | 'enabled'>) {
+  return api.post<{ id: string }>(
+    `${BASE}/faqs/export-async`,
+    null,
+    { params: { keyword: query.keyword ?? '', enabled: query.enabled ?? '' } },
+  )
+}
+
+/** 批量删除 FAQ。 */
+export function useDeleteFaqs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/faqs`, { ids: ids.join(',') }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'faqs'] }),
+  })
+}
+
+export function useSaveFaq() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id?: string; question: string; answer: string; sort: number; enabled: boolean }) =>
+      id ? api.put<FaqItem>(`${BASE}/faqs/${id}`, data) : api.post<FaqItem>(`${BASE}/faqs`, data),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'faqs'] }),
+  })
+}
+
+export function useDeleteFaq() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/faqs/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'faqs'] }),
+  })
+}
+
 export function useFeatures() {
   return useQuery({
     queryKey: [...KEY, 'features'],
@@ -948,6 +1020,9 @@ export interface MessageQuery {
   keyword?: string
   /** 逗号分隔多值：?status=new,read；省略 = 全部状态 */
   status?: string
+  /** 表头排序字段（后端白名单：status/created_at），空 = 默认 created_at DESC */
+  sort?: string
+  desc?: boolean
 }
 
 export function useMessages(query: MessageQuery) {
@@ -1201,5 +1276,54 @@ export function useReorderProductCategories() {
     mutationFn: (items: ProductCategoryOrderItem[]) => api.put<null>(`${BASE}/product-categories/reorder`, { items }),
     // 失败时 TreeTable 会回滚乐观数据并 toast，这里只保证最终与库一致
     onSettled: () => void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] }),
+  })
+}
+
+// ---- 站点订单（官网商品页在线购买） ----
+
+export interface SiteOrder {
+  id: string
+  orderNo: string
+  productTitle: string
+  qty: number
+  currency: string
+  amountMinor: number
+  payCurrency: string
+  payAmountMinor: number
+  buyerEmail: string
+  buyerPhone: string
+  status: 'pending' | 'paid' | 'failed' | 'closed'
+  createdAt: string
+}
+
+export interface SiteOrderQuery extends PageQuery {
+  /** 逗号分隔多值：?status=pending,paid；省略 = 全部状态 */
+  status?: string
+}
+
+/** 站点订单列表（管理端业务记录；资金状态在支付中台按业务单号 SO… 对账）。 */
+export function useSiteOrders(query: SiteOrderQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'site-orders', query],
+    queryFn: () => api.get<Page<SiteOrder>>(`${BASE}/site-orders`, query),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** 创建订单导出任务：按当前筛选提交到导出中心；进度与下载见导出中心。 */
+export function createSiteOrderExportJob(query: Pick<SiteOrderQuery, 'keyword' | 'status'>) {
+  return api.post<{ id: string }>(
+    `${BASE}/site-orders/export-async`,
+    null,
+    { params: { keyword: query.keyword ?? '', status: query.status ?? '' } },
+  )
+}
+
+/** 批量删除订单（业务侧记录，不影响 pay 中台资金流水）。 */
+export function useDeleteSiteOrders() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/site-orders`, { ids: ids.join(',') }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'site-orders'] }),
   })
 }

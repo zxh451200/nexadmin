@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/response"
 	"nexadmin/core/secret"
@@ -84,7 +85,8 @@ func (in *ModelInput) normalize() error {
 }
 
 // ListModels 分页列出模型配置（密钥打码）。kinds 是逗号拼接多值（空 = 不限）。
-func (s *Service) ListModels(ctx context.Context, keyword string, kinds []string, page, pageSize int) ([]ModelView, int64, error) {
+// sort/desc 是表头排序参数（白名单：名称/厂商/模型标识/时间，白名单外回退 created_at）。
+func (s *Service) ListModels(ctx context.Context, keyword, sort string, desc bool, kinds []string, page, pageSize int) ([]ModelView, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Model{})
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		like := "%" + escapeLike(kw) + "%"
@@ -98,7 +100,12 @@ func (s *Service) ListModels(ctx context.Context, keyword string, kinds []string
 		return nil, 0, err
 	}
 	var rows []Model
-	if err := db.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	if err := db.Order(core.OrderBy(sort, desc, map[string]string{
+		"name":       "name",
+		"provider":   "provider",
+		"model":      "model",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out := make([]ModelView, len(rows))
@@ -269,10 +276,13 @@ func (s *Service) RecordUsage(ctx context.Context, in UsageInput) {
 }
 
 // UsageQuery 过滤用量列表。
+// Sort/Desc 是表头排序参数（白名单见 ListUsage）。
 type UsageQuery struct {
 	Kind []string // 逗号拼接多值，空 = 不限
 	// BizType 保持单值：来自统计下钻（自由文本等值），多选语义不清晰
 	BizType  string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }
@@ -291,7 +301,13 @@ func (s *Service) ListUsage(ctx context.Context, q UsageQuery) ([]Usage, int64, 
 		return nil, 0, err
 	}
 	var rows []Usage
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：类型/业务/模型/时间，白名单外回退 created_at
+	if err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"kind":       "kind",
+		"biz_type":   "biz_type",
+		"model":      "model",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

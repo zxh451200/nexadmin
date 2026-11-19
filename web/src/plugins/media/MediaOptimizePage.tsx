@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { StatCard } from '@/framework/components/StatCard'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -23,7 +24,9 @@ export default function MediaOptimizePage() {
   const { t, i18n } = useTranslation()
   const stats = useMediaStats()
   const [page, setPage] = useState(1)
-  const list = usePendingImages(page, PAGE_SIZE)
+  // 表头排序：默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
+  const list = usePendingImages(page, PAGE_SIZE, sort, desc)
   const [state, setState] = useState<Record<string, RowState>>({})
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState(0)
@@ -89,6 +92,7 @@ export default function MediaOptimizePage() {
     {
       key: 'name',
       title: t('plugin_media.col.name'),
+      sortKey: 'name',
       mobile: 'title',
       render: (r) => (
         <div className="min-w-0">
@@ -97,10 +101,11 @@ export default function MediaOptimizePage() {
         </div>
       ),
     },
-    { key: 'size', title: t('plugin_media.col.size'), align: 'end', render: (r) => <span className="num">{formatSize(r.size)}</span> },
+    { key: 'size', title: t('plugin_media.col.size'), align: 'end', sortKey: 'size', render: (r) => <span className="num">{formatSize(r.size)}</span> },
     {
       key: 'createdAt',
       title: t('plugin_media.col.createdAt'),
+      sortKey: 'created_at',
       render: (r) => <span className="num text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString(i18n.language)}</span>,
     },
     {
@@ -163,6 +168,7 @@ export default function MediaOptimizePage() {
           ) : null}
 
           <DataTable<PendingImage>
+            sort={sortProp}
             toolbar={
               <>
                 <Button onClick={() => void runAll()} disabled={running || rows.length === 0}>

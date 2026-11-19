@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
@@ -100,6 +101,8 @@ export default function TenantPage() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   // 状态/套餐是多选数组，搜索时 join 成 CSV（后端按 IN 收窄）
   const [draft, setDraft] = useState<{ keyword: string; status: string[]; packageId: string[] }>({ keyword: '', status: [], packageId: [] })
   const [filters, setFilters] = useState<{ keyword?: string; status?: string; packageId?: string }>({})
@@ -115,6 +118,8 @@ export default function TenantPage() {
     keyword: filters.keyword || undefined,
     status: filters.status,
     packageId: filters.packageId,
+    sort,
+    desc,
   })
   const save = useSaveTenant()
   const renew = useRenewTenant()
@@ -217,10 +222,11 @@ export default function TenantPage() {
   }
 
   const columns: Column<TenantRow>[] = [
-    { key: 'name', title: t('tenant.name'), mobile: 'title' },
+    { key: 'name', title: t('tenant.name'), sortKey: 'name', mobile: 'title' },
     {
       key: 'domain',
       title: t('tenant.domain'),
+      sortKey: 'domain',
       mobile: 'sub',
       // break-all 在 nowrap 单元格里是死代码：改 truncate + title
       render: (r) =>
@@ -249,6 +255,7 @@ export default function TenantPage() {
     {
       key: 'expireAt',
       title: t('tenant.expireAt'),
+      sortKey: 'expire_at',
       render: (r) => (
         <div className="flex flex-col items-start gap-1">
           {/* 到期是日期概念：本地化日期，不显示原始 ISO（也不会被时区偏移带偏一天） */}
@@ -260,7 +267,7 @@ export default function TenantPage() {
     { key: 'usage', title: t('tenant.usage.title'), mobile: 'hidden', render: (r) => <TenantUsageCell id={r.id} /> },
     { key: 'status', title: t('common.status'), render: (r) => <DictTag dict="tenant_status" value={r.status} /> },
     { key: 'adminUsername', title: t('tenant.adminUsername'), mobile: 'hidden' },
-    { key: 'createdAt', title: t('common.createdAt'), mobile: 'hidden', render: (r) => <span className="num">{new Date(r.createdAt).toLocaleString(i18n.language)}</span> },
+    { key: 'createdAt', title: t('common.createdAt'), sortKey: 'created_at', mobile: 'hidden', render: (r) => <span className="num">{new Date(r.createdAt).toLocaleString(i18n.language)}</span> },
   ]
 
   const isNew = !editing
@@ -312,6 +319,7 @@ export default function TenantPage() {
       </FilterBar>
 
       <DataTable<TenantRow>
+        sort={sortProp}
         toolbar={
           <Can perm="tenant:create">
             <Button type="button" onClick={() => openForm(null)}>

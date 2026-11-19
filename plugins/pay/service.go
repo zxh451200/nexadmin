@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -94,6 +95,15 @@ type CreateInput struct {
 
 // Create 创建（或幂等取回）一笔 pending 支付单，返回订单与拉起支付的参数。
 func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParams, error) {
+	// 平台级站点（官网商品页）的匿名下单：请求上下文没有租户——幂等查询与建单都以
+	// 全局视角进行（tenant.Skip），支付单归属渠道所属租户——管理员在哪个租户配置的
+	// 渠道，单就落进哪个租户的对账与退款视图。检测必须在最前：幂等查询也查 TenantModel，
+	// 带着无租户上下文进查询就会直接报 no tenant in context。
+	anon := false
+	if _, ok := tenant.From(ctx); !ok && !tenant.Skipped(ctx) {
+		anon = true
+		ctx = tenant.Skip(ctx)
+	}
 	in.BizType, in.BizNo = strings.TrimSpace(in.BizType), strings.TrimSpace(in.BizNo)
 	in.Subject, in.ReturnURL = strings.TrimSpace(in.Subject), strings.TrimSpace(in.ReturnURL)
 	in.Currency = strings.ToUpper(strings.TrimSpace(in.Currency))
@@ -136,13 +146,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		return nil, nil, err
 	}
 
-	// 平台级站点（官网商品页）的匿名下单：请求上下文没有租户，渠道按全局定位，
-	// 支付单归属渠道所属租户——管理员在哪个租户配置的渠道，单就落进哪个租户的
-	// 对账与退款视图。显式跳过租户闸后 BeforeCreate 保留下面手动填的 TenantID。
-	anon := false
-	if _, ok := tenant.From(ctx); !ok && !tenant.Skipped(ctx) {
-		anon = true
-	}
 	ch, err := s.pickChannelFor(ctx, in.ChannelCode, anon)
 	if err != nil {
 		return nil, nil, err
@@ -186,9 +189,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		ExpireAt: ptr(time.Now().UTC().Add(time.Duration(in.ExpireSec) * time.Second)),
 	}
 	if anon {
-		// 匿名下单：单归属渠道租户，插入在 skip 上下文里（BeforeCreate 保留显式值）
+		// 匿名下单：单归属渠道租户（ctx 已在函数头进入 skip，BeforeCreate 保留显式值）
 		o.TenantID = ch.TenantID
-		ctx = tenant.Skip(ctx)
 	}
 	o.ID = id
 	if err := s.db.WithContext(ctx).Create(o).Error; err != nil {
@@ -943,6 +945,7 @@ func (s *Service) ListChannels(ctx context.Context, subjectID string, enabledOnl
 // OrderQuery 过滤支付单列表。
 // 枚举类筛选是逗号拼接多值（?status=paid,refunded），空切片 = 不过滤；
 // SubjectID 保留单值（统计下钻 chips 的语义是单主体）。
+// Sort/Desc 是表头排序参数（白名单见 ListOrders）。
 type OrderQuery struct {
 	Keyword    string // 支付单号 / 业务单号模糊
 	Status     []string
@@ -956,6 +959,8 @@ type OrderQuery struct {
 	// 对账导出里少一天是数据事故，不是体验问题。
 	CreatedFrom string
 	CreatedTo   string
+	Sort        string
+	Desc        bool
 	Page        int
 	PageSize    int
 }
@@ -1033,13 +1038,21 @@ func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64,
 		return nil, 0, err
 	}
 	var rows []Order
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：状态/渠道/金额/时间，白名单外回退 created_at（与原 id DESC 的「新建在前」口径一致）
+	if err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"status":      "status",
+		"channel":     "channel_code",
+		"amount":      "amount_minor",
+		"created_at":  "created_at",
+		"paid_at":     "paid_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
 }
 
 // CallbackQuery 过滤回调审计列表。
+// Sort/Desc 是表头排序参数（白名单见 ListCallbacks）。
 type CallbackQuery struct {
 	Channel string
 	Keyword string
@@ -1049,6 +1062,8 @@ type CallbackQuery struct {
 	// 排障高频问题是「只看某天渠道在推哪些通知」，静默忽略等于给错数据。
 	CreatedFrom string
 	CreatedTo   string
+	Sort        string
+	Desc        bool
 	Page        int
 	PageSize    int
 }
@@ -1084,16 +1099,24 @@ func (s *Service) ListCallbacks(ctx context.Context, q CallbackQuery) ([]Callbac
 		return nil, 0, err
 	}
 	var rows []Callback
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：渠道/成功与否/时间，白名单外回退 created_at
+	if err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"channel":    "channel_code",
+		"ok":         "ok",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
 }
 
 // RefundQuery 过滤退款列表。
+// Sort/Desc 是表头排序参数（白名单见 ListRefunds）。
 type RefundQuery struct {
 	Status   string
 	Keyword  string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }
@@ -1113,7 +1136,11 @@ func (s *Service) ListRefunds(ctx context.Context, q RefundQuery) ([]Refund, int
 		return nil, 0, err
 	}
 	var rows []Refund
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：状态/时间，白名单外回退 created_at
+	if err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

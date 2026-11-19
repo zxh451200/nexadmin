@@ -11,6 +11,7 @@ import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -194,10 +195,12 @@ export default function ImportsPage() {
   const [status, setStatus] = useState<string | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新导入在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [importOpen, setImportOpen] = useState(false)
 
   const sources = useSources()
-  const jobs = useJobs({ source, status, page, pageSize })
+  const jobs = useJobs({ source, status, page, pageSize, sort, desc })
   const remove = useDeleteImport()
   const removeBatch = useDeleteImports()
   const cancelJob = useCancelImport()
@@ -268,6 +271,7 @@ export default function ImportsPage() {
     },
     { key: 'total', title: t('plugin_imports.fields.totalRows'), align: 'end', render: (j) => <span className="num">{j.totalRows}</span> },
     { key: 'ok', title: t('plugin_imports.fields.okRows'), align: 'end', render: (j) => <span className="num">{j.okRows}</span> },
+    // 台账行数列不进排序：total/ok/fail 都是导入完成后落库的快照值，按它们排序意义有限；来源/状态/时间足够
     {
       key: 'fail',
       title: t('plugin_imports.fields.failRows'),
@@ -291,6 +295,7 @@ export default function ImportsPage() {
     {
       key: 'createdAt',
       title: t('plugin_imports.fields.createdAt'),
+      sortKey: 'created_at',
       render: (j) => <span className="num text-xs text-muted-foreground">{formatTime(j.createdAt, i18n.language)}</span>,
     },
   ]
@@ -335,6 +340,7 @@ export default function ImportsPage() {
         data={jobs.data?.list ?? []}
         rowKey="id"
         loading={jobs.isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-imports-jobs"
         pagination={{
           page,

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -143,12 +144,14 @@ export function LogsTab({ jobIds, onJobsChange }: Props) {
   const [applied, setApplied] = useState<string[] | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最近执行在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('started_at', true, () => setPage(1))
   const [detail, setDetail] = useState<string | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
   // 自动刷新：运行中恒 3s 紧盯，平时 10s 慢刷；可关
   const [autoRefresh, setAutoRefresh] = useState(true)
 
-  const query: LogQuery = { jobId: jobIds?.length ? jobIds.join(',') : undefined, status: applied?.length ? applied.join(',') : undefined, page, pageSize }
+  const query: LogQuery = { jobId: jobIds?.length ? jobIds.join(',') : undefined, status: applied?.length ? applied.join(',') : undefined, page, pageSize, sort, desc }
   const { data, isLoading } = useLogs(query, autoRefresh)
   const { data: jobs } = useJobs({ page: 1, pageSize: 200 })
   const runJob = useRunJob()
@@ -176,12 +179,12 @@ export function LogsTab({ jobIds, onJobsChange }: Props) {
   }
 
   const columns: Column<CronLog>[] = [
-    { key: 'jobName', title: t('plugin_cron.fields.job'), mobile: 'title', render: (l) => <span className="font-medium text-foreground">{l.jobName}</span> },
+    { key: 'jobName', title: t('plugin_cron.fields.job'), sortKey: 'job_name', mobile: 'title', render: (l) => <span className="font-medium text-foreground">{l.jobName}</span> },
     { key: 'status', title: t('plugin_cron.fields.status'), mobile: 'sub', render: (l) => <Badge variant={statusVariant(l.status)}>{t(`plugin_cron.status.${l.status}`)}</Badge> },
     { key: 'trigger', title: t('plugin_cron.fields.trigger'), render: (l) => t(`plugin_cron.trigger.${l.trigger}`) },
-    { key: 'startedAt', title: t('plugin_cron.fields.startedAt'), render: (l) => <span className="num">{formatTime(l.startedAt, i18n.language)}</span> },
-    { key: 'costMs', title: t('plugin_cron.fields.costMs'), align: 'end', render: (l) => (l.status === 'running' ? '-' : <span className="num">{t('plugin_cron.ms', { value: l.costMs })}</span>) },
-    { key: 'attempts', title: t('plugin_cron.fields.attempts'), align: 'end', render: (l) => <span className="num">{l.attempts}</span> },
+    { key: 'startedAt', title: t('plugin_cron.fields.startedAt'), sortKey: 'started_at', render: (l) => <span className="num">{formatTime(l.startedAt, i18n.language)}</span> },
+    { key: 'costMs', title: t('plugin_cron.fields.costMs'), align: 'end', sortKey: 'cost_ms', render: (l) => (l.status === 'running' ? '-' : <span className="num">{t('plugin_cron.ms', { value: l.costMs })}</span>) },
+    { key: 'attempts', title: t('plugin_cron.fields.attempts'), align: 'end', sortKey: 'attempts', render: (l) => <span className="num">{l.attempts}</span> },
     { key: 'output', title: t('plugin_cron.fields.output'), render: (l) => <Snippet text={l.output} /> },
     { key: 'error', title: t('plugin_cron.fields.error'), render: (l) => <Snippet text={l.error} tone="error" /> },
   ]
@@ -222,6 +225,7 @@ export function LogsTab({ jobIds, onJobsChange }: Props) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-cron-logs"
         pagination={{
           page,

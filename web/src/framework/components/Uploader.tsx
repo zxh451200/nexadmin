@@ -320,6 +320,9 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
             ))}
           </div>
         </SortableContext>
+        {/* 拖拽排序没有任何可见标识（抓手是整块图、光标只在悬停时出现），可发现性为零；
+            只在真能拖的时候给一行提示，单图/禁用态不出现以免噪音 */}
+        {sortable ? <p className="mt-2 text-xs text-muted-foreground">{t('uploader.sortHint')}</p> : null}
       </DndContext>
 
       <input ref={addRef} type="file" hidden accept={accepts} multiple={!!multiple && limit > 1} onChange={(e) => onPick(e)} />

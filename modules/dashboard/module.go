@@ -47,7 +47,18 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	s := &service{db: d.DB, log: d.Log, loc: loc, dataDir: d.Config.DataDir}
 	r.GET("/dashboard/stats", func(c *gin.Context) {
-		response.OK(c, s.stats(c))
+		// 趋势窗口按查询参数选（白名单，默认 30 天）；窗口只影响趋势/TopN，
+		// KPI 与待办等不受影响。
+		days := trendDays
+		switch c.Query("days") {
+		case "7":
+			days = 7
+		case "14":
+			days = 14
+		case "30":
+			days = 30
+		}
+		response.OK(c, s.stats(c, days))
 	})
 	// 布局：登录即可、只读写自己的，不挂权限点；按用户限流（规则 dashboard_layout）。
 	rl := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "dashboard_layout", middleware.ByUser())
@@ -61,6 +72,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 type StatValue struct {
 	Value int64   `json:"value"`
 	Delta float64 `json:"delta"`
+	// Base 是上一期的绝对值（users=上期总数、todayLogin=昨日数）：前端在涨跌徽章旁
+	// 显示「上期 12,345」，只看百分比会丢掉「比多少」的量感。
+	Base int64 `json:"base,omitempty"`
 	// Comparable=false 表示上期基线太小，百分比没有意义，前端应当隐藏涨跌标签。
 	Comparable bool `json:"comparable"`
 }
@@ -124,7 +138,7 @@ type service struct {
 	dataDir string
 }
 
-func (s *service) stats(c *gin.Context) Stats {
+func (s *service) stats(c *gin.Context, days int) Stats {
 	ctx := c.Request.Context()
 	tid, _ := tenant.From(ctx)
 	var uid idgen.ID
@@ -140,20 +154,20 @@ func (s *service) stats(c *gin.Context) Stats {
 	total := s.count(ctx, "users", "SELECT COUNT(*) FROM sys_user WHERE tenant_id = ? AND deleted_at IS NULL", tid)
 	added := s.count(ctx, "users.added", "SELECT COUNT(*) FROM sys_user WHERE tenant_id = ? AND deleted_at IS NULL AND created_at >= ?", tid, today.AddDate(0, 0, -7).UTC())
 	ud, uok := pctOf(total, total-added)
-	out.Users = statValue(total, ud, uok)
+	out.Users = statValue(total, ud, uok, total-added)
 
 	// 今日登录与较昨日变化
 	todayN := s.count(ctx, "login.today", "SELECT COUNT(*) FROM sys_login_log WHERE tenant_id = ? AND "+loginOK+" AND created_at >= ?", tid, today.UTC())
 	yesterdayN := s.count(ctx, "login.yesterday", "SELECT COUNT(*) FROM sys_login_log WHERE tenant_id = ? AND "+loginOK+" AND created_at >= ? AND created_at < ?",
 		tid, today.AddDate(0, 0, -1).UTC(), today.UTC())
 	ld, lok := pctOf(todayN, yesterdayN)
-	out.TodayLogin = statValue(todayN, ld, lok)
+	out.TodayLogin = statValue(todayN, ld, lok, yesterdayN)
 
 	out.UnreadMessages = StatValue{Value: s.count(ctx, "message.unread", "SELECT COUNT(*) FROM sys_message WHERE tenant_id = ? AND user_id = ? AND read_at IS NULL", tid, uid)}
 	out.Storage = s.storage(ctx, today)
 
-	// 近 7 天登录趋势
-	for i := trendDays - 1; i >= 0; i-- {
+	// 登录趋势：按请求的窗口逐日统计
+	for i := days - 1; i >= 0; i-- {
 		from := today.AddDate(0, 0, -i)
 		to := from.AddDate(0, 0, 1)
 		q := "SELECT COUNT(*) FROM sys_login_log WHERE tenant_id = ? AND created_at >= ? AND created_at < ? AND "
@@ -164,14 +178,14 @@ func (s *service) stats(c *gin.Context) Stats {
 		})
 	}
 	// 请求趋势来自进程内统计（apistat），重启后清零
-	for _, d := range apistat.Default.Days(trendDays) {
+	for _, d := range apistat.Default.Days(days) {
 		out.RequestTrend = append(out.RequestTrend, RequestPoint{Date: d.Date.In(s.loc).Format("01-02"), Requests: d.Requests, Errors: d.Errors})
 	}
 
 	var ops []OperType
 	s.try("oper.types", func() error {
 		return s.db.WithContext(ctx).Raw("SELECT type, COUNT(*) AS value FROM sys_oper_log WHERE tenant_id = ? AND created_at >= ? GROUP BY type ORDER BY value DESC LIMIT 5",
-			tid, today.AddDate(0, 0, -(trendDays-1)).UTC()).Scan(&ops).Error
+			tid, today.AddDate(0, 0, -(days-1)).UTC()).Scan(&ops).Error
 	})
 	if ops != nil {
 		out.OperTypes = ops
@@ -247,6 +261,6 @@ func pctOf(cur, prev int64) (float64, bool) {
 	return round1(float64(cur-prev) / float64(prev) * 100), true
 }
 
-func statValue(value int64, delta float64, comparable bool) StatValue {
-	return StatValue{Value: value, Delta: delta, Comparable: comparable}
+func statValue(value int64, delta float64, comparable bool, base int64) StatValue {
+	return StatValue{Value: value, Delta: delta, Comparable: comparable, Base: base}
 }

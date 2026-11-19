@@ -13,6 +13,7 @@ import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormGrid, FormSection } from '@/framework/components/FormLayout'
 import {
@@ -260,6 +261,7 @@ function PostFormBody({
               hint={t('plugin_website.fields.coverHint')}
               placeholder={t('plugin_website.fields.coverPlaceholder')}
               crop={{ width: 1200, height: 630 }}
+              previewBelow
               aria-label={t('plugin_website.fields.coverUrl')}
             />
             {coverInvalid ? (
@@ -851,8 +853,10 @@ export default function PostPage() {
   const [filters, setFilters] = useState<ContentQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认「最近更新在前」（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('updated_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
-  const { data, isLoading } = usePosts({ ...filters, page, pageSize })
+  const { data, isLoading } = usePosts({ ...filters, page, pageSize, sort, desc })
   const extraLocales = languages.filter((l) => !l.default)
   const remove = useDeletePost()
   const removeBatch = useDeletePosts()
@@ -943,6 +947,7 @@ export default function PostPage() {
     {
       key: 'title',
       title: t('plugin_website.fields.postTitle'),
+      sortKey: 'title',
       mobile: 'title',
       render: (r) => (
         <span className="flex flex-wrap items-center gap-1.5 font-medium text-foreground">
@@ -1007,6 +1012,7 @@ export default function PostPage() {
       key: 'views',
       title: t('plugin_website.fields.views'),
       align: 'end',
+      sortKey: 'views',
       render: (r) => <span className="num text-muted-foreground">{r.views}</span>,
     },
     {
@@ -1018,18 +1024,6 @@ export default function PostPage() {
           {isScheduled(r) ? <span className="text-xs text-muted-foreground">{t('plugin_website.post.scheduledHint')}</span> : null}
         </div>
       ),
-    },
-    {
-      key: 'link',
-      title: '',
-      align: 'end',
-      render: (r) => (r.published && !isScheduled(r) ? (
-        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-          <a href={`/news/${r.slug}`} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" />
-          </a>
-        </Button>
-      ) : null),
     },
   ]
 
@@ -1092,6 +1086,7 @@ export default function PostPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-website-posts"
         pagination={{
           page,
@@ -1130,6 +1125,13 @@ export default function PostPage() {
         )}
         rowActions={(row) => (
           <Can perm="website:post">
+            {row.published && !isScheduled(row) ? (
+              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+                <a href={`/news/${row.slug}`} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                </a>
+              </Button>
+            ) : null}
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.preview')} onClick={() => void onPreview(row)}>
               <Eye aria-hidden="true" />
             </Button>

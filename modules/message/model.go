@@ -47,6 +47,8 @@ type ListQuery struct {
 	To       string
 	Page     int
 	PageSize int
+	Sort     string // 表头排序字段（白名单见 Service.List）
+	Desc     bool
 }
 
 func toView(m Message) View {

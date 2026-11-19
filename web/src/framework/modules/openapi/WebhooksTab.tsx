@@ -12,6 +12,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Switch } from '@/framework/ui/switch'
 import { fmtDateTime } from '../oper-log/format'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import {
   fetchAllWebhooks,
   useDeleteWebhook,
@@ -36,7 +37,9 @@ export function WebhooksTab() {
   const confirm = useConfirm()
   const { has } = usePermission()
   const canEdit = has('openapi:edit')
-  const { data, isLoading } = useWebhooks()
+  // 表头排序：不分页的全量列表也走服务端排序，改排序不重置其它状态
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true)
+  const { data, isLoading } = useWebhooks({ sort, desc })
   const setEnabled = useSetWebhookEnabled()
   const remove = useDeleteWebhook()
   const removeBatch = useDeleteWebhooks()
@@ -108,6 +111,7 @@ export function WebhooksTab() {
     {
       key: 'name',
       title: t('openapi.webhooks.fields.name'),
+      sortKey: 'name',
       mobile: 'title',
       render: (w) => <span className="font-medium text-foreground">{w.name}</span>,
     },
@@ -153,6 +157,7 @@ export function WebhooksTab() {
     {
       key: 'createdAt',
       title: t('openapi.webhooks.fields.createdAt'),
+      sortKey: 'created_at',
       render: (w) => <span className="num">{fmtDateTime(w.createdAt, i18n.language)}</span>,
     },
   ]
@@ -161,6 +166,7 @@ export function WebhooksTab() {
     <>
       <DataTable
         columns={columns}
+        sort={sortProp}
         columnSettingsKey="openapiWebhooks"
         data={data ?? []}
         rowKey="id"

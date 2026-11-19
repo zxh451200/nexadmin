@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -20,10 +21,12 @@ export function DatasetsTab() {
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：默认新建在前（id DESC，与后端回退序一致），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('id', true, () => setPage(1))
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Dataset | null>(null)
   const [picked, setPicked] = useState<string[]>([])
-  const { data, isLoading } = useDatasets({ keyword, page, pageSize })
+  const { data, isLoading } = useDatasets({ keyword, page, pageSize, sort, desc })
   const { data: sources = [] } = useSources()
   const remove = useDeleteDataset()
   const removeBatch = useDeleteDatasets()
@@ -57,7 +60,7 @@ export function DatasetsTab() {
   }
 
   const columns: Column<Dataset>[] = [
-    { key: 'name', title: t('common.name'), mobile: 'title', render: (d) => <span className="font-medium text-foreground">{builtinText(t, d.name)}</span> },
+    { key: 'name', title: t('common.name'), sortKey: 'name', mobile: 'title', render: (d) => <span className="font-medium text-foreground">{builtinText(t, d.name)}</span> },
     { key: 'source', title: t('plugin_report.dataset.source'), mobile: 'sub', render: (d) => <Badge variant="outline">{sourceLabel(d.source)}</Badge> },
     { key: 'columns', title: t('plugin_report.dataset.columns'), render: (d) => <span className="num">{d.columns.length}</span> },
     { key: 'filters', title: t('plugin_report.dataset.fixedFilters'), render: (d) => <span className="num">{d.filters.length}</span> },
@@ -84,6 +87,7 @@ export function DatasetsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-report-datasets"
         pagination={{
           page,

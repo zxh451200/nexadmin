@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/recbin"
@@ -72,7 +73,15 @@ func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) 
 		return nil, 0, err
 	}
 	var rows []Notice
-	err := base.Order("pinned DESC").Order("COALESCE(published_at, created_at) DESC").
+	// 排序白名单：标题/类型/级别/状态/发布时间；发布时间按列表展示口径取 COALESCE(published_at, created_at)，
+	// 置顶始终在前（列名/表达式都是白名单常量，请求值只用来查表）
+	err := base.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"title":        "title",
+		"type":         "type",
+		"level":        "level",
+		"status":       "status",
+		"published_at": "pinned DESC, COALESCE(published_at, created_at)",
+	}, "pinned DESC, COALESCE(published_at, created_at)")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error
 	if err != nil {
 		return nil, 0, err

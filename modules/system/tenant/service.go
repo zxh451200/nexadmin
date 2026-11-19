@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	ctenant "nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -176,7 +177,14 @@ func (s *Service) ListTenants(ctx context.Context, q ListQuery, page, size int) 
 		return nil, 0, err
 	}
 	list := []Tenant{}
-	err := db.Order("created_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&list).Error
+	// 排序白名单：名称/域名/状态/到期/时间，白名单外回退 created_at
+	err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"name":       "name",
+		"domain":     "domain",
+		"status":     "status",
+		"expire_at":  "expire_at",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * size).Limit(size).Find(&list).Error
 	return list, total, err
 }
 

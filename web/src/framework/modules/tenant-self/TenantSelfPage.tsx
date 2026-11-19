@@ -256,6 +256,7 @@ export default function TenantSelfPage() {
                 title={t('tenantSelf.profile.logo')}
                 hint={t('tenantSelf.profile.logoHint')}
                 placeholder="/uploads/logo.png"
+                previewBelow
                 aria-label={t('tenantSelf.profile.logo')}
               />
               {errors.logoUrl ? <p className="text-xs text-destructive">{errors.logoUrl}</p> : null}

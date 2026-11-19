@@ -52,7 +52,7 @@ export function SiteSection({ value }: { value: AllSettings['site'] }) {
                     title={t('settings.site.logoUpload')}
                     hint={t('settings.site.logoUploadHint')}
                     placeholder={t('settings.site.logoPlaceholder')}
-                    previewClassName="h-16 w-24"
+                    previewBelow
                   />
                   <FormMessage />
                 </FormItem>

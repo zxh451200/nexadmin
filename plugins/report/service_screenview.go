@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 
+	"nexadmin/core"
 	"nexadmin/pkg/idgen"
 )
 
@@ -53,7 +54,8 @@ func (s *Service) canSeeScreen(ctx context.Context, v Viewer, screenID idgen.ID)
 }
 
 // ListScreensManage 列出本租户全部大屏（管理端，含角色授权）。
-func (s *Service) ListScreensManage(ctx context.Context, keyword string, page, size int) ([]ScreenView, int64, error) {
+// sort/desc 是表头排序参数（白名单：名称/时间，白名单外回退 created_at）。
+func (s *Service) ListScreensManage(ctx context.Context, keyword, sort string, desc bool, page, size int) ([]ScreenView, int64, error) {
 	tx, err := s.scoped(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -68,7 +70,11 @@ func (s *Service) ListScreensManage(ctx context.Context, keyword string, page, s
 	}
 	off, lim := pageOf(page, size)
 	var rows []Screen
-	if err := tx.Order("id DESC").Offset(off).Limit(lim).Find(&rows).Error; err != nil {
+	if err := tx.Order(core.OrderBy(sort, desc, map[string]string{
+		"name":       "name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+	}, "created_at")).Offset(off).Limit(lim).Find(&rows).Error; err != nil {
 		return nil, 0, dbErr(err)
 	}
 	out := make([]ScreenView, len(rows))

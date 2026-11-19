@@ -120,7 +120,8 @@ func (h *handler) listMessages(c *gin.Context) {
 			return
 		}
 	}
-	q := MessageQuery{Page: page, PageSize: size, Keyword: c.Query("keyword"), Status: statuses}
+	sortField, desc := response.ParseSort(c)
+	q := MessageQuery{Page: page, PageSize: size, Keyword: c.Query("keyword"), Status: statuses, Sort: sortField, Desc: desc}
 	list, total, err := h.svc.ListMessages(c.Request.Context(), q)
 	if err != nil {
 		response.Fail(c, err)
@@ -318,12 +319,14 @@ func (h *handler) deleteFeatures(c *gin.Context) {
 
 func contentQuery(c *gin.Context) ContentQuery {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	q := ContentQuery{
 		Keyword: c.Query("keyword"),
 		// 多值 CSV：?status=published,draft；单值旧链接天然兼容
 		Statuses: response.ParseList(c.Query("status"), response.MaxFilterValues),
 		Missings: response.ParseList(c.Query("missing"), response.MaxFilterValues),
-		Page:     page, PageSize: size,
+		Sort:     sortField, Desc: desc,
+		Page: page, PageSize: size,
 	}
 	// 分类筛选只对新闻生效；categoryIds 多选 + 兼容历史单值 categoryId；非法值当没有这个筛选，不让一个手改的 URL 500。
 	raw := c.Query("categoryIds")

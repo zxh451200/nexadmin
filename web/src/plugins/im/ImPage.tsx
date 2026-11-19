@@ -22,6 +22,8 @@ import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubbl
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { TimezoneSelect } from '@/framework/components/TimezoneSelect'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { Spinner } from '@/framework/ui/spinner'
+import { Kbd } from '@/framework/ui/kbd'
 import { TimeField } from '@/framework/components/pickers/TimeField'
 import { Lightbox, type LightboxSlide } from '@/framework/upload/Lightbox'
 import { useWs } from '@/framework/hooks/useWs'
@@ -278,15 +280,23 @@ export default function ImPage() {
     if (Notification.permission !== 'granted') {
       const perm = await Notification.requestPermission()
       if (perm !== 'granted') {
-        toast.error(t('plugin_im.notify.denied'))
+        // 浏览器对「已被拒绝」的源不再弹任何窗、静默返回 denied——8 秒的长 toast
+        // 是这条路径唯一的反馈，短了会被当成「点了没反应」。
+        toast.error(t('plugin_im.notify.denied'), { duration: 8000 })
         return
       }
     }
-    setNotifyOn((prev) => {
-      const next = !prev
-      localStorage.setItem(NOTIFY_KEY, next ? '1' : '0')
-      return next
-    })
+    const next = !notifyOn
+    localStorage.setItem(NOTIFY_KEY, next ? '1' : '0')
+    setNotifyOn(next)
+    if (next) {
+      // 开启即发一条测试通知：权限刚拿到就给一次看得见的确认，也顺便让用户
+      // 认识通知长什么样（系统勿扰开着时这条也会缺声，toast 同时兜底）。
+      notifyDesktop(t('plugin_im.title'), t('plugin_im.notify.test'))
+      toast.success(t('plugin_im.notify.on'))
+    } else {
+      toast(t('plugin_im.notify.off'))
+    }
   }
 
   const onSend = async (content: string) => {
@@ -859,14 +869,17 @@ function ConvListItem({
             {conv.unread}
           </span>
         ) : null}
-        {stamp ? (
-          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-            {stamp.kind === 'yesterday' ? t('plugin_im.yesterday') : stamp.text}
-          </span>
+        {/* 今天行给时分、更早行给日期；「昨天」行不再盖章——分组节头已经说了「昨天」，
+            行内再写一遍是同一个信号说两遍 */}
+        {stamp?.text ? (
+          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{stamp.text}</span>
         ) : null}
       </span>
       <span className="mt-0.5 flex w-full items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">{conv.lastPreview || t('plugin_im.noMessages')}</span>
+        {/* 没有消息摘要时退到访客设备信息（Windows · Chrome），一排「暂无消息」既重复又没信息量 */}
+        <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">
+          {conv.lastPreview || uaSummary(conv.visitorUa) || t('plugin_im.noMessages')}
+        </span>
         {/* 状态与摘要之间一道发丝线：两堆灰字不再连成一串 */}
         <span className="flex shrink-0 items-center border-s border-border/60 ps-2">
           <QueueStatus tone={conv.status === 'open' ? 'success' : 'neutral'}>{t(`plugin_im.status.${conv.status}`)}</QueueStatus>
@@ -881,7 +894,16 @@ function ConvListItem({
     // 误导提示——勾选的语义是批量操作（关闭/删除），禁用只出现在权限够不上的组合里
     <label
       htmlFor={selectable ? cbId : undefined}
-      className={cn('flex items-center px-1.5', selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40')}
+      className={cn(
+        'flex items-center px-1.5 transition-opacity',
+        selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40',
+        // 勾选框按需出现：平时隐身，hover 行 / 已勾选 / 键盘聚焦才亮出来——
+        // 50 行常驻勾选列是整屏视觉噪音；用透明度而非 display，列宽不变、相邻行不跳。
+        // 触屏没有 hover，pointer-coarse 下保持常显，不牺牲移动端逐条勾选
+        !picked &&
+        selectable &&
+        'opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100',
+      )}
     >
       <Checkbox
         id={selectable ? cbId : undefined}
@@ -967,6 +989,16 @@ function ImageAttachment({ att, url, onZoom }: { att: ImAttachment; url: string;
       />
     </button>
   )
+}
+
+/** 我方（坐席/bot）最后一条消息的下标：已读/未读回执只挂它身上——访客按序阅读，
+ *  只有最新一条的回执有信息量，逐条盖章等于把同一个状态刷满整列。 */
+function lastMineIndex(messages: ImMessage[]): number {
+  for (let j = messages.length - 1; j >= 0; j--) {
+    const m = messages[j]
+    if (m.kind !== 'system' && (m.senderType === 'agent' || m.senderType === 'bot')) return j
+  }
+  return -1
 }
 
 function ChatPane({
@@ -1090,13 +1122,16 @@ function ChatPane({
     }
   }
 
+  const lastMineIdx = lastMineIndex(messages)
+
   return (
     // 合并卡后的聊天栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
     <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-        <Avatar className="size-9 shrink-0">
-          <AvatarFallback className="text-xs">{initials(conv.visitorName || conv.visitorToken)}</AvatarFallback>
-        </Avatar>
+        {/* 与左侧列表同一颗渐变头像（同 seed 同色）：点进会话时头像颜色不变，两栏是同一个访客 */}
+        <QueueAvatar seed={conv.convNo} className="size-9 rounded-lg">
+          <UserRound aria-hidden="true" className="size-4" />
+        </QueueAvatar>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
             {conv.visitorName || conv.visitorToken}
@@ -1171,7 +1206,14 @@ function ChatPane({
           ) : null}
           {conv.status === 'open' ? (
             <Can perm="im:edit">
-              <Button variant="ghost" size="icon" aria-label={t('plugin_im.close')} onClick={() => onClose(conv)}>
+              {/* 关闭会话是不可逆的收尾动作：悬停染红，提示语义与批量条上的删除一致 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:text-destructive"
+                aria-label={t('plugin_im.close')}
+                onClick={() => onClose(conv)}
+              >
                 <Ban aria-hidden="true" />
               </Button>
             </Can>
@@ -1261,6 +1303,7 @@ function ChatPane({
         ) : null}
         {messages.map((m, i) => {
           const prev = i > 0 ? messages[i - 1] : undefined
+          const next = i < messages.length - 1 ? messages[i + 1] : undefined
           const newDay = !prev || dayOf(prev.createdAt) !== dayOf(m.createdAt)
           const day = newDay ? daySeparator(m.createdAt, i18n.language) : null
           const separator = day ? (
@@ -1294,6 +1337,12 @@ function ChatPane({
           // 同一人连发只在一组的第一条露头像与姓名，否则气泡上方全是重复信息
           const groupStart =
             newDay || !prev || prev.kind === 'system' || prev.senderType !== m.senderType || prev.senderId !== m.senderId
+          // 组尾（下一条换了人/换天/是系统事件）：时间只落在连发组的最后一条上，
+          // 组中间的气泡不再逐条盖时分——分组内的时间密度靠「隔 5 分钟补一条居中时间」兜底
+          const groupEnd =
+            !next || next.kind === 'system' || next.senderType !== m.senderType || next.senderId !== m.senderId ||
+            dayOf(next.createdAt) !== dayOf(m.createdAt)
+          const showMeta = groupStart || groupEnd || recallable
           const who =
             m.senderType === 'bot'
               ? m.senderName || t('plugin_im.senders.bot')
@@ -1320,34 +1369,40 @@ function ChatPane({
                   <ChatBubble
                     side={mine ? 'end' : 'start'}
                     tone={mine ? 'primary' : 'default'}
+                    // meta 行做减法：姓名只在组首露一次，时间只落在组尾，回执只挂我方最后一条；
+                    // 三个条件都不沾的组中气泡干脆不出 meta 行，气泡更干净
                     meta={
-                      <>
-                        {groupStart ? (
-                          <>
-                            {m.senderType === 'bot' ? (
-                              <Badge variant="secondary" className="px-1 py-0 text-[10px]">
-                                AI
-                              </Badge>
-                            ) : null}
-                            <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span>
-                          </>
-                        ) : null}
-                        <span title={formatTime(m.createdAt, i18n.language)}>{formatClock(m.createdAt, i18n.language)}</span>
-                        {mine ? (
-                          <span>{conv.visitorReadSeq >= m.seq ? t('plugin_im.read') : t('plugin_im.unread')}</span>
-                        ) : null}
-                        {/* 撤回放进 meta 行：单独一行会把两行的气泡撑成三行 */}
-                        {recallable ? (
-                          <button
-                            type="button"
-                            onClick={() => onRecall(conv, m)}
-                            className="inline-flex items-center gap-0.5 hover:text-primary-foreground hover:underline underline-offset-2"
-                          >
-                            <Undo2 aria-hidden="true" className="size-3" />
-                            {t('plugin_im.recall.action')}
-                          </button>
-                        ) : null}
-                      </>
+                      showMeta ? (
+                        <>
+                          {groupStart ? (
+                            <>
+                              {m.senderType === 'bot' ? (
+                                <Badge variant="secondary" className="px-1 py-0 text-[10px]">
+                                  AI
+                                </Badge>
+                              ) : null}
+                              <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span>
+                            </>
+                          ) : null}
+                          {groupEnd ? (
+                            <span title={formatTime(m.createdAt, i18n.language)}>{formatClock(m.createdAt, i18n.language)}</span>
+                          ) : null}
+                          {mine && i === lastMineIdx ? (
+                            <span>{conv.visitorReadSeq >= m.seq ? t('plugin_im.read') : t('plugin_im.unread')}</span>
+                          ) : null}
+                          {/* 撤回放进 meta 行：单独一行会把两行的气泡撑成三行 */}
+                          {recallable ? (
+                            <button
+                              type="button"
+                              onClick={() => onRecall(conv, m)}
+                              className="inline-flex items-center gap-0.5 hover:text-primary-foreground hover:underline underline-offset-2"
+                            >
+                              <Undo2 aria-hidden="true" className="size-3" />
+                              {t('plugin_im.recall.action')}
+                            </button>
+                          ) : null}
+                        </>
+                      ) : undefined
                     }
                   >
                     {att ? (
@@ -1379,7 +1434,19 @@ function ChatPane({
       ) : null}
 
       {typing ? (
-        <div className="px-4 pb-1 text-xs text-muted-foreground">{t('plugin_im.visitorTyping')}</div>
+        <div className="flex items-center gap-1.5 px-4 pb-1 text-xs text-muted-foreground">
+          {t('plugin_im.visitorTyping')}
+          {/* 三枚跳动圆点：输入中的「动」一眼可辨，不依赖文字本身 */}
+          <span className="inline-flex items-center gap-0.5" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="size-1 animate-bounce rounded-full bg-current"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </span>
+        </div>
       ) : null}
 
       {conv.status === 'open' ? (
@@ -1437,14 +1504,21 @@ function ChatPane({
                     inputRef.current?.focus()
                   }}
                 />
+                {/* 快捷键提示用 Kbd 徽标而不是口头文案：桌面端一眼看懂，移动端隐藏（触屏没有回车键） */}
+                <span className="ms-auto hidden items-center gap-1 text-[11px] text-muted-foreground md:inline-flex">
+                  <Kbd>Enter</Kbd>
+                  {t('plugin_im.kbd.send')}
+                  <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd>
+                  {t('plugin_im.kbd.newline')}
+                </span>
                 <Button
                   type="submit"
                   size="icon"
-                  className="ms-auto rounded-full"
+                  className="ms-auto rounded-full md:ms-2"
                   disabled={sending || !draft.trim()}
                   aria-label={t('plugin_im.send')}
                 >
-                  <Send aria-hidden="true" />
+                  {sending ? <Spinner /> : <Send aria-hidden="true" />}
                 </Button>
               </div>
             </div>

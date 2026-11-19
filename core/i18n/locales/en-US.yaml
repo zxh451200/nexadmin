@@ -248,6 +248,7 @@ pay:
   PAY_SIGN_INVALID: Callback signature verification failed
   PAY_CHANNEL_UNAVAILABLE: Payment channel unavailable or unknown provider
   PAY_CHANNEL_ERROR: The channel rejected the operation
+  PAY_CHANNEL_CODE_TAKEN: Channel code already exists; choose another code or edit the existing channel
   PAY_NOT_FOUND: Pay order not found
   PAY_TENANT_MISMATCH: Pay order does not belong to the current tenant
   PAY_IDEMPOTENCY_CONFLICT: Idempotency key already used with a different request body
@@ -783,6 +784,15 @@ website:
   message_not_found: "The message does not exist or has been deleted."
   message_ids_empty: "Select at least one message."
   message_status_invalid: "Invalid message status."
+  order_status_invalid: "Invalid order status."
+  order_ids_empty: "Select at least one order."
+  order_not_found: "The order does not exist or has been deleted."
+  faq_question_required: "A question is required."
+  faq_question_too_long: "The question must be at most 300 characters."
+  faq_answer_too_long: "The answer must be at most 5000 characters."
+  faq_not_found: "The FAQ does not exist or has been deleted."
+  faq_ids_empty: "Select at least one FAQ."
+  faq_enabled_invalid: "Invalid visibility status."
   file_empty: "The file is empty."
   image_too_large: "Images must not exceed %s."
   image_type_unsupported: "Only %s images are supported."

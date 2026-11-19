@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import {
@@ -150,7 +151,7 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
             hint={t('plugin_website.fields.ogHint')}
             placeholder={t('plugin_website.fields.coverPlaceholder')}
             crop={{ width: 1200, height: 630 }}
-            previewClassName="h-24 w-40 object-cover p-0"
+            previewBelow
             aria-label={t('plugin_website.fields.ogImage')}
           />
           <span className="text-xs text-muted-foreground">{t('plugin_website.fields.ogImageHint')}</span>
@@ -227,8 +228,10 @@ export default function PagePage() {
   const [filters, setFilters] = useState<ContentQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认「排序权重优先、同权重最近更新在前」（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('sort', false, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
-  const { data, isLoading } = usePages({ ...filters, page, pageSize })
+  const { data, isLoading } = usePages({ ...filters, page, pageSize, sort, desc })
   const remove = useDeletePage()
   const removeBatch = useDeletePages()
   const setStatus = useSetPagesStatus()
@@ -309,6 +312,7 @@ export default function PagePage() {
     {
       key: 'title',
       title: t('plugin_website.fields.pageTitle'),
+      sortKey: 'title',
       mobile: 'title',
       render: (r) => (
         <span className="block max-w-[18rem] truncate font-medium text-foreground" title={r.title}>
@@ -328,23 +332,7 @@ export default function PagePage() {
     },
     { key: 'i18n', title: t('plugin_website.i18n.status'), render: (r) => <TranslationStatus value={r.i18nJson} fields={['title', 'seoTitle', 'seoDesc', 'content']} /> },
     { key: 'published', title: t('plugin_website.fields.published'), render: (r) => (r.published ? <Badge variant="success">{t('plugin_website.publishedOn')}</Badge> : <Badge variant="outline">{t('plugin_website.publishedOff')}</Badge>) },
-    { key: 'updatedAt', title: t('plugin_website.fields.updatedAt'), render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.updatedAt, i18n.language)}</span> },
-    {
-      key: 'link',
-      title: '',
-      align: 'end',
-      render: (r) => (r.published ? (
-        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-          <a href={`/p/${r.slug}`} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" />
-          </a>
-        </Button>
-      ) : (
-        <Button variant="ghost" size="icon" aria-label={t('plugin_website.page.preview')} onClick={() => void onPreview(r)}>
-          <Eye aria-hidden="true" />
-        </Button>
-      )),
-    },
+    { key: 'updatedAt', title: t('plugin_website.fields.updatedAt'), sortKey: 'updated_at', render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.updatedAt, i18n.language)}</span> },
   ]
 
   return (
@@ -380,6 +368,7 @@ export default function PagePage() {
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
+        sort={sortProp}
         loading={isLoading}
         columnSettingsKey="plugin-website-pages"
         pagination={{
@@ -414,6 +403,17 @@ export default function PagePage() {
         }
         rowActions={(row) => (
           <Can perm="website:page">
+            {row.published ? (
+              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+                <a href={`/p/${row.slug}`} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                </a>
+              </Button>
+            ) : (
+              <Button variant="ghost" size="icon" aria-label={t('plugin_website.page.preview')} onClick={() => void onPreview(row)}>
+                <Eye aria-hidden="true" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => { setEditing(row); setFormOpen(true) }}>
               <Pencil aria-hidden="true" />
             </Button>

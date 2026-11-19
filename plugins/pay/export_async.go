@@ -47,6 +47,8 @@ type orderExportParams struct {
 	FailReason  string `json:"failReason,omitempty"`
 	CreatedFrom string `json:"createdFrom,omitempty"`
 	CreatedTo   string `json:"createdTo,omitempty"`
+	Sort        string `json:"sort,omitempty"`
+	Desc        bool   `json:"desc,omitempty"`
 	ActorID     int64  `json:"actorId"`
 }
 
@@ -61,6 +63,7 @@ func (p orderExportParams) query() OrderQuery {
 		Scene:      response.ParseList(p.Scene, response.MaxFilterValues),
 		FailReason: response.ParseList(p.FailReason, response.MaxFilterValues),
 		CreatedFrom: p.CreatedFrom, CreatedTo: p.CreatedTo,
+		Sort: p.Sort, Desc: p.Desc,
 	}
 }
 
@@ -75,6 +78,8 @@ type orderExportBody struct {
 	FailReason  string `json:"failReason"`
 	CreatedFrom string `json:"createdFrom"`
 	CreatedTo   string `json:"createdTo"`
+	Sort        string `json:"sort"`
+	Desc        *bool  `json:"desc"`
 }
 
 // exportOrdersAsync POST /plugins/pay/orders/export-async：创建导出任务并立即返回任务 ID。
@@ -97,6 +102,10 @@ func (h *handler) exportOrdersAsync(c *gin.Context) {
 			pick(&q.SubjectID, b.SubjectID)
 			pick(&q.CreatedFrom, b.CreatedFrom)
 			pick(&q.CreatedTo, b.CreatedTo)
+			pick(&q.Sort, b.Sort)
+			if b.Desc != nil {
+				q.Desc = *b.Desc
+			}
 			// 多值字段（body 里同样是逗号拼接串）：非空才覆盖 query 解析结果
 			if s := response.ParseList(b.Status, response.MaxFilterValues); len(s) > 0 {
 				q.Status = s
@@ -127,6 +136,7 @@ func (h *handler) exportOrdersAsync(c *gin.Context) {
 			SubjectID: q.SubjectID, BizType: strings.Join(q.BizType, ","), Scene: strings.Join(q.Scene, ","),
 			FailReason: strings.Join(q.FailReason, ","),
 			CreatedFrom: q.CreatedFrom, CreatedTo: q.CreatedTo,
+			Sort: q.Sort, Desc: q.Desc,
 			ActorID: owner,
 		},
 	})

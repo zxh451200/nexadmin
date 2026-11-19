@@ -19,6 +19,8 @@ export interface StatCardProps {
   /** 同比/环比百分比，如 12.5 表示 +12.5%；正数为升（success），负数为降（destructive） */
   delta?: number
   deltaLabel?: string
+  /** 上期基线绝对值（如 207300）：徽章旁显示「上期 20.73 万」，只有百分比会丢掉「比多少」的量感 */
+  deltaBase?: number | string
   icon?: React.ReactNode
   /** 迷你趋势线数据（从旧到新） */
   spark?: number[]
@@ -29,7 +31,7 @@ export interface StatCardProps {
   className?: string
 }
 
-export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, progress, tone = 'primary', className }: StatCardProps) {
+export function StatCard({ title, value, hint, delta, deltaLabel, deltaBase, icon, spark, progress, tone = 'primary', className }: StatCardProps) {
   const { t, i18n } = useTranslation()
   const gid = useId().replace(/:/g, '')
   const shown = typeof value === 'number' ? new Intl.NumberFormat(i18n.language).format(value) : value
@@ -106,7 +108,15 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
               <span className="num">{`${up ? '+' : ''}${delta.toFixed(1)}%`}</span>
             </span>
             <span className="sr-only">{up ? t('charts.up') : down ? t('charts.down') : t('charts.flat')}</span>
-            <span className="text-muted-foreground">{deltaLabel ?? t('charts.vsLast')}</span>
+            <span className="text-muted-foreground">
+              {deltaLabel ?? t('charts.vsLast')}
+              {deltaBase !== undefined ? (
+                <span className="num">
+                  {' · '}
+                  {t('charts.vsBase', { base: typeof deltaBase === 'number' ? new Intl.NumberFormat(i18n.language).format(deltaBase) : deltaBase })}
+                </span>
+              ) : null}
+            </span>
           </div>
         ) : null}
       </CardContent>

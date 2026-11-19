@@ -51,6 +51,10 @@ export interface JobQuery {
   status?: string
   /** 管理员（job:all）查看全部任务 */
   all?: boolean
+  /** 表头排序字段（后端按白名单翻译成 ORDER BY） */
+  sort?: string
+  /** true = 倒序；后端 ParseSort 兼容 true/false 与 1/0 */
+  desc?: boolean
 }
 
 export const isActive = (s: JobStatus) => s === 'queued' || s === 'running'

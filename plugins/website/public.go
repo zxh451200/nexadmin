@@ -23,6 +23,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/response"
+	"nexadmin/plugins/maps"
 	"nexadmin/pkg/idgen"
 )
 
@@ -48,6 +49,9 @@ type siteHandler struct {
 	// uploadLocal 是询盘附件的 IP 计数（每 IP 每分钟 20 次）：上传比投稿重，
 	// 但一条询盘可能带几个文件，不能沿用留言的 5 次窗口。
 	uploadLocal *ipLimiter
+	// orderLocal 是在线购买的 IP 计数（每 IP 每分钟 10 次）：匿名资金入口，
+	// 比留言重得多——一次购买要建支付单并拉起渠道，滥用即刷单。
+	orderLocal *ipLimiter
 	// gw 是 AI 网关（未配置时为 nil）：访客聊天翻译与管理端内容机翻共用同一个实例。
 	gw *ai.Gateway
 }
@@ -100,6 +104,9 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		Socials: parseSocials(set.SocialsJSON), FriendLinks: parseFriendLinks(set.FriendLinksJSON),
 		ICP: set.ICP, FooterNote: set.FooterNote,
 		SeoKeywords: set.SeoKeywords, MarketEnabled: set.MarketEnabled,
+		PurchaseEnabled: set.PurchaseEnabled,
+		Offices:         parseOffices(set.OfficesJSON),
+		Faqs:            h.svc.PublicFaqs(ctx),
 		Consent: set.ContactConsent, ConsentURL: set.ContactConsentURL,
 		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),
@@ -589,6 +596,8 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 	// （Product/Offer + 面包屑 JSON-LD 在 render() 装配；询盘品无价时不给 offers。）
 	v.OGImage = absURL(v.BaseURL, p.CoverURL)
 	v.Noindex = p.Noindex
+	// 无 JS 表单下单失败 303 回商品页带 order_error=<i18n key>：翻成站点文案渲染成提示条。
+	v.OrderError = orderErrorText(v, c.Query("order_error"))
 	// hreflang、og:locale:alternate 与语言切换器都遍历 v.Languages：未发布的语言不能出现在这里。
 	v.Languages = visibleLanguages(p.Published(), p.PublishedJSON)
 	h.render(c, "product", http.StatusOK, v)
@@ -609,12 +618,34 @@ func (h *siteHandler) sitemapPage(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
+	// 框架自带的插件市场与文档区只在框架展示站（未套品牌主题）摆进站点地图：
+	// 品牌站导航里没有这两个入口，列出来只会让访客点进一片与业务无关的页面。
+	// 分组口径与 /sitemap.xml 一致（见 sitemap），否则「给访客的索引」和
+	// 「给爬虫的索引」说的就不是同一个站点。
+	if v.MarketEnabled && v.ThemeID == "" {
+		links := make([]SitemapLink, 0, len(h.marketEntries()))
+		for _, e := range h.marketEntries() {
+			links = append(links, SitemapLink{Label: localizeEntry(e, lang.Code).Name, Href: "/plugins/" + e.ID})
+		}
+		if g := newSitemapGroup("plugins", links, "/plugins"); len(g.Links) > 0 {
+			groups = append(groups, g)
+		}
+	}
+	if v.ThemeID == "" {
+		links := make([]SitemapLink, 0, 8)
+		for _, g := range docGroups {
+			for _, it := range g.Items {
+				links = append(links, SitemapLink{Label: resolveDoc(it, lang).Title, Href: "/docs/" + it.Slug})
+			}
+		}
+		if g := newSitemapGroup("docs", links, "/docs"); len(g.Links) > 0 {
+			groups = append(groups, g)
+		}
+	}
 	for i := range groups {
 		groups[i].Title = v.T("sitemap." + groups[i].Key)
 	}
 	v.SitemapGroups = groups
-	// 品牌主题站不把框架自带的 /docs 摆进站点地图：那套文档是给后台使用者看的，
-	// 品牌站导航里也没有入口，列出来只会让访客点进一片与业务无关的页面。
 	v.DocsEnabled = v.ThemeID == ""
 	v.Title = v.composeTitle(v.T("layout.sitemap"))
 	v.Desc = v.T("sitemap.desc")
@@ -663,7 +694,14 @@ func (h *siteHandler) pageDetail(c *gin.Context) {
 	h.render(c, "page", http.StatusOK, v)
 }
 
-// GET /contact —— 联系页：联系方式 + 在线留言。
+// 地图供应商取值沿用 maps 插件的枚举：联系页按访客语言挑厂商（zh 系→天地图，
+// 其他→谷歌）。定义成 website 包内的常量别名，视图字段与模板判断都够用。
+const (
+	ProviderGoogle   = maps.ProviderGoogle
+	ProviderTianditu = maps.ProviderTianditu
+)
+
+// GET /contact —— 联系页：联系方式 + 办公地点与地图 + 在线留言。
 func (h *siteHandler) contact(c *gin.Context) {
 	lang := langOf(c)
 	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
@@ -675,6 +713,30 @@ func (h *siteHandler) contact(c *gin.Context) {
 	v.Desc = v.TF("contact.desc", v.SiteName)
 	v.ContactSent = c.Query("sent") == "1"
 	v.ContactError = contactErrorText(v, c.Query("error"))
+	// 地图厂商按访客语言判定（zh 系→天地图优先，其他→谷歌优先）：国内外访客
+	// 各自拿到可达的地图服务；对应厂商未启用则回退另一个，都没有只渲染地点卡。
+	// Key 配置在「系统设置 → 地图服务」（maps 插件），tk/公钥本就是浏览器端用的。
+	if len(v.Offices) > 0 {
+		zh := strings.HasPrefix(strings.ToLower(lang.Code), "zh")
+		prefer, fallback := ProviderGoogle, ProviderTianditu
+		if zh {
+			prefer, fallback = ProviderTianditu, ProviderGoogle
+		}
+		bc := maps.PublicBrowserConfig(c.Request.Context())
+		if bc != nil {
+			if p := bc[prefer]; p.Enabled && p.PublicKey != "" {
+				v.MapProvider = string(prefer)
+				if prefer == ProviderTianditu {
+					v.TiandituTK = p.PublicKey
+				}
+			} else if p := bc[fallback]; p.Enabled && p.PublicKey != "" {
+				v.MapProvider = string(fallback)
+				if fallback == ProviderTianditu {
+					v.TiandituTK = p.PublicKey
+				}
+			}
+		}
+	}
 	h.render(c, "contact", http.StatusOK, v)
 }
 
@@ -908,14 +970,34 @@ func languageForPath(p string) Language {
 }
 
 // GET /robots.txt —— 官网开放收录，后台路径不允许抓取。
+// Disallow 清单与公开站的实际页面口径对齐：页面（内容、列表、站点地图、联系页）
+// 全部可抓；机器入口（下载、校验和、签名、附件、订单状态、签发出来的草稿预览）
+// 不是给搜索引擎的页面，挡在抓取层省抓取配额。
 func (h *siteHandler) robots(c *gin.Context) {
 	var b strings.Builder
 	b.WriteString("User-agent: *\n")
 	b.WriteString("Allow: /\n")
+	// 后台与框架自身入口。
 	for _, p := range []string{"/admin", "/api", "/mcp", "/healthz"} {
 		b.WriteString("Disallow: " + p + "\n")
 	}
+	// 访客订单（状态页 /orders/:no、下单与轮询端点 /website/orders*）：单人视角的
+	// 机器页面，不进索引也不进 sitemap，与 SitemapEntries 口径天然一致。
+	b.WriteString("Disallow: /orders/\n")
+	b.WriteString("Disallow: /website/orders\n")
+	// 询盘附件按签名 token 下载：不是页面。
+	b.WriteString("Disallow: /website/inquiry\n")
+	// 市场的机器端点：目录 JSON、签名公钥、包下载与校验和（页面 /plugins 与
+	// /plugins/:id 照常可抓）。
+	b.WriteString("Disallow: /plugins/index.json\n")
+	b.WriteString("Disallow: /plugins/signing-key.pub\n")
+	b.WriteString("Disallow: /plugins/*/download\n")
+	b.WriteString("Disallow: /plugins/*/download.sha256\n")
+	b.WriteString("Disallow: /plugins/*/download.sig\n")
+	// 草稿预览链接挂在正常页面路径的查询串上（?preview=<token>），按查询串挡。
+	b.WriteString("Disallow: /*?preview=\n")
 	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", baseURL(c))
+	c.Header("Cache-Control", "public, max-age=3600")
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(b.String()))
 }
 
@@ -931,17 +1013,23 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "sitemap unavailable")
 		return
 	}
-	if set.MarketEnabled {
+	// 插件市场与文档区只在框架展示站（未套品牌主题）收录：品牌主题站的导航与
+	// /sitemap 页都不出现这两个栏目（见 sitemapPage），XML 单方面收录等于给
+	// 「站点自己都不推荐」的页面烧抓取配额，也与访客视角的索引口径打架。
+	if set.MarketEnabled && set.Theme == "" {
 		entries = append(entries, SitemapEntry{Loc: "/plugins"})
 		for _, e := range h.marketEntries() {
 			entries = append(entries, SitemapEntry{Loc: "/plugins/" + e.ID})
 		}
 	}
-	// 文档区也进 sitemap（内容由框架 docs/*.md 渲染，随版本更新）。
-	entries = append(entries, SitemapEntry{Loc: "/docs"}, SitemapEntry{Loc: "/contact"}, SitemapEntry{Loc: "/sitemap"})
-	for _, g := range docGroups {
-		for _, it := range g.Items {
-			entries = append(entries, SitemapEntry{Loc: "/docs/" + it.Slug})
+	entries = append(entries, SitemapEntry{Loc: "/contact"}, SitemapEntry{Loc: "/sitemap"})
+	if set.Theme == "" {
+		// 文档区也进 sitemap（内容由框架 docs/*.md 渲染，随版本更新）。
+		entries = append(entries, SitemapEntry{Loc: "/docs"})
+		for _, g := range docGroups {
+			for _, it := range g.Items {
+				entries = append(entries, SitemapEntry{Loc: "/docs/" + it.Slug})
+			}
 		}
 	}
 	base := baseURL(c)
@@ -964,6 +1052,8 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 		b.WriteString("  </url>\n")
 	}
 	b.WriteString("</urlset>\n")
+	// 内容变更频率低，给 CDN/代理一段可缓存窗口（与静态资源同一档 1h）。
+	c.Header("Cache-Control", "public, max-age=3600")
 	c.Data(http.StatusOK, "application/xml; charset=utf-8", []byte(b.String()))
 }
 

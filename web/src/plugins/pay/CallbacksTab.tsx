@@ -6,6 +6,7 @@ import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -51,10 +52,12 @@ export function CallbacksTab() {
   const [filters, setFilters] = useState<CallbackQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [detail, setDetail] = useState<PayCallback | null>(null)
   const replay = useReplayCallback()
 
-  const { data, isLoading, isError, refetch } = useCallbacks({ ...filters, page, pageSize })
+  const { data, isLoading, isError, refetch } = useCallbacks({ ...filters, page, pageSize, sort, desc })
   const { data: channels = [] } = useChannels()
   // 渠道列显示实例名（表头「渠道实例」），code 只在找不到实例时兜底——运营看得懂名称看不懂 code
   const channelName = useMemo(() => new Map(channels.map((c) => [c.code, c.name])), [channels])
@@ -111,6 +114,7 @@ export function CallbacksTab() {
     {
       key: 'channel',
       title: t('plugin_pay.fields.channel'),
+      sortKey: 'channel',
       mobile: 'sub',
       render: (r) => <Badge variant="outline">{channelName.get(r.channelCode) ?? r.channelCode}</Badge>,
     },
@@ -136,6 +140,7 @@ export function CallbacksTab() {
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
+      sortKey: 'created_at',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
   ]
@@ -203,6 +208,7 @@ export function CallbacksTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-pay-callbacks"
         pagination={{
           page,

@@ -17,6 +17,7 @@ type Handler struct{ svc *Service }
 // from/to 是删除日期（YYYY-MM-DD，含当天），任一可省。
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	list, total, err := h.svc.List(c.Request.Context(), ListFilter{
 		Type:    response.ParseList(c.Query("type"), response.MaxFilterValues),
 		Keyword: strings.TrimSpace(c.Query("keyword")),
@@ -24,6 +25,8 @@ func (h *Handler) List(c *gin.Context) {
 		To:      c.Query("to"),
 		Page:    page,
 		Size:    size,
+		Sort:    sortField,
+		Desc:    desc,
 	})
 	if err != nil {
 		response.Fail(c, err)

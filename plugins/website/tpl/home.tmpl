@@ -1,249 +1,296 @@
 {{define "content"}}
-<section class="hero">
-  <!-- 弧带固定在界面卡背后，不穿过标题；窄屏隐藏，减少动态效果时静止。 -->
-  <svg class="hero-arc" viewBox="0 0 1200 700" preserveAspectRatio="none" aria-hidden="true" focusable="false"
-       data-parallax="34">
-    <defs>
-      <linearGradient id="heroArcGrad" x1="0" y1="1" x2="1" y2="0">
-        <stop offset="0" style="stop-color: var(--hero-arc-deep)"></stop>
-        <stop offset="0.45" style="stop-color: var(--hero-arc-mid)"></stop>
-        <stop offset="1" style="stop-color: var(--hero-arc-tip)"></stop>
-      </linearGradient>
-      <filter id="heroArcShadow" x="-25%" y="-25%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="rgba(10, 12, 40, 0.45)"></feDropShadow>
-      </filter>
-    </defs>
-    <path d="M-70 706 C 180 320, 620 150, 1270 300" fill="none" stroke="url(#heroArcGrad)" stroke-width="56"
-          stroke-linecap="round" filter="url(#heroArcShadow)"></path>
-    <path d="M-70 706 C 180 320, 620 150, 1270 300" fill="none" stroke="rgba(255,255,255,0.14)"
-          stroke-width="9" stroke-linecap="round" transform="translate(0 -14)"></path>
-  </svg>
-  <div class="container hero-in">
-    <h1 class="hero-title" data-reveal>
-      {{- range $i, $line := titleLines .HomeTitle}}
-      {{- if $i}}<br>{{end}}<span class="title-line">{{$line}}</span>
-      {{- end}}
-    </h1>
-    <div class="hero-lead" data-reveal>
-      {{if .HomeSubtitle}}<p class="hero-sub">{{.HomeSubtitle}}</p>{{end}}
-      <a class="hero-badge" href="{{.URL "/news"}}">{{.T "home.badge"}}<span class="badge-arrow" aria-hidden="true">→</span></a>
-    </div>
-    <div class="hero-cta" data-reveal>
-      {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}
-      <a class="hero-link" href="#quickstart"><span aria-hidden="true">→</span>{{.T "home.heroQuickstart"}}</a>
-    </div>
+{{/* 首页 v3：linear.app 式编辑版式，但按「信息优先」重排——
+     1) 首屏：定位句 + 真实界面 + 四个硬数字，先回答「它是什么」；
+     2) 陈述 + Fig 0.1~0.3 + 设计准则引语合成一个分区；
+     3) 两块产品界面（核心平台 / 扩展体系）；
+     4) 出厂能力与集成合并成一个分区；
+     5) 插件市场 → 上手（含 FAQ）→ 更新 → 收尾 CTA。
+     文案全部走 i18n，界面图沿用后台真实截图（深浅两套随主题切换）。 */}}
+<div class="hp">
 
-    <div class="hero-visual" data-reveal>
-      <div class="hero-stage">
-        <figure class="hero-shot" data-parallax>
-          <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
-          <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
+  <section class="hp-hero">
+    <div class="hp-hero-bg" aria-hidden="true"></div>
+    <div class="container hp-hero-in">
+      <div class="hp-hero-copy" data-reveal>
+        <h1 class="hp-hero-title">
+          {{- range $i, $line := titleLines .HomeTitle}}
+          {{- if $i}}<br>{{end}}<span class="hp-title-line">{{$line}}</span>
+          {{- end}}
+        </h1>
+        <p class="hp-hero-lede">{{.T "home.heroLede"}}</p>
+        {{if .HomeSubtitle}}<p class="hp-hero-sub">{{.HomeSubtitle}}</p>{{end}}
+        <div class="hp-hero-actions">
+          {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}
+          <a class="hp-hero-link" href="#quickstart">{{.T "home.heroQuickstart"}}<span aria-hidden="true">→</span></a>
+        </div>
+        {{if .MarketEnabled}}
+        <p class="hp-hero-new">
+          <a href="{{.URL "/plugins"}}"><span class="hp-new-tag">{{.T "home.new.tag"}}</span>{{.T "home.new.text"}}<span class="hp-new-arrow" aria-hidden="true">→</span></a>
+        </p>
+        {{else if .Posts}}
+        <p class="hp-hero-new">
+          <a href="{{.URL "/news"}}"><span class="hp-new-tag">{{.T "home.new.tag"}}</span>{{.T "home.badge"}}<span class="hp-new-arrow" aria-hidden="true">→</span></a>
+        </p>
+        {{end}}
+      </div>
+
+      <div class="hp-hero-stage" data-reveal>
+        <figure class="hp-window">
+          <div class="hp-window-bar" aria-hidden="true">
+            <span class="hp-window-dots"><i></i><i></i><i></i></span>
+            <span class="hp-window-url">{{icon "lock"}}<span>app.nexadmin.dev/admin/workbench</span></span>
+          </div>
+          <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
+          <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
         </figure>
-        <span class="hero-mark hero-mark--tl" aria-hidden="true"></span>
-        <span class="hero-mark hero-mark--tr" aria-hidden="true"></span>
-        <span class="hero-mark hero-mark--bl" aria-hidden="true"></span>
-        <span class="hero-mark hero-mark--br" aria-hidden="true"></span>
-        <p class="hero-caption"><span class="hero-caption-dot" aria-hidden="true"></span>{{.T "home.heroShotNote"}}</p>
+        <p class="hp-hero-caption"><span class="hp-dot" aria-hidden="true"></span>{{.T "home.heroShotNote"}}</p>
       </div>
-    </div>
-  </div>
-</section>
 
-<section class="tech">
-  <div class="container" data-reveal>
-    <p class="tech-title">{{.T "home.tech.title"}}</p>
-    <div class="tech-marquee">
-      <div class="tech-track">
-        <ul class="tech-list">
+      <ul class="hp-facts" data-reveal>
+        {{/* 数字来自仓库本身：30 = modules 下 module.go 的文件数；4 = /setup 向导步数；
+             3 = mysql/mariadb/postgres 三份迁移；1 = 前端内嵌后的单一二进制。
+             新增内置模块时记得同步这里和 home.facts.m* 文案。 */}}
+        <li><b>30</b><span>{{.T "home.facts.m1"}}</span></li>
+        <li><b>4</b><span>{{.T "home.facts.m2"}}</span></li>
+        <li><b>3</b><span>{{.T "home.facts.m3"}}</span></li>
+        <li><b>1</b><span>{{.T "home.facts.m4"}}</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="hp-band" aria-label="{{.T "home.tech.title"}}">
+    <div class="container">
+      <p class="hp-band-label">{{.T "home.tech.title"}}</p>
+    </div>
+    <div class="hp-marquee">
+      <div class="hp-marquee-track">
+        <ul class="hp-marquee-list">
           <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
           <li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li><li>Redis / Valkey</li>
         </ul>
-        <ul class="tech-list" aria-hidden="true">
+        <ul class="hp-marquee-list" aria-hidden="true">
           <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
           <li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li><li>Redis / Valkey</li>
         </ul>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="statement">
-  <div class="container statement-in" data-reveal>
-    <p class="fig">{{.T "home.statement.fig"}}</p>
-    <p class="statement-copy"><span class="stmt-lead">{{.T "home.statement.strong"}}</span><span class="stmt-sub">{{.T "home.statement.rest"}}</span></p>
-  </div>
-</section>
+  <section class="hp-principles" id="features">
+    <div class="container">
+      <p class="hp-statement-text" data-reveal><span class="hp-statement-lead">{{.T "home.statement.strong"}}</span> <span class="hp-statement-rest">{{.T "home.statement.rest"}}</span></p>
+    </div>
 
-<section class="section pillars" id="features">
-  <div class="container">
-    <div class="pillar" data-reveal>
-      <h2>{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
-      <div class="pillar-body">
-        <p>{{.T "home.editorial.platform.sub"}}</p>
-        <a class="learn-more" href="{{.URL "/docs/features"}}">{{.T "home.editorial.platform.link"}}<span aria-hidden="true">→</span></a>
+    <div class="container">
+      <div class="hp-principles-grid">
+        <article class="hp-principle" data-reveal>
+          <p class="hp-fig"><span>Fig 0.1</span></p>
+          <div class="hp-art" aria-hidden="true">
+            <svg viewBox="0 0 220 220" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round">
+              <path d="M110 42 178 76 110 110 42 76Z"></path>
+              <path d="M42 76v20l68 34 68-34V76"></path>
+              <path d="M42 96v20l68 34 68-34V96"></path>
+              <path d="M42 116v20l68 34 68-34v-20"></path>
+              <path d="M110 110v20" opacity=".5"></path>
+              <path d="M76 93v20M144 93v20" opacity=".5"></path>
+            </svg>
+          </div>
+          <h3>{{.T "home.principle1.title"}}</h3>
+          <p>{{.T "home.principle1.desc"}}</p>
+        </article>
+
+        <article class="hp-principle" data-reveal>
+          <p class="hp-fig"><span>Fig 0.2</span></p>
+          <div class="hp-art" aria-hidden="true">
+            <svg viewBox="0 0 220 220" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round">
+              <path d="M110 26l34 19v38l-34 19-34-19V45Z"></path>
+              <path d="M110 26v38M76 45l34 19 34-19"></path>
+              <path d="M64 108l32 18v36l-32 18-32-18v-36Z"></path>
+              <path d="M64 108v36M32 126l32 18 32-18"></path>
+              <path d="M156 108l32 18v36l-32 18-32-18v-36Z"></path>
+              <path d="M156 108v36M124 126l32 18 32-18"></path>
+              <path d="M105 84l-9 24M115 84l9 24" opacity=".45"></path>
+            </svg>
+          </div>
+          <h3>{{.T "home.principle2.title"}}</h3>
+          <p>{{.T "home.principle2.desc"}}</p>
+        </article>
+
+        <article class="hp-principle" data-reveal>
+          <p class="hp-fig"><span>Fig 0.3</span></p>
+          <div class="hp-art" aria-hidden="true">
+            <svg viewBox="0 0 220 220" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round">
+              <path d="M32 158l92-26 64 16-92 26Z"></path>
+              <path d="M40 140l92-26 64 16-92 26Z" opacity=".78"></path>
+              <path d="M48 122l92-26 64 16-92 26Z" opacity=".58"></path>
+              <path d="M56 104l92-26 64 16-92 26Z" opacity=".4"></path>
+              <path d="M64 86l92-26 64 16-92 26Z" opacity=".24"></path>
+              <path d="M32 158v12l92 26 64-18v-12" opacity=".5"></path>
+            </svg>
+          </div>
+          <h3>{{.T "home.principle3.title"}}</h3>
+          <p>{{.T "home.principle3.desc"}}</p>
+        </article>
       </div>
-      <figure class="pillar-shot">
+    </div>
+
+    <div class="container">
+      <figure class="hp-quote-in" data-reveal>
+        <blockquote>{{.T "home.quote.body"}}</blockquote>
+        <figcaption>{{.T "home.quote.by"}}</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="hp-show" id="platform">
+    <div class="container">
+      <div class="hp-show-head">
+        <div class="hp-show-title" data-reveal>
+          <p class="hp-kicker">{{.T "home.platform.kicker"}}</p>
+          <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+        </div>
+        <div class="hp-show-aside" data-reveal>
+          <p class="hp-lead">{{.T "home.editorial.platform.sub"}}</p>
+          <a class="hp-more" href="{{.URL "/docs/features"}}">{{.T "home.editorial.platform.link"}}<span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+
+      <figure class="hp-show-shot" data-reveal>
         <img class="shot-dark" src="/website-assets/market/user-dark.jpg?v={{assetV "market/user-dark.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
         <img class="shot-light" src="/website-assets/market/user-light.jpg?v={{assetV "market/user-light.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <figcaption class="hero-caption">{{.T "home.pillarShot.userNote"}}</figcaption>
       </figure>
+      <ul class="hp-tags" data-reveal>
+        <li>{{.T "home.platform.f1"}}</li>
+        <li>{{.T "home.platform.f2"}}</li>
+        <li>{{.T "home.platform.f3"}}</li>
+        <li>{{.T "home.platform.f4"}}</li>
+        <li class="hp-tags-note">{{.T "home.pillarShot.userNote"}}</li>
+      </ul>
     </div>
-    <div class="pillar" id="extension" data-reveal>
-      <h2>{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
-      <div class="pillar-body">
-        <p>{{.T "home.editorial.extension.sub"}}</p>
-        <a class="learn-more" href="{{.URL "/docs/plugin-dev"}}">{{.T "home.editorial.extension.link"}}<span aria-hidden="true">→</span></a>
+  </section>
+
+  <section class="hp-show" id="extension">
+    <div class="container">
+      <div class="hp-show-head">
+        <div class="hp-show-title" data-reveal>
+          <p class="hp-kicker">{{.T "home.extension.kicker"}}</p>
+          <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+        </div>
+        <div class="hp-show-aside" data-reveal>
+          <p class="hp-lead">{{.T "home.editorial.extension.sub"}}</p>
+          <a class="hp-more" href="{{.URL "/docs/plugin-dev"}}">{{.T "home.editorial.extension.link"}}<span aria-hidden="true">→</span></a>
+        </div>
       </div>
-      <figure class="pillar-shot">
+
+      <figure class="hp-show-shot" data-reveal>
         <img class="shot-dark" src="/website-assets/market/pluginmarket-dark.jpg?v={{assetV "market/pluginmarket-dark.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
         <img class="shot-light" src="/website-assets/market/pluginmarket-light.jpg?v={{assetV "market/pluginmarket-light.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <figcaption class="hero-caption">{{.T "home.pillarShot.marketNote"}}</figcaption>
       </figure>
+      <ul class="hp-tags" data-reveal>
+        <li>{{.T "home.extension.f1"}}</li>
+        <li>{{.T "home.extension.f2"}}</li>
+        <li>{{.T "home.extension.f3"}}</li>
+        <li>{{.T "home.extension.f4"}}</li>
+        <li class="hp-tags-note">{{.T "home.pillarShot.marketNote"}}</li>
+      </ul>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="section integrations" id="integrations">
-  <div class="container">
-    <h3 class="intg-head" data-reveal>{{.T "home.editorial.intg.head"}}</h3>
-    <ul class="intg-grid" data-reveal>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "code"}}</span><span class="intg-name">{{.T "home.intg.github"}}</span><span class="intg-kind">{{.T "home.intg.kindOauth"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "users"}}</span><span class="intg-name">{{.T "home.intg.wecom"}}</span><span class="intg-kind">{{.T "home.intg.kindScan"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "bell"}}</span><span class="intg-name">{{.T "home.intg.dingtalk"}}</span><span class="intg-kind">{{.T "home.intg.kindScan"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "zap"}}</span><span class="intg-name">{{.T "home.intg.feishu"}}</span><span class="intg-kind">{{.T "home.intg.kindScan"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "box"}}</span><span class="intg-name">{{.T "home.intg.s3"}}</span><span class="intg-kind">{{.T "home.intg.kindUpload"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "chart"}}</span><span class="intg-name">{{.T "home.intg.prometheus"}}</span><span class="intg-kind">{{.T "home.intg.kindMetrics"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "key"}}</span><span class="intg-name">{{.T "home.intg.oidc"}}</span><span class="intg-kind">{{.T "home.intg.kindIdp"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "plug"}}</span><span class="intg-name">{{.T "home.intg.webhook"}}</span><span class="intg-kind">{{.T "home.intg.kindEvents"}}</span></li>
-      <li><span class="intg-mark" aria-hidden="true">{{icon "terminal"}}</span><span class="intg-name">{{.T "home.intg.mcp"}}</span><span class="intg-kind">{{.T "home.intg.kindTool"}}</span></li>
-    </ul>
-  </div>
-</section>
-
-{{if .Features}}
-<section class="section cap-index" id="capabilities">
-  <div class="container">
-    <div class="cap-head" data-reveal>
-      <p class="fig">{{.T "home.cap.fig"}}</p>
-      <a class="section-more" href="{{.URL "/docs/features"}}">{{.T "home.cap.more"}}</a>
-    </div>
-    <div class="cap-grid">
-      {{range .Features}}
-      <article class="cap" data-reveal>
-        <header class="cap-title">
-          <span class="cap-icon" aria-hidden="true">{{icon .Icon}}</span>
-          <h3>{{.Title}}</h3>
-        </header>
-        <p>{{.Description}}</p>
-      </article>
-      {{end}}
-    </div>
-  </div>
-</section>
-{{end}}
-
-<section class="section" id="product">
-  <div class="container">
-    <header class="section-head home-head" data-reveal>
-      <div class="section-copy">
-        <h2>{{.T "home.product.title"}}</h2>
-      </div>
-      <div class="section-side">
-        <p class="section-sub">{{.T "home.product.sub"}}</p>
-        <a class="section-more" href="/admin/login">{{.T "layout.login"}}</a>
-      </div>
-    </header>
-    <!-- 首屏已经展示过工作台截图，这里不再重复贴图，用文字列出真实存在的三块界面 -->
-    <ul class="product-facts" data-reveal>
-      <li><h3>{{.T "home.product.shot.user"}}</h3></li>
-      <li><h3>{{.T "home.product.shot.menu"}}</h3></li>
-      <li><h3>{{.T "home.product.shot.siteset"}}</h3></li>
-    </ul>
-  </div>
-</section>
-
-{{if and .MarketEnabled .FeaturedPlugins}}
-<section class="section" id="market">
-  <div class="container">
-    <header class="section-head home-head" data-reveal>
-      <div class="section-copy">
-        <h2>{{.T "home.market.title"}}</h2>
-      </div>
-      <div class="section-side">
-        <p class="section-sub">{{.T "home.market.sub"}}</p>
-        <a class="section-more" href="{{.URL "/plugins"}}">{{.T "home.market.more"}}</a>
-      </div>
-    </header>
-    <div class="plugin-grid">
-      {{range .FeaturedPlugins}}
-      <article class="plugin-card" data-reveal>
-        <!-- 去掉封面图，只用图标和色块 -->
-        <header class="plugin-card-head">
-          <span class="plugin-icon" aria-hidden="true">{{.Initial}}</span>
-          <div class="plugin-title">
-            <h3><a href="{{$.URL .DetailURL}}">{{.Name}}</a></h3>
-            <span class="plugin-id">{{.ID}} · v{{.Version}}</span>
-          </div>
-          <span class="pill {{if .Pro}}pro{{end}}">{{if .Pro}}{{$.T "market.pro"}}{{else}}{{$.T "market.free"}}{{end}}</span>
-        </header>
-        <p class="plugin-desc">{{.Description}}</p>
-        <div class="plugin-stats-line">
-          {{if .RatingCount}}<span class="plugin-rating">★ {{.RatingAvg}} <small>({{.RatingCount}})</small></span>{{end}}
-          {{if .Downloads}}<span>{{$.TN .Downloads "market.downloads" .DownloadsText}}</span>{{end}}
+  {{if .Features}}
+  <section class="hp-section" id="capabilities">
+    <div class="container">
+      <div class="hp-section-head" data-reveal>
+        <div>
+          <p class="hp-kicker">{{.T "home.cap.fig"}}</p>
+          <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.cap.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
         </div>
-        <footer class="plugin-card-foot">
-          <span class="plugin-cat">{{.CategoryLabel}}</span>
-          <a class="plugin-link" href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}">{{$.T "market.detail"}}</a>
-        </footer>
-      </article>
-      {{end}}
-    </div>
-  </div>
-</section>
-{{end}}
-
-{{if .Posts}}
-<section class="section" id="news">
-  <div class="container">
-    <header class="section-head home-head" data-reveal>
-      <div class="section-copy">
-        <h2>{{.T "home.news.title"}}</h2>
-      </div>
-      <div class="section-side">
-        <a class="section-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
-      </div>
-    </header>
-    <div class="home-posts">
-      {{range .Posts}}
-      <a class="home-post" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
-        <time class="post-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
-        <div class="home-post-text">
-          <h3>{{.Title}}</h3>
-          {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+        <div class="hp-section-aside">
+          <p class="hp-lead">{{.T "home.cap.sub"}}</p>
+          <a class="hp-more" href="{{.URL "/docs/features"}}">{{.T "home.cap.more"}}<span aria-hidden="true">→</span></a>
         </div>
-        <span class="home-post-arrow" aria-hidden="true">→</span>
-      </a>
-      {{end}}
-    </div>
-  </div>
-</section>
-{{end}}
+      </div>
+      <div class="hp-caps">
+        {{range .Features}}
+        <article class="hp-cap" data-reveal>
+          <span class="hp-cap-icon" aria-hidden="true">{{icon .Icon}}</span>
+          <h3>{{.Title}}</h3>
+          <p>{{.Description}}</p>
+        </article>
+        {{end}}
+      </div>
 
-<section class="section" id="quickstart">
-  <div class="container qs-grid">
-    <div class="qs-copy" data-reveal>
-      <h2>{{.T "home.qs.title"}}</h2>
-      <p class="section-sub">{{.T "home.qs.sub"}}</p>
-      <ol class="qs-steps">
-        <li><b>{{.T "home.qs.build"}}</b>{{.T "home.qs.buildText"}}</li>
-        <li><b>{{.T "home.qs.start"}}</b>{{.T "home.qs.startText"}}</li>
-        <li><b>{{.T "home.qs.open"}} <code>/setup</code></b>{{.T "home.qs.setupText"}}</li>
-      </ol>
-      <p class="qs-note">{{.T "home.qs.notePre"}}<code>go run ./cmd/server</code>{{.T "home.qs.noteMid"}}<code>cd web &amp;&amp; npm run dev</code>{{.T "home.qs.notePost"}}</p>
+      <div class="hp-intg-block" data-reveal>
+        <div class="hp-intg-intro">
+          <h3>{{.T "home.intg.title"}}</h3>
+          <p>{{.T "home.intg.sub"}}</p>
+        </div>
+        <ul class="hp-intg">
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "code"}}</span><span class="hp-intg-name">{{.T "home.intg.github"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindOauth"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "users"}}</span><span class="hp-intg-name">{{.T "home.intg.wecom"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindScan"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "bell"}}</span><span class="hp-intg-name">{{.T "home.intg.dingtalk"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindScan"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "zap"}}</span><span class="hp-intg-name">{{.T "home.intg.feishu"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindScan"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "box"}}</span><span class="hp-intg-name">{{.T "home.intg.s3"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindUpload"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "chart"}}</span><span class="hp-intg-name">{{.T "home.intg.prometheus"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindMetrics"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "key"}}</span><span class="hp-intg-name">{{.T "home.intg.oidc"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindIdp"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "plug"}}</span><span class="hp-intg-name">{{.T "home.intg.webhook"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindEvents"}}</span></li>
+          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "terminal"}}</span><span class="hp-intg-name">{{.T "home.intg.mcp"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindTool"}}</span></li>
+        </ul>
+      </div>
     </div>
-    <div class="terminal" data-reveal role="img" aria-label="{{.T "home.qs.aria"}}">
-      <div class="term-bar"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="term-title">sh — nexadmin</span></div>
-      <pre class="term-body"><code><span class="tl"><span class="p">$</span> sh scripts/build.sh</span>
+  </section>
+  {{end}}
+
+  {{if and .MarketEnabled .FeaturedPlugins}}
+  <section class="hp-section" id="market">
+    <div class="container">
+      <div class="hp-section-head" data-reveal>
+        <div>
+          <p class="hp-kicker">{{.T "market.fig"}}</p>
+          <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.market.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+        </div>
+        <div class="hp-section-aside">
+          <p class="hp-lead">{{.T "home.market.sub"}}</p>
+          <a class="hp-more" href="{{.URL "/plugins"}}">{{.T "home.market.more"}}<span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+      <div class="hp-market">
+        {{range .FeaturedPlugins}}
+        <article class="hp-plugin" data-reveal>
+          <header class="hp-plugin-head">
+            <span class="hp-plugin-icon" aria-hidden="true">{{.Initial}}</span>
+            <div class="hp-plugin-title">
+              <h3><a href="{{$.URL .DetailURL}}">{{.Name}}</a></h3>
+              <span class="hp-plugin-id">{{.ID}} · v{{.Version}}</span>
+            </div>
+            <span class="pill {{if .Pro}}pro{{end}}">{{if .Pro}}{{$.T "market.pro"}}{{else}}{{$.T "market.free"}}{{end}}</span>
+          </header>
+          <p class="hp-plugin-desc">{{.Description}}</p>
+          <footer class="hp-plugin-foot">
+            <span>{{.CategoryLabel}}</span>
+            <a href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}">{{$.T "market.detail"}}<span aria-hidden="true">→</span></a>
+          </footer>
+        </article>
+        {{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+
+  <section class="hp-section" id="quickstart">
+    <div class="container hp-qs">
+      <div class="hp-qs-copy" data-reveal>
+        <p class="hp-kicker">{{.T "home.qs.kicker"}}</p>
+        <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.qs.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+        <p class="hp-lead">{{.T "home.qs.sub"}}</p>
+        <ol class="hp-steps">
+          <li><b>{{.T "home.qs.build"}}</b>{{.T "home.qs.buildText"}}</li>
+          <li><b>{{.T "home.qs.start"}}</b>{{.T "home.qs.startText"}}</li>
+          <li><b>{{.T "home.qs.open"}} <code>/setup</code></b>{{.T "home.qs.setupText"}}</li>
+        </ol>
+      </div>
+      <div class="terminal" data-reveal role="img" aria-label="{{.T "home.qs.aria"}}">
+        <div class="term-bar"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="term-title">sh — nexadmin</span></div>
+        <pre class="term-body"><code><span class="tl"><span class="p">$</span> sh scripts/build.sh</span>
 <span class="tl"><span class="c">web   npm ci + npm run build</span></span>
 <span class="tl"><span class="c">build go build -tags embedweb</span></span>
 <span class="tl"><span class="o">✓ bin/nexadmin-server</span></span>
@@ -251,25 +298,68 @@
 <span class="tl"><span class="o">{{.T "home.term.setup"}}  http://localhost:8080/setup</span></span>
 <span class="tl"><span class="o">{{.T "home.term.token"}}  8f3a-…{{.T "home.term.tokenNote"}}</span></span>
 <span class="tl"><span class="p">$</span> <span class="c">{{.T "home.term.hint"}}</span><span class="caret" aria-hidden="true"></span></span></code></pre>
+      </div>
     </div>
-  </div>
-</section>
 
-<section class="quote">
-  <div class="container quote-in" data-reveal>
-    <blockquote>{{.T "home.quote.body"}}</blockquote>
-    <p class="quote-by">{{.T "home.quote.by"}}</p>
-  </div>
-</section>
-
-<section class="cta">
-  <div class="container cta-in" data-reveal>
-    <h2>{{.T "home.cta.title"}}</h2>
-    <p>{{.T "home.cta.sub"}}</p>
-    <div class="hero-cta">
-      <a class="btn btn-primary" href="{{.URL "#quickstart"}}">{{.T "home.cta.primary"}}</a>
-      <a class="btn btn-ghost" href="{{.URL "/p/about"}}">{{.T "home.cta.secondary"}}</a>
+    {{if .Faqs}}
+    <div class="container">
+      <div class="hp-faq-block" id="faq">
+        <div class="hp-faq-intro" data-reveal>
+          <h2 class="hp-h3">{{.T "home.faq.title"}}</h2>
+          <a class="hp-more" href="{{.URL "/contact"}}">{{.T "home.faq.more"}}<span aria-hidden="true">→</span></a>
+        </div>
+        <div class="hp-faq" data-reveal>
+          {{range .Faqs}}
+          <details class="hp-faq-item">
+            <summary>{{.Question}}</summary>
+            <div class="hp-faq-answer">{{.Answer}}</div>
+          </details>
+          {{end}}
+        </div>
+      </div>
     </div>
-  </div>
-</section>
+    {{end}}
+  </section>
+
+  {{if .Posts}}
+  <section class="hp-section" id="news">
+    <div class="container">
+      <div class="hp-section-head" data-reveal>
+        <div>
+          <p class="hp-kicker">{{.T "home.news.kicker"}}</p>
+          <h2 class="hp-h2 hp-h2-sm">{{.T "home.news.title"}}</h2>
+        </div>
+        <div class="hp-section-aside">
+          <a class="hp-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}<span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+      <div class="hp-posts">
+        {{range .Posts}}
+        <a class="hp-post" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+          <time class="hp-post-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
+          <div class="hp-post-text">
+            <h3>{{.Title}}</h3>
+            {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+          </div>
+          <span class="hp-post-arrow" aria-hidden="true">→</span>
+        </a>
+        {{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+
+  <section class="hp-cta">
+    <div class="hp-cta-glow" aria-hidden="true"></div>
+    <div class="container hp-cta-in" data-reveal>
+      <h2>{{range $i, $line := titleLines (.T "home.cta.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+      <p>{{.T "home.cta.sub"}}</p>
+      <div class="hp-cta-actions">
+        <a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.T "home.cta.primary"}}</a>
+        <a class="btn btn-ghost" href="{{.URL "/docs"}}">{{.T "home.cta.secondary"}}</a>
+      </div>
+    </div>
+  </section>
+
+</div>
 {{end}}

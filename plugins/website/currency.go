@@ -107,15 +107,20 @@ var currencyNames = map[string][2]string{
 
 // currencyLabel 弹层下拉的选项文本：「USD - 美元」。lang 是站点界面语言码。
 func currencyLabel(code, lang string) string {
+	return code + " - " + currencyName(code, lang)
+}
+
+// currencyName 返回币种的本地化名称（zh 界面取中文名，其余取英文名；
+// 清单外的币种回退币种码本身）。语言-币种触发钮用纯名称。
+func currencyName(code, lang string) string {
 	names, ok := currencyNames[code]
 	if !ok {
 		return code
 	}
-	name := names[0]
 	if strings.HasPrefix(strings.ToLower(lang), "zh") {
-		name = names[1]
+		return names[1]
 	}
-	return code + " - " + name
+	return names[0]
 }
 
 // fx 是请求级换算器：siteView.FxCur / FxMoney 的后端。

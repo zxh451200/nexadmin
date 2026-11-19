@@ -111,10 +111,12 @@ type DefView struct {
 	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
-// DefQuery 是定义列表过滤条件。
+// DefQuery 是定义列表过滤条件。Sort/Desc 是表头排序参数（白名单见 store_gorm 的 Defs.List）。
 type DefQuery struct {
 	Keyword  string
 	Status   string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }
@@ -153,7 +155,7 @@ func toDefView(d *store.Definition) (DefView, error) {
 // DefList 分页列出流程定义。
 func (s *Service) DefList(ctx context.Context, q DefQuery) ([]DefView, int64, error) {
 	rows, total, err := s.rt.Defs.List(ctx, store.DefQuery{
-		Keyword: q.Keyword, Status: q.Status, Page: q.Page, PageSize: q.PageSize,
+		Keyword: q.Keyword, Status: q.Status, Sort: q.Sort, Desc: q.Desc, Page: q.Page, PageSize: q.PageSize,
 	})
 	if err != nil {
 		return nil, 0, err

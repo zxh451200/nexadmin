@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/database"
 	"nexadmin/core/notify"
 	"nexadmin/core/tenant"
@@ -207,7 +208,14 @@ func (s *Service) List(ctx context.Context, q Query) ([]View, int64, error) {
 		return nil, 0, err
 	}
 	var rows []SendLog
-	if err := tx.Order("created_at DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：渠道/场景/状态/耗时/时间，白名单外回退 created_at
+	if err := tx.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"channel":    "channel",
+		"scene":      "scene",
+		"status":     "status",
+		"duration_ms": "duration_ms",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out := make([]View, len(rows))

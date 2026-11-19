@@ -30,6 +30,11 @@ const settings: SiteSettings = {
   icp: '',
   footerNote: '框架区源码以 MIT 许可开源；业务与插件代码归各自作者。',
   marketEnabled: true,
+  purchaseEnabled: false,
+  offices: [
+    { name: '深圳总部', address: '南山区科技园 · 研发楼 A 座 12 层', lng: 113.94653, lat: 22.54621 },
+    { name: '上海办事处', address: '徐汇区漕河泾开发区 · 创新中心 B 座 8 层', lng: 121.39868, lat: 31.16859 },
+  ],
   messageNotifyEmail: true,
   contactConsent: false,
   contactConsentUrl: '',

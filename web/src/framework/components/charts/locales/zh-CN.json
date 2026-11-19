@@ -1,10 +1,12 @@
 {
   "charts": {
     "vsLast": "较上期",
+    "vsBase": "上期 {{base}}",
     "up": "上升",
     "down": "下降",
     "flat": "持平",
     "chartType": "图表类型",
+    "range": "时间范围",
     "line": "折线",
     "area": "面积",
     "bar": "柱状"

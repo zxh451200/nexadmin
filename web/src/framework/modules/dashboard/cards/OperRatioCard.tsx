@@ -1,15 +1,23 @@
+import { useState } from 'react'
 import { Cell, Legend, Pie, PieChart, Sector, Tooltip } from 'recharts'
 import type { PieSectorDataItem } from 'recharts/types/polar/Pie'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
+import { Can } from '@/framework/auth/Can'
 import { ChartBox } from '@/framework/components/ChartBox'
+import { ChartCard, type ChartCardRange } from '@/framework/components/ChartCard'
 import { useLegendToggle } from '@/framework/components/useLegendToggle'
-import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
-import { useDashboardStats } from '../api'
+import { useDashboardStats, type TrendDays } from '../api'
+
+const DAYS: TrendDays[] = [7, 14, 30]
+const RANGE_KEYS = ['d7', 'd14', 'd30'] as const
 
 export default function OperRatioCard() {
   const { t } = useTranslation()
-  const { data } = useDashboardStats()
+  const [days, setDays] = useState<TrendDays>(30)
+  const { data } = useDashboardStats(days)
   // 图例点击切显隐；饼图各扇区共用 dataKey，按名称取 key，并把隐藏项置 0 而不是删掉数据（否则图例点不回来）。
   const sliceNames = (data?.operTypes ?? []).map((o) => t(`dashboard.oper.${o.type}`, { defaultValue: o.type }))
   const { hidden, formatter } = useLegendToggle((value) => String(value ?? ''), sliceNames)
@@ -18,12 +26,28 @@ export default function OperRatioCard() {
     value: hidden.has(t(`dashboard.oper.${o.type}`, { defaultValue: o.type })) ? 0 : o.value,
     color: `hsl(var(--chart-${(i % 5) + 1}))`,
   }))
+  const ranges: ChartCardRange[] = DAYS.map((d, i) => ({ value: String(d), label: t(`dashboard.trendRange.${RANGE_KEYS[i]}`) }))
   return (
-    <Card className="flex h-full flex-col transition-shadow hover:glow motion-reduce:transition-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{t('dashboard.operRatio')}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1">
+    <ChartCard
+      title={t('dashboard.operRatio')}
+      ranges={ranges}
+      range={String(days)}
+      onRangeChange={(v) => setDays(Number(v) as TrendDays)}
+      // 操作日志是这份占比的明细去处：入口与报表页同一权限口径（operLog:list）
+      actions={
+        <Can perm="operLog:list">
+          <Link
+            to="/monitor/oper-log"
+            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t('dashboard.viewReport')}
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </Can>
+      }
+      className="flex h-full flex-col"
+    >
+      <div className="flex-1">
         {data ? (
           <ChartBox height={260}>
             {({ width, height }) => (
@@ -64,7 +88,7 @@ export default function OperRatioCard() {
         ) : (
           <Skeleton className="h-64 w-full" />
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </ChartCard>
   )
 }

@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { isJsonObjectText } from '@/framework/components/json'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { cn } from '@/lib/utils'
 import {
   useDeleteJob,
@@ -46,6 +47,8 @@ export function JobsTab({ onViewLogs }: Props) {
   const [filters, setFilters] = useState<JobQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新创建在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CronJob | null>(null)
   const [selected, setSelected] = useState<string[]>([])
@@ -55,7 +58,7 @@ export function JobsTab({ onViewLogs }: Props) {
   const [runTarget, setRunTarget] = useState<CronJob | null>(null)
   const [healthTarget, setHealthTarget] = useState<CronJob | null>(null)
 
-  const { data, isLoading } = useJobs({ ...filters, page, pageSize }, autoRefresh)
+  const { data, isLoading } = useJobs({ ...filters, page, pageSize, sort, desc }, autoRefresh)
   const { data: handlers = [] } = useHandlers()
   const setEnabled = useSetEnabled()
   const setEnabledBatch = useSetJobsEnabled()
@@ -107,9 +110,9 @@ export function JobsTab({ onViewLogs }: Props) {
   }
 
   const columns: Column<CronJob>[] = [
-    { key: 'name', title: t('plugin_cron.fields.name'), mobile: 'title', render: (j) => <span className="font-medium text-foreground">{j.name}</span> },
+    { key: 'name', title: t('plugin_cron.fields.name'), sortKey: 'name', mobile: 'title', render: (j) => <span className="font-medium text-foreground">{j.name}</span> },
     { key: 'cronExpr', title: t('plugin_cron.fields.cronExpr'), mobile: 'sub', render: (j) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{j.cronExpr}</code> },
-    { key: 'handler', title: t('plugin_cron.fields.handler'), render: (j) => <Badge variant="outline">{handlerLabel(j.handler)}</Badge> },
+    { key: 'handler', title: t('plugin_cron.fields.handler'), sortKey: 'handler', render: (j) => <Badge variant="outline">{handlerLabel(j.handler)}</Badge> },
     {
       key: 'enabled',
       title: t('plugin_cron.fields.enabled'),
@@ -198,6 +201,7 @@ export function JobsTab({ onViewLogs }: Props) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-cron-jobs"
         pagination={{
           page,

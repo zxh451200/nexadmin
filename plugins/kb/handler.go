@@ -54,7 +54,12 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 
 // GET /plugins/kb/documents —— 文档列表。
 func (h *handler) list(c *gin.Context) {
-	rows, err := h.svc.ListDocuments(c.Request.Context(), DocumentQuery{Status: c.Query("status")})
+	sortField, desc := response.ParseSort(c)
+	// 未指定排序字段时保持历史默认（新文档在前）
+	if sortField == "" {
+		desc = true
+	}
+	rows, err := h.svc.ListDocuments(c.Request.Context(), DocumentQuery{Status: c.Query("status"), Sort: sortField, Desc: desc})
 	respond(c, rows, err)
 }
 

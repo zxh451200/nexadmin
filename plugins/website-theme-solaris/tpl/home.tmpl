@@ -281,6 +281,29 @@
 </section>
 {{end}}
 
+{{if .Faqs}}
+{{/* 常见问题板块：条目在「站点设置 → 常见问题」维护，details/summary 原生交互。 */}}
+<section class="sl-section" id="faq">
+  <div class="sl-wrap">
+    <header class="sl-sect-head" data-reveal>
+      <div>
+        <p class="sl-eyebrow">{{.T "contact.offices"}}</p>
+        <h2>{{.T "home.faq.title"}}</h2>
+      </div>
+      <a class="sl-more" href="{{.URL "/contact"}}">{{.T "home.faq.more"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="sl-faq">
+      {{range .Faqs}}
+      <details class="sl-faq-item" data-reveal>
+        <summary>{{.Question}}</summary>
+        <div class="sl-faq-answer">{{.Answer}}</div>
+      </details>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
 <section class="sl-cta">
   <div class="sl-wrap sl-cta-grid">
     <div>

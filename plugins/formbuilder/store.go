@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/database"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -106,7 +107,13 @@ func (s *gormStore) ListForms(ctx context.Context, fq FormQuery) ([]Form, int64,
 		return nil, 0, err
 	}
 	var list []Form
-	err = q.Order("id DESC").Offset((fq.Page - 1) * fq.PageSize).Limit(fq.PageSize).Find(&list).Error
+	// 排序白名单：名称/状态/时间，白名单外回退 created_at（与原 id DESC 的「新建在前」口径一致）
+	err = q.Order(core.OrderBy(fq.Sort, fq.Desc, map[string]string{
+		"name":       "name",
+		"status":     "status",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+	}, "created_at")).Offset((fq.Page - 1) * fq.PageSize).Limit(fq.PageSize).Find(&list).Error
 	return list, total, err
 }
 

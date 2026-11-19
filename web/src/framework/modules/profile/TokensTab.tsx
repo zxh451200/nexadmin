@@ -249,28 +249,27 @@ export function TokensTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">{t('profile.tokens.description')}</p>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button type="button" onClick={() => setCreateOpen(true)}>
-            <Plus aria-hidden="true" />
-            {t('profile.tokens.create')}
-          </Button>
-          {/* 令牌列表接口只回前缀（prefix），明文与哈希都不在返回里：导出的列因此天然不含可凭证 */}
-          <ExportCsvButton
-            filename="profile-tokens"
-            getRows={fetchAllAccessTokens}
-            columns={[
-              { header: t('profile.tokens.fields.name'), value: (tk) => tk.name },
-              { header: t('profile.tokens.fields.scope'), value: (tk) => t(`profile.tokens.scope.${tk.scope}`) },
-              { header: t('profile.tokens.fields.prefix'), value: (tk) => tk.prefix },
-              { header: t('profile.tokens.fields.lastUsedAt'), value: (tk) => (tk.lastUsedAt ? fmtDateTime(tk.lastUsedAt, i18n.language) : t('profile.tokens.neverUsed')) },
-              { header: t('profile.tokens.fields.expiresAt'), value: (tk) => (tk.expiresAt ? fmtDateTime(tk.expiresAt, i18n.language) : t('profile.tokens.expiry.never')) },
-              { header: t('common.status'), value: (tk) => t(`profile.tokens.state.${tokenState(tk)}`) },
-              { header: t('common.createdAt'), value: (tk) => fmtDateTime(tk.createdAt, i18n.language) },
-            ]}
-          />
-        </div>
+      {/* 描述一行 + 按钮左对齐一行（与新闻管理等列表页的按钮排布一致），不再右飘悬空 */}
+      <p className="text-sm text-muted-foreground">{t('profile.tokens.description')}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" onClick={() => setCreateOpen(true)}>
+          <Plus aria-hidden="true" />
+          {t('profile.tokens.create')}
+        </Button>
+        {/* 令牌列表接口只回前缀（prefix），明文与哈希都不在返回里：导出的列因此天然不含可凭证 */}
+        <ExportCsvButton
+          filename="profile-tokens"
+          getRows={fetchAllAccessTokens}
+          columns={[
+            { header: t('profile.tokens.fields.name'), value: (tk) => tk.name },
+            { header: t('profile.tokens.fields.scope'), value: (tk) => t(`profile.tokens.scope.${tk.scope}`) },
+            { header: t('profile.tokens.fields.prefix'), value: (tk) => tk.prefix },
+            { header: t('profile.tokens.fields.lastUsedAt'), value: (tk) => (tk.lastUsedAt ? fmtDateTime(tk.lastUsedAt, i18n.language) : t('profile.tokens.neverUsed')) },
+            { header: t('profile.tokens.fields.expiresAt'), value: (tk) => (tk.expiresAt ? fmtDateTime(tk.expiresAt, i18n.language) : t('profile.tokens.expiry.never')) },
+            { header: t('common.status'), value: (tk) => t(`profile.tokens.state.${tokenState(tk)}`) },
+            { header: t('common.createdAt'), value: (tk) => fmtDateTime(tk.createdAt, i18n.language) },
+          ]}
+        />
       </div>
       <DataTable
         columns={columns}

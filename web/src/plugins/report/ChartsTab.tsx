@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -20,10 +21,12 @@ export function ChartsTab() {
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：默认新建在前（id DESC，与后端回退序一致），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('id', true, () => setPage(1))
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Chart | null>(null)
   const [picked, setPicked] = useState<string[]>([])
-  const { data, isLoading } = useCharts({ keyword, page, pageSize })
+  const { data, isLoading } = useCharts({ keyword, page, pageSize, sort, desc })
   const { data: datasets = [] } = useDatasetOptions('chart')
   const remove = useDeleteChart()
   const removeBatch = useDeleteCharts()
@@ -56,7 +59,7 @@ export function ChartsTab() {
   }
 
   const columns: Column<Chart>[] = [
-    { key: 'name', title: t('common.name'), mobile: 'title', render: (c) => <span className="font-medium text-foreground">{builtinText(t, c.name)}</span> },
+    { key: 'name', title: t('common.name'), sortKey: 'name', mobile: 'title', render: (c) => <span className="font-medium text-foreground">{builtinText(t, c.name)}</span> },
     { key: 'type', title: t('plugin_report.chart.type'), mobile: 'sub', render: (c) => <Badge variant="outline">{t(`plugin_report.type.${c.type}`)}</Badge> },
     { key: 'dataset', title: t('plugin_report.chart.dataset'), render: (c) => <span>{builtinText(t, datasets.find((d) => d.id === c.datasetId)?.name) || '-'}</span> },
     {
@@ -91,6 +94,7 @@ export function ChartsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-report-charts"
         pagination={{
           page,

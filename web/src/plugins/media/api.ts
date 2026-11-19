@@ -54,10 +54,10 @@ export function useMediaStats() {
   return useQuery({ queryKey: ['media', 'stats'], queryFn: () => api.get<MediaStats>('/plugins/media/stats') })
 }
 
-export function usePendingImages(page: number, pageSize: number) {
+export function usePendingImages(page: number, pageSize: number, sort?: string, desc?: boolean) {
   return useQuery({
-    queryKey: ['media', 'images', page, pageSize],
-    queryFn: () => api.get<{ list: PendingImage[]; total: number }>('/plugins/media/images', { page, pageSize }),
+    queryKey: ['media', 'images', page, pageSize, sort ?? null, desc ?? null],
+    queryFn: () => api.get<{ list: PendingImage[]; total: number }>('/plugins/media/images', { page, pageSize, sort, desc }),
   })
 }
 
@@ -73,10 +73,10 @@ export function useSaveVideoConfig() {
   })
 }
 
-export function useVideos(page: number, pageSize: number) {
+export function useVideos(page: number, pageSize: number, sort?: string, desc?: boolean) {
   return useQuery({
-    queryKey: ['media', 'video', 'assets', page, pageSize],
-    queryFn: () => api.get<{ list: VideoItem[]; total: number }>('/plugins/media/video/assets', { page, pageSize }),
+    queryKey: ['media', 'video', 'assets', page, pageSize, sort ?? null, desc ?? null],
+    queryFn: () => api.get<{ list: VideoItem[]; total: number }>('/plugins/media/video/assets', { page, pageSize, sort, desc }),
   })
 }
 

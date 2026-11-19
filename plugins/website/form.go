@@ -55,6 +55,8 @@ type SettingForm struct {
 	// 「语言-币种」选择器；清洗与校验见 currency.go 的 normalizeCurrencySetting。
 	DefaultCurrency string `json:"defaultCurrency"`
 	CurrencyRates   string `json:"currencyRates"`
+	// PurchaseEnabled 打开产品在线购买（有定价的产品详情页出「立即购买」，匿名下单走 pay 中台）。
+	PurchaseEnabled *bool `json:"purchaseEnabled"`
 	// 供应商实力档案（对标阿里商详供应商卡）：成立年份用指针，设置页分区块保存时不传就不改。
 	// 其余四项是字符串，传空即清空展示（运营可能只想留其中几项）。
 	EstablishedYear *int   `json:"establishedYear"`
@@ -62,6 +64,8 @@ type SettingForm struct {
 	AnnualRevenue   string `json:"annualRevenue"`
 	MainMarkets     string `json:"mainMarkets"`
 	ResponseTime    string `json:"responseTime"`
+	// Offices 是办公地点列表（联系页地点卡 + 地图打点）：服务层做清洗与上限校验。
+	Offices []Office `json:"offices"`
 }
 
 // ItemForm 是导航项表单。
@@ -107,12 +111,15 @@ type ContactForm struct {
 }
 
 // MessageQuery 是后台留言列表的筛选。
+// Sort/Desc 是表头排序参数（白名单见 ListMessages）。
 type MessageQuery struct {
 	Page     int
 	PageSize int
 	Keyword  string
 	// Status 多值（逗号拼接），空切片 = 全部状态；取值必须是 MsgNew / MsgRead / MsgHandled 之一。
 	Status []string
+	Sort   string
+	Desc   bool
 }
 
 // MessageStatusForm 是批量改状态：一次把 ids 里的留言置为 status。

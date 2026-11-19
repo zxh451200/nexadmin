@@ -39,7 +39,8 @@ export function useColumnSettings<T>(columns: Column<T>[], settingsKey?: string)
   const reset = useCallback(() => persist([]), [persist])
 
   const visibleColumns = useMemo(
-    () => columns.filter((c) => c.hideable === false || !hidden.includes(c.key)),
+    // 空标题的列（纯图标外链列）既然不进列设置，也就不能被历史隐藏记录藏掉，始终显示
+    () => columns.filter((c) => c.hideable === false || !c.title || !hidden.includes(c.key)),
     [columns, hidden],
   )
 

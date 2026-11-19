@@ -10,7 +10,9 @@
       "products": "Products",
       "productCategories": "Product categories",
       "messages": "Messages",
-      "openSite": "Open website"
+      "openSite": "Open website",
+      "orders": "Site orders",
+      "faq": "FAQ"
     },
     "settings": {
       "title": "Site settings",
@@ -46,7 +48,10 @@
       "demoImportWarn": "Writes the brand's sample products and news (insert-only), and replaces brand identity content entirely: site name, home copy, navigation and feature cards; safe to repeat.",
       "supplierProfile": "Supplier profile",
       "supplierProfileHint": "These five rows appear on the supplier card of a product page; empty rows are hidden.",
-      "estYearOff": "Hidden"
+      "estYearOff": "Hidden",
+      "offices": "Office locations",
+      "officesHint": "Shown as location cards and maps on the contact page. Map vendor follows the visitor language (zh → Tianditu, others → Google); keys live in System Settings → Map services.",
+      "officeAdd": "Add location"
     },
     "social": {
       "github": "GitHub",
@@ -209,8 +214,8 @@
       "tagDeleteConfirm": "Delete tag \"{{name}}\"? It will be removed from {{count}} posts too.",
       "tagRequired": "Tag name is required",
       "versions": "Version history",
-      "versionsHint": "Every save that changes the body archives the previous content, keeping the latest {{max}} versions. Rollback re-saves historical content — the current one is archived first, and the rollback itself can be rolled back.",
-      "versionsEmpty": "No versions yet: this post has no body-changing overwrite yet.",
+      "versionsHint": "Every save that changes the body or a translation archives the previous content, keeping the latest {{max}} versions. Rollback re-saves historical content — the current one is archived first, and the rollback itself can be rolled back.",
+      "versionsEmpty": "No versions yet: this post has no overwrite that changed the body or a translation.",
       "previewVersion": "Preview",
       "hideVersion": "Hide preview",
       "versionWords": "{{count}} characters",
@@ -575,7 +580,9 @@
       "staffCount": "e.g. 51-100 or 1000+",
       "annualRevenue": "e.g. US$10M-50M",
       "mainMarkets": "Multi-select, e.g. Europe, North America",
-      "responseTime": "e.g. ≤4h"
+      "responseTime": "e.g. ≤4h",
+      "officeName": "e.g. Shenzhen HQ",
+      "officeName2": "e.g. Shanghai office"
     },
     "market": {
       "enabled": "Enable public plugin marketplace",
@@ -604,6 +611,58 @@
       "baseNote": "base (always 1)",
       "add": "Add currency",
       "hint": "Up to {{max}} currencies; rate = 1 USD in that currency. USD is the base and locked; prices are converted to the visitor’s chosen currency."
+    },
+    "orders": {
+      "title": "Site orders",
+      "description": "Orders placed on the product pages; payment status is authoritative in the Payment hub (reference SO…).",
+      "empty": "No orders yet: after enabling product checkout, purchases from the product pages appear here.",
+      "searchPlaceholder": "Search order no. / product / buyer email / phone",
+      "filterStatus": "Filter by status",
+      "filterAll": "All statuses",
+      "deleteConfirm": "Delete order \"{{orderNo}}\"? This only removes the business record; the payment ledger is unaffected.",
+      "deleteBatchConfirm": "Delete the {{count}} selected orders? This only removes business records; the payment ledger is unaffected.",
+      "qty": "Qty {{count}}",
+      "origAmount": "Priced {{currency}} {{amount}}",
+      "fields": {
+        "orderNo": "Order No.",
+        "product": "Product",
+        "buyer": "Buyer",
+        "amount": "Amount",
+        "status": "Status",
+        "createdAt": "Placed at"
+      },
+      "status": {
+        "pending": "Pending",
+        "paid": "Paid",
+        "failed": "Failed",
+        "closed": "Closed"
+      }
+    },
+    "faq": {
+      "title": "FAQ",
+      "description": "Q&A entries for the homepage FAQ section; entries are shown in sort order, disabled ones are hidden.",
+      "add": "Add FAQ",
+      "addTitle": "Add FAQ",
+      "editTitle": "Edit FAQ",
+      "empty": "No FAQs yet: added entries appear in the homepage FAQ section.",
+      "questionRequired": "Question is required",
+      "questionPlaceholder": "e.g. Which payment methods do you accept?",
+      "answerPlaceholder": "Write the answer; line breaks are kept",
+      "answerHint": "Plain text; rendered as paragraphs on the site.",
+      "searchPlaceholder": "Search question or answer",
+      "deleteConfirm": "Delete \"{{question}}\"? It will disappear from the homepage.",
+      "deleteBatchConfirm": "Delete the {{count}} selected FAQs?",
+      "fields": {
+        "question": "Question",
+        "answer": "Answer",
+        "sort": "Sort",
+        "enabled": "Enabled",
+        "actions": "Actions"
+      },
+      "status": {
+        "on": "Shown",
+        "off": "Hidden"
+      }
     }
   }
 }

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -185,11 +186,13 @@ export function ModelsTab() {
   const [filters, setFilters] = useState<ModelQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AiModel | null>(null)
   const [selected, setSelected] = useState<string[]>([])
 
-  const { data, isLoading } = useModels({ ...filters, page, pageSize })
+  const { data, isLoading } = useModels({ ...filters, page, pageSize, sort, desc })
   const remove = useDeleteModel()
   const removeBatch = useDeleteModels()
   const ping = usePingModel()
@@ -235,6 +238,7 @@ export function ModelsTab() {
     {
       key: 'name',
       title: t('plugin_aigateway.fields.name'),
+      sortKey: 'name',
       mobile: 'title',
       render: (m) => (
         <div>
@@ -244,7 +248,7 @@ export function ModelsTab() {
       ),
     },
     { key: 'kind', title: t('plugin_aigateway.fields.kind'), mobile: 'sub', render: (m) => <Badge variant="outline">{t(`plugin_aigateway.kind.${m.kind}`)}</Badge> },
-    { key: 'provider', title: t('plugin_aigateway.fields.provider'), render: (m) => m.provider || '-' },
+    { key: 'provider', title: t('plugin_aigateway.fields.provider'), sortKey: 'provider', render: (m) => m.provider || '-' },
     {
       key: 'default',
       title: t('plugin_aigateway.fields.isDefault'),
@@ -331,6 +335,7 @@ export function ModelsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-aigateway-models"
         pagination={{
           page,

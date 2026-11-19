@@ -8,6 +8,7 @@
     "failed": "Upload failed",
     "retry": "Retry",
     "drag": "Drag to reorder",
+    "sortHint": "Press and drag a tile to reorder",
     "maxCount": "At most {{count}} files",
     "errSize": "\"{{name}}\" exceeds the size limit ({{limit}} MB)",
     "errType": "The type of \"{{name}}\" is not allowed",

@@ -13,7 +13,7 @@
       <ul class="sitemap-list">
         <li><a href="{{.URL "/"}}">{{.T "layout.home"}}</a></li>
         <li><a href="{{.URL "/products"}}">{{.T "layout.product"}}</a></li>
-        <li><a href="{{.URL "/news"}}">{{.T "layout.news"}}</a></li>
+        {{if .Posts}}<li><a href="{{.URL "/news"}}">{{.T "layout.news"}}</a></li>{{end}}
         {{if .DocsEnabled}}<li><a href="{{.URL "/docs"}}">{{.T "layout.docs"}}</a></li>{{end}}
         <li><a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a></li>
       </ul>

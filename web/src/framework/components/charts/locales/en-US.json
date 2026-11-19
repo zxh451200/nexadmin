@@ -1,10 +1,12 @@
 {
   "charts": {
     "vsLast": "vs last period",
+    "vsBase": "prev. {{base}}",
     "up": "Up",
     "down": "Down",
     "flat": "Flat",
     "chartType": "Chart type",
+    "range": "Time range",
     "line": "Line",
     "area": "Area",
     "bar": "Bar"

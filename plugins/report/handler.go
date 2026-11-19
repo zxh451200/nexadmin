@@ -145,13 +145,20 @@ func (h *handler) keywordPage(c *gin.Context) (string, int, int) {
 	return strings.TrimSpace(c.Query("keyword")), page, size
 }
 
+// sortDesc 读取表头排序参数（sort/desc）；白名单与回退列由各 Service.List 决定。
+func sortDesc(c *gin.Context) (string, bool) {
+	d := c.Query("desc")
+	return strings.TrimSpace(c.Query("sort")), d == "true" || d == "1"
+}
+
 // ---- 数据集 ----
 
 func (h *handler) sources(c *gin.Context) { response.OK(c, h.svc.Sources()) }
 
 func (h *handler) listDatasets(c *gin.Context) {
 	kw, page, size := h.keywordPage(c)
-	list, total, err := h.svc.ListDatasets(c.Request.Context(), kw, page, size)
+	sort, desc := sortDesc(c)
+	list, total, err := h.svc.ListDatasets(c.Request.Context(), kw, sort, desc, page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -219,7 +226,8 @@ func (h *handler) listCharts(c *gin.Context) {
 			return
 		}
 	}
-	list, total, err := h.svc.ListCharts(c.Request.Context(), kw, ds, page, size)
+	sort, desc := sortDesc(c)
+	list, total, err := h.svc.ListCharts(c.Request.Context(), kw, ds, sort, desc, page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -228,7 +236,7 @@ func (h *handler) listCharts(c *gin.Context) {
 }
 
 func (h *handler) chartOptions(c *gin.Context) {
-	list, _, err := h.svc.ListCharts(c.Request.Context(), "", 0, 1, 200)
+	list, _, err := h.svc.ListCharts(c.Request.Context(), "", 0, "", true, 1, 200)
 	respond(c, list, err)
 }
 

@@ -25,7 +25,9 @@ type module struct{}
 func (*module) Name() string { return "maps" }
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: newService(d.DB)}
+	svc := newService(d.DB)
+	SetDefault(svc)
+	h := &handler{svc: svc}
 	g := r.Group("/plugins/maps")
 	// 键配置是管理动作：maps:config + 平台级。
 	g.GET("/config", core.Perm(PermConfig), h.Config)

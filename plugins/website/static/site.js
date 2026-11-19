@@ -757,11 +757,36 @@
     }
   });
 
+  // ---- 联系页办公地点地图（天地图）：脚本已在页面内同步加载（带 tk），window.T 就绪后打点。
+  // 谷歌渠道走 iframe embed，无需 JS。加载失败静默缺席，地址卡仍可读。 ----
+  function initOfficeMap() {
+    var el = document.querySelector('[data-office-map]');
+    if (!el || typeof window.T === 'undefined') return;
+    var lng = parseFloat(el.getAttribute('data-lng'));
+    var lat = parseFloat(el.getAttribute('data-lat'));
+    if (isNaN(lng) || isNaN(lat)) return;
+    var label = el.getAttribute('data-label') || '';
+    try {
+      var map = new T.Map(el, { minZoom: 3, maxZoom: 18 });
+      map.centerAndZoom(new T.LngLat(lng, lat), 15);
+      var marker = new T.Marker(new T.LngLat(lng, lat));
+      map.addOverLay(marker);
+      if (label) {
+        marker.addEventListener('click', function () {
+          var info = new T.InfoWindow();
+          info.setContent('<div style="font:13px/1.6 sans-serif;min-width:140px">' + label.replace(/</g, '&lt;') + '</div>');
+          map.openInfoWindow(info, new T.LngLat(lng, lat));
+        });
+      }
+    } catch (e) { /* 地图初始化失败不挡联系页，地址卡仍可读 */ }
+  }
+
   // ---- 页面级绑定 ----
   function initSite() {
     i18n = readI18n();
     injectCSS('site-tip-style', TIP_CSS);
     initContactForm();
+    initOfficeMap();
     initChat();
     initShare();
     initProductDetail();
@@ -1758,10 +1783,95 @@
     initGalleryZoom();
     initProductQty();
   initProductSubtotal();
+    initPurchase();
     initInquiry();
     initStickyInquiry();
     initInquirySticky();
     initSupplierCta();
+  }
+
+  // ---- 产品在线购买（PurchaseEnabled + 有定价才渲染）：数量同步、表单 fetch 提交。
+  // 第一次点「立即购买」展开邮箱等字段（下单必须留联系方式），填完再提交；
+  // 成功后跳收银台。金额与商品由服务端按产品定价计算，前端只传 slug 与数量。 ----
+  function initPurchase() {
+    var form = document.querySelector('[data-pd-buy]');
+    if (!form) return;
+    var fields = form.querySelector('[data-pd-buy-fields]');
+    var btn = form.querySelector('[data-pd-buy-btn]');
+    var qtyHidden = form.querySelector('[data-pd-buy-qty]');
+    var qtyInput = document.querySelector('[data-pd-qty-input]');
+    var revealed = false;
+    var orderErrorShown = false;
+    // 数量步进器联动：下单数量始终跟随页面上可见的数量控件
+    if (qtyInput && qtyHidden) {
+      qtyInput.addEventListener('input', function () {
+        var n = parseInt(String(qtyInput.value).replace(/[^\d]/g, ''), 10);
+        if (isNaN(n) || n < 1) n = 1;
+        qtyHidden.value = String(n);
+      });
+    }
+    // 无 JS 整页提交失败 303 回商品页带 order_error：翻成提示条只显示一次
+    var m = /(?:^|[?&])order_error=([^&]*)/.exec(location.search);
+    if (m && !orderErrorShown) {
+      orderErrorShown = true;
+      var box = document.createElement('p');
+      box.className = 'pd-order-error';
+      box.setAttribute('role', 'alert');
+      box.textContent = msg('buyFailed', '下单失败，请稍后重试');
+      form.parentNode.insertBefore(box, form);
+      // 清掉查询参数，避免刷新页面后提示条一直挂着
+      var u = location.pathname + location.search.replace(/[?&]order_error=[^&]*/, '').replace(/^&/, '?');
+      window.history.replaceState({}, '', u);
+    }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!revealed && fields) {
+        // 首次点击：展开联系方式字段（匿名下单必须留邮箱），按钮变成「提交订单」
+        revealed = true;
+        fields.hidden = false;
+        var email = fields.querySelector('[name="email"]');
+        if (email) email.focus();
+        return;
+      }
+      var fd = new FormData(form);
+      var email = String(fd.get('email') || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        if (fields) fields.hidden = false;
+        var em = fields ? fields.querySelector('[name="email"]') : null;
+        if (em) em.focus();
+        return;
+      }
+      var payload = {
+        slug: String(fd.get('slug') || ''),
+        qty: parseInt(String(fd.get('qty') || '1'), 10) || 1,
+        email: email,
+        phone: String(fd.get('phone') || '').trim(),
+        remark: String(fd.get('remark') || '').trim()
+      };
+      var busy = true;
+      if (btn) { btn.disabled = true; busy = true; }
+      fetch(form.getAttribute('action'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        busy = false;
+        if (btn) btn.disabled = false;
+        if (!j || j.code !== 0 || !j.data) throw new Error('failed');
+        // 有收银台地址就跳渠道（mock 收银台 / 易支付网关 / Stripe Checkout）；
+        // 只回了订单号（无跳转型渠道）时落订单状态页轮询。
+        if (j.data.payUrl) { location.href = j.data.payUrl; return; }
+        if (j.data.orderNo) { location.href = location.pathname.replace(/\/products\/[^/]+/, '/orders/') + j.data.orderNo; }
+      }).catch(function () {
+        busy = false;
+        if (btn) btn.disabled = false;
+        var box = document.createElement('p');
+        box.className = 'pd-order-error';
+        box.setAttribute('role', 'alert');
+        box.textContent = msg('buyFailed', '下单失败，请稍后重试');
+        form.parentNode.insertBefore(box, form);
+      });
+    });
   }
 
   // ---- 产品列表排序：选完立即提交 GET，保留分类与检索词（无 JS 时还有「应用」按钮） ----

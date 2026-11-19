@@ -119,6 +119,7 @@ func (h *handler) createOrder(c *gin.Context) {
 
 // orderQueryFrom 把列表/异步导出任务共用的查询参数收拢成 OrderQuery。
 func orderQueryFrom(c *gin.Context) OrderQuery {
+	sortField, desc := response.ParseSort(c)
 	return OrderQuery{
 		Keyword: c.Query("keyword"),
 		Status:  response.ParseList(c.Query("status"), response.MaxFilterValues),
@@ -128,6 +129,7 @@ func orderQueryFrom(c *gin.Context) OrderQuery {
 		Scene:   response.ParseList(c.Query("scene"), response.MaxFilterValues),
 		FailReason: response.ParseList(c.Query("failReason"), response.MaxFilterValues),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+		Sort: sortField, Desc: desc,
 	}
 }
 
@@ -221,8 +223,9 @@ func (h *handler) createRefund(c *gin.Context) {
 // GET /plugins/pay/refunds —— 管理端分页列表（契约外附加）。
 func (h *handler) listRefunds(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	rows, total, err := h.svc.ListRefunds(c.Request.Context(), RefundQuery{
-		Status: c.Query("status"), Keyword: c.Query("keyword"), Page: page, PageSize: size,
+		Status: c.Query("status"), Keyword: c.Query("keyword"), Sort: sortField, Desc: desc, Page: page, PageSize: size,
 	})
 	if err != nil {
 		fail(c, err)
@@ -315,7 +318,8 @@ func (h *handler) getAuth(c *gin.Context) {
 // GET /plugins/pay/authorizations —— 管理端分页列表（契约外附加）。
 func (h *handler) listAuths(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	rows, total, err := h.svc.ListAuths(c.Request.Context(), c.Query("status"), c.Query("keyword"), page, size)
+	sortField, desc := response.ParseSort(c)
+	rows, total, err := h.svc.ListAuths(c.Request.Context(), c.Query("status"), c.Query("keyword"), sortField, desc, page, size)
 	if err != nil {
 		fail(c, err)
 		return
@@ -395,9 +399,11 @@ func (h *handler) providers(c *gin.Context) {
 // 导致搜索完全失效；orderDateRange 的两个日期参数与支付单列表同名。
 func (h *handler) listCallbacks(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	q := CallbackQuery{
 		Channel: c.Query("channelCode"), Keyword: c.Query("keyword"),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+		Sort: sortField, Desc: desc,
 		Page: page, PageSize: size,
 	}
 	if v, err := strconv.ParseBool(c.Query("ok")); err == nil {

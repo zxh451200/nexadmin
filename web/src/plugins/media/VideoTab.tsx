@@ -7,6 +7,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
@@ -32,7 +33,9 @@ export function VideoTab() {
   const cfg = useVideoConfig()
   const save = useSaveVideoConfig()
   const [page, setPage] = useState(1)
-  const list = useVideos(page, PAGE_SIZE)
+  // 表头排序：默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
+  const list = useVideos(page, PAGE_SIZE, sort, desc)
   const [form, setForm] = useState({ enabled: false, provider: 'cloudflare' as VideoProvider, keyA: '', keyB: '', keyC: '' })
   const [progress, setProgress] = useState<number | null>(null)
   const [playing, setPlaying] = useState<VideoItem | null>(null)
@@ -138,13 +141,14 @@ export function VideoTab() {
   }
 
   const columns: Column<VideoItem>[] = [
-    { key: 'name', title: t('plugin_media.col.name'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.name}</span> },
+    { key: 'name', title: t('plugin_media.col.name'), sortKey: 'name', mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.name}</span> },
     { key: 'size', title: t('plugin_media.col.size'), align: 'end', render: (r) => <span className="num">{formatSize(r.size)}</span> },
     { key: 'status', title: t('plugin_media.col.state'), render: (r) => <Badge variant={r.status === 'ready' ? 'success' : 'secondary'}>{r.status}</Badge> },
     { key: 'uploader', title: t('plugin_media.video.uploader'), render: (r) => <span className="text-xs text-muted-foreground">{r.uploader}</span> },
     {
       key: 'createdAt',
       title: t('plugin_media.col.createdAt'),
+      sortKey: 'created_at',
       render: (r) => <span className="num text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString(i18n.language)}</span>,
     },
     {
@@ -254,6 +258,7 @@ export function VideoTab() {
       ) : null}
 
       <DataTable<VideoItem>
+        sort={sortProp}
         toolbar={
           <>
             {canUpload ? (

@@ -87,6 +87,9 @@ export interface DeliveryQuery {
   status?: string
   /** 事件名精确筛选（如 user.created） */
   event?: string
+  /** 表头排序字段（后端白名单：event/status/created_at），空 = 默认 created_at DESC */
+  sort?: string
+  desc?: boolean
 }
 
 const KEY = ['openapi'] as const
@@ -149,10 +152,10 @@ export function useResetOpenAppSecret() {
   })
 }
 
-export function useWebhooks() {
+export function useWebhooks(sort?: { sort: string; desc: boolean }) {
   return useQuery({
-    queryKey: [...KEY, 'webhooks'],
-    queryFn: async () => toList(await api.get<Webhook[] | { list: Webhook[] }>('/openapi/webhooks')),
+    queryKey: [...KEY, 'webhooks', sort ?? null],
+    queryFn: async () => toList(await api.get<Webhook[] | { list: Webhook[] }>('/openapi/webhooks', sort)),
   })
 }
 

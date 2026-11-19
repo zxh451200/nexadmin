@@ -12,6 +12,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -299,10 +300,12 @@ function DefList() {
   const [versionsOf, setVersionsOf] = useState<WfDef | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize] = useState(50)
+  // 表头排序：默认新建在前（id DESC，与后端回退序一致），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('id', true, () => setPage(1))
   // 勾选用独立状态：外层 selected 是「打开哪个实例详情」，与批量选择不是一回事。
   const [selectedDefs, setSelectedDefs] = useState<string[]>([])
 
-  const defs = useDefs({ page, pageSize })
+  const defs = useDefs({ page, pageSize, sort, desc })
   const remove = useDeleteDef()
   const removeBatch = useDeleteDefs()
   const templates = useTemplates()
@@ -339,6 +342,7 @@ function DefList() {
     {
       key: 'name',
       title: t('plugin_workflow.fields.defName'),
+      sortKey: 'name',
       mobile: 'title',
       render: (d) => (
         <div className="min-w-0">
@@ -361,6 +365,7 @@ function DefList() {
     {
       key: 'updatedAt',
       title: t('plugin_workflow.fields.updatedAt'),
+      sortKey: 'updated_at',
       render: (d) => <span className="num text-xs text-muted-foreground">{formatTime(d.updatedAt, i18n.language)}</span>,
     },
   ]
@@ -372,6 +377,7 @@ function DefList() {
         data={defs.data?.list ?? []}
         rowKey="id"
         loading={defs.isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-workflow-defs"
         pagination={{ page, pageSize, total: defs.data?.total ?? 0, onChange: setPage }}
         emptyText={t('plugin_workflow.empty')}

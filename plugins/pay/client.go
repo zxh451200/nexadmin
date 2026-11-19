@@ -66,6 +66,16 @@ func QueryByBiz(ctx context.Context, bizType, bizNo string) (*OrderView, error) 
 	return &v, nil
 }
 
+// Channels 返回平台级站点可用的启用渠道清单（全局定位、只回安全字段 + 能力矩阵，
+// 绝不回凭据）：站点据此渲染购买渠道选择。列表为空表示 pay 未装配或没有启用渠道。
+func Channels(ctx context.Context) []ChannelView {
+	s := current()
+	if s == nil {
+		return nil
+	}
+	return s.EnabledChannelsGlobal(ctx)
+}
+
 // CreateRefund 发起退款（in.BizType/BizNo 是退款幂等键）；渠道拒绝时退款单落
 // failed 并返回 409。异步渠道落 pending 并把支付单置 refunding。
 func CreateRefund(ctx context.Context, in RefundInput) (*RefundView, error) {

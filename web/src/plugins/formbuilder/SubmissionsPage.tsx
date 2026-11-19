@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -61,11 +62,13 @@ export default function SubmissionsPage() {
   const [filters, setFilters] = useState<Filters>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新提交在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [detailId, setDetailId] = useState<string | null>(null)
   const [selected, setSelected] = useState<string[]>([])
 
   const { data: meta, isError } = useSubmissionMeta(id)
-  const { data, isLoading } = useSubmissions(id, { ...toQuery(filters), page, pageSize })
+  const { data, isLoading } = useSubmissions(id, { ...toQuery(filters), page, pageSize, sort, desc })
   const remove = useDeleteSubmission()
   const removeBatch = useDeleteSubmissions()
   const exportJob = useExportJob()
@@ -129,8 +132,8 @@ export default function SubmissionsPage() {
   const yes = t('common.yes')
   const no = t('common.no')
   const columns: Column<SubmissionRow>[] = [
-    { key: 'username', title: t('plugin_formbuilder.submissions.submitter'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.username}</span> },
-    { key: 'createdAt', title: t('plugin_formbuilder.submissions.submittedAt'), mobile: 'sub', render: (r) => <span className="num">{formatTime(r.createdAt, i18n.language)}</span> },
+    { key: 'username', title: t('plugin_formbuilder.submissions.submitter'), sortKey: 'username', mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.username}</span> },
+    { key: 'createdAt', title: t('plugin_formbuilder.submissions.submittedAt'), sortKey: 'created_at', mobile: 'sub', render: (r) => <span className="num">{formatTime(r.createdAt, i18n.language)}</span> },
     { key: 'version', title: t('plugin_formbuilder.fields.version'), render: (r) => <span className="num">v{r.version}</span> },
     ...fields.slice(0, VALUE_COLUMNS).map(
       (f): Column<SubmissionRow> => ({
@@ -218,6 +221,7 @@ export default function SubmissionsPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-formbuilder-submissions"
         pagination={{
           page,

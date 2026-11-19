@@ -34,11 +34,12 @@ func actor(c *gin.Context) string {
 
 // ---- 流程定义 ----
 
-// GET /plugins/workflow/defs?keyword=&status=&page=&pageSize=
+// GET /plugins/workflow/defs?keyword=&status=&sort=&desc=&page=&pageSize=
 func (h *handler) defList(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.DefList(c.Request.Context(), DefQuery{
 		Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, PageSize: size,
+		Sort: c.Query("sort"), Desc: c.Query("desc") == "true" || c.Query("desc") == "1",
 	})
 	if err != nil {
 		response.Fail(c, err)

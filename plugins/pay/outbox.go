@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -176,7 +177,8 @@ func (s *Service) CountOutbox(ctx context.Context) (OutboxCounts, error) {
 
 // ListOutbox 分页列出出站箱；status 为空列全部（载荷只在详情里回显）。
 // 租户过滤依赖请求上下文：出站箱是资金事件，跨租户可见等于泄漏别的租户的流水。
-func (s *Service) ListOutbox(ctx context.Context, status, keyword string, page, pageSize int) ([]Outbox, int64, error) {
+// sort/desc 是表头排序参数（白名单：事件名/状态/时间，白名单外回退 created_at）。
+func (s *Service) ListOutbox(ctx context.Context, status, keyword, sort string, desc bool, page, pageSize int) ([]Outbox, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Outbox{})
 	if status != "" {
 		db = db.Where("status = ?", status)
@@ -190,7 +192,11 @@ func (s *Service) ListOutbox(ctx context.Context, status, keyword string, page, 
 		return nil, 0, err
 	}
 	var rows []Outbox
-	if err := db.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	if err := db.Order(core.OrderBy(sort, desc, map[string]string{
+		"event":      "event_name",
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

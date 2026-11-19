@@ -1274,21 +1274,24 @@ export default function TicketPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-72 space-y-2">
-                    {/* 排序和筛选同源：导出用的就是这份 listFilters，顺序也得跟着走 */}
-                    <div className="flex items-end gap-2">
+                    {/* 排序和筛选同源：导出用的就是这份 listFilters，顺序也得跟着走。
+                        max-w-none：SimpleSelect 默认的 max-w-56 是给工具栏防撑爆的，
+                        在 w-72 弹层里会把下拉卡在 224px，比复选框行短一截（宽窄不齐的根源） */}
+                    <div className="flex items-center gap-2">
                       <SimpleSelect
                         aria-label={t('plugin_ticket.sort.label')}
                         label={t('plugin_ticket.sort.label')}
-                        className="min-w-0 flex-1"
+                        className="min-w-0 flex-1 max-w-none"
                         value={sortKey}
                         onChange={setSortKey}
                         options={SORT_KEYS.map((k) => ({ value: k, label: t(`plugin_ticket.sort.${k}`) }))}
                       />
+                      {/* 高度跟 SelectTrigger 的 h-10 md:h-8 对齐，别再各写各的 */}
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-9 shrink-0"
+                        className="h-10 shrink-0 px-3 md:h-8"
                         onClick={() => setSortAsc((v) => !v)}
                       >
                         {sortAsc ? t('plugin_ticket.sort.asc') : t('plugin_ticket.sort.desc')}
@@ -1297,7 +1300,7 @@ export default function TicketPage() {
                     <SimpleSelect
                       aria-label={t('plugin_ticket.assigneeFilter')}
                       label={t('plugin_ticket.assignee')}
-                      className="w-full"
+                      className="w-full max-w-none"
                       value={assigneeFilter}
                       onChange={(v) => setAssigneeFilter(v as AssigneeFilter)}
                       options={[
@@ -1309,7 +1312,7 @@ export default function TicketPage() {
                     <SimpleSelect
                       aria-label={t('plugin_ticket.groups.label')}
                       label={t('plugin_ticket.groups.label')}
-                      className="w-full"
+                      className="w-full max-w-none"
                       value={groupFilter}
                       onChange={setGroupFilter}
                       options={[
@@ -1320,7 +1323,7 @@ export default function TicketPage() {
                     <SimpleSelect
                       aria-label={t('plugin_ticket.tags.title')}
                       label={t('plugin_ticket.tags.title')}
-                      className="w-full"
+                      className="w-full max-w-none"
                       value={tagFilter}
                       onChange={setTagFilter}
                       options={[
@@ -1331,7 +1334,7 @@ export default function TicketPage() {
                     <SimpleSelect
                       aria-label={t('plugin_ticket.fields.priority')}
                       label={t('plugin_ticket.fields.priority')}
-                      className="w-full"
+                      className="w-full max-w-none"
                       value={priorityFilter ?? ALL}
                       onChange={(v) => setPriorityFilter(v === ALL ? undefined : v)}
                       options={[
@@ -1339,7 +1342,7 @@ export default function TicketPage() {
                         ...PRIORITIES.map((p) => ({ value: p, label: t(`plugin_ticket.priority.${p}`) })),
                       ]}
                     />
-                    <label className="flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm">
+                    <label className="flex h-10 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-sm md:h-8">
                       <Checkbox
                         checked={overdueOnly}
                         onCheckedChange={(v) => setOverdueOnly(v === true)}

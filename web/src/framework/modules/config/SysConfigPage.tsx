@@ -10,6 +10,7 @@ import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -55,6 +56,8 @@ export function ParamsSection() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存，改排序不重置筛选条件；默认创建时间升序（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', false, () => setPage(1))
   // 类型是多选数组，搜索时 join 成 CSV（后端 config_type IN）
   const [draft, setDraft] = useState<{ keyword: string; type: string[] }>({ keyword: '', type: [] })
   const [filters, setFilters] = useState<{ keyword?: string; type?: string }>({})
@@ -67,6 +70,8 @@ export function ParamsSection() {
     pageSize,
     keyword: filters.keyword || undefined,
     type: filters.type,
+    sort,
+    desc,
   })
   const save = useSaveConfig()
   const del = useDeleteConfigs()
@@ -133,10 +138,11 @@ export function ParamsSection() {
     t(`sysConfig.item.${key.replaceAll('.', '_')}.${field}`, { defaultValue: fallback ?? '' })
 
   const columns: Column<ConfigRow>[] = [
-    { key: 'name', title: t('sysConfig.name'), mobile: 'title', render: (r) => cfgText(r.key, 'name', r.name) },
+    { key: 'name', title: t('sysConfig.name'), sortKey: 'name', mobile: 'title', render: (r) => cfgText(r.key, 'name', r.name) },
     {
       key: 'key',
       title: t('sysConfig.key'),
+      sortKey: 'key',
       mobile: 'sub',
       // break-all 在 nowrap 单元格里是死代码：改 truncate + title，列宽有界
       render: (r) => (
@@ -155,7 +161,7 @@ export function ParamsSection() {
         </span>
       ),
     },
-    { key: 'type', title: t('sysConfig.type'), render: (r) => t(`sysConfig.types.${r.type}`) },
+    { key: 'type', title: t('sysConfig.type'), sortKey: 'type', render: (r) => t(`sysConfig.types.${r.type}`) },
     {
       key: 'isPublic',
       title: t('sysConfig.isPublic'),
@@ -232,6 +238,7 @@ export function ParamsSection() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="sysConfig"
         pagination={{
           page,

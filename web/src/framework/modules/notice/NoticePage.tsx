@@ -11,6 +11,7 @@ import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -58,12 +59,14 @@ export default function NoticePage() {
   const [filters, setFilters] = useState<NoticeQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
+  // 表头排序：默认发布时间倒序（后端置顶列始终在前），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('published_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Notice | null>(null)
   const [statsFor, setStatsFor] = useState<Notice | null>(null)
 
-  const { data, isLoading } = useNoticeList({ ...toNoticeQuery(draft), ...filters, page, pageSize })
+  const { data, isLoading } = useNoticeList({ ...toNoticeQuery(draft), ...filters, page, pageSize, sort, desc })
   const publish = usePublishNotice()
   const revoke = useRevokeNotice()
   const remove = useDeleteNotices()
@@ -108,6 +111,7 @@ export default function NoticePage() {
     {
       key: 'title',
       title: t('notice.fields.title'),
+      sortKey: 'title',
       mobile: 'title',
       render: (n) => (
         <div className="flex min-w-0 items-center gap-2">
@@ -121,8 +125,8 @@ export default function NoticePage() {
         </div>
       ),
     },
-    { key: 'type', title: t('notice.fields.type'), mobile: 'hidden', render: (n) => <DictTag dict="notice_type" value={n.type} /> },
-    { key: 'level', title: t('notice.fields.level'), render: (n) => <DictTag dict="notice_level" value={n.level} /> },
+    { key: 'type', title: t('notice.fields.type'), sortKey: 'type', mobile: 'hidden', render: (n) => <DictTag dict="notice_type" value={n.type} /> },
+    { key: 'level', title: t('notice.fields.level'), sortKey: 'level', render: (n) => <DictTag dict="notice_level" value={n.level} /> },
     { key: 'status', title: t('notice.fields.status'), render: (n) => <DictTag dict="notice_status" value={n.status} /> },
     { key: 'scope', title: t('notice.fields.scope'), render: (n) => t(`notice.scope.${n.scope}`) },
     {
@@ -143,6 +147,7 @@ export default function NoticePage() {
     {
       key: 'publishedAt',
       title: t('notice.fields.publishedAt'),
+      sortKey: 'published_at',
       render: (n) => {
         const v = n.publishedAt ?? n.publishAt
         return v ? <span className="num">{fmt(v, i18n.language)}</span> : <span className="text-muted-foreground">-</span>
@@ -202,6 +207,7 @@ export default function NoticePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="notice-list"
         pagination={{
           page,

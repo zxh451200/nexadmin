@@ -22,7 +22,8 @@ func (h *handler) Stats(c *gin.Context) {
 // Images GET /plugins/media/images?page=&pageSize= —— 待生成 WebP 的原图。
 func (h *handler) Images(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	list, total, err := h.svc.Pending(c.Request.Context(), page, size)
+	sortField, desc := response.ParseSort(c)
+	list, total, err := h.svc.Pending(c.Request.Context(), page, size, sortField, desc)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -84,8 +85,9 @@ func (h *handler) SaveVideo(c *gin.Context) {
 
 // Videos GET /plugins/media/video/assets?page=&pageSize=
 func (h *handler) Videos(c *gin.Context) {
+	sortField, desc := response.ParseSort(c)
 	page, size := response.ParsePage(c)
-	list, total, err := h.svc.Videos(c.Request.Context(), page, size)
+	list, total, err := h.svc.Videos(c.Request.Context(), page, size, sortField, desc)
 	if err != nil {
 		response.Fail(c, err)
 		return

@@ -56,6 +56,7 @@ func auditActions(raw string) ([]string, bool) {
 // GET /plugins/audit/logs?table=&operator=&action=&from=&to=&page=&pageSize=
 func (h *handler) listLogs(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	actions, ok := auditActions(c.Query("action"))
 	if !ok {
 		response.Fail(c, response.BadRequest("error.bad_request"))
@@ -63,7 +64,7 @@ func (h *handler) listLogs(c *gin.Context) {
 	}
 	list, total, err := h.svc.ListLogs(c.Request.Context(), LogQuery{
 		Tables: response.ParseList(strings.TrimSpace(c.Query("table")), response.MaxFilterValues), Operator: strings.TrimSpace(c.Query("operator")), Actions: actions,
-		From: c.Query("from"), To: c.Query("to"), Page: page, PageSize: size,
+		From: c.Query("from"), To: c.Query("to"), Sort: sortField, Desc: desc, Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)

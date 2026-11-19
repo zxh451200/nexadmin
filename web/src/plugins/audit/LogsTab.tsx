@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Eraser } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -133,6 +134,8 @@ export function LogsTab() {
   const [applied, setApplied] = useState<Draft>({ range: {} })
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [detail, setDetail] = useState<string | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
 
@@ -143,7 +146,7 @@ export function LogsTab() {
     from: applied.range.from,
     to: applied.range.to,
   }
-  const query: LogQuery = { ...exportQuery, page, pageSize }
+  const query: LogQuery = { ...exportQuery, page, pageSize, sort, desc }
   const { data, isLoading } = useLogs(query)
   const { data: tables } = useLogTables()
 
@@ -158,11 +161,11 @@ export function LogsTab() {
   ]
 
   const columns: Column<AuditLog>[] = [
-    { key: 'createdAt', title: t('plugin_audit.fields.time'), mobile: 'sub', render: (l) => <span className="num">{formatTime(l.createdAt, i18n.language)}</span> },
-    { key: 'table', title: t('plugin_audit.fields.table'), mobile: 'title', render: (l) => <span className="font-mono text-xs font-medium text-foreground">{l.table}</span> },
+    { key: 'createdAt', title: t('plugin_audit.fields.time'), sortKey: 'created_at', mobile: 'sub', render: (l) => <span className="num">{formatTime(l.createdAt, i18n.language)}</span> },
+    { key: 'table', title: t('plugin_audit.fields.table'), sortKey: 'table_name', mobile: 'title', render: (l) => <span className="font-mono text-xs font-medium text-foreground">{l.table}</span> },
     { key: 'rowPk', title: t('plugin_audit.fields.rowPk'), render: (l) => <span className="num font-mono text-xs">{l.rowPk}</span> },
-    { key: 'action', title: t('plugin_audit.fields.action'), render: (l) => <Badge variant={actionVariant(l.action)}>{t(`plugin_audit.action.${l.action}`)}</Badge> },
-    { key: 'operator', title: t('plugin_audit.fields.operator'), render: (l) => operatorLabel(l) },
+    { key: 'action', title: t('plugin_audit.fields.action'), sortKey: 'action', render: (l) => <Badge variant={actionVariant(l.action)}>{t(`plugin_audit.action.${l.action}`)}</Badge> },
+    { key: 'operator', title: t('plugin_audit.fields.operator'), sortKey: 'operator_name', render: (l) => operatorLabel(l) },
     {
       key: 'fields',
       title: t('plugin_audit.fields.changedFields'),
@@ -218,6 +221,7 @@ export function LogsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-audit-logs"
         pagination={{
           page,

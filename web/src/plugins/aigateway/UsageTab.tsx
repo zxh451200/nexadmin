@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { Badge } from '@/framework/ui/badge'
@@ -14,14 +15,17 @@ export function UsageTab() {
   const [filters, setFilters] = useState<UsageQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
 
-  const { data, isLoading } = useUsage({ ...filters, page, pageSize })
+  const { data, isLoading } = useUsage({ ...filters, page, pageSize, sort, desc })
   const { data: summary = [] } = useUsageSummary()
 
   const columns: Column<AiUsage>[] = [
     {
       key: 'model',
       title: t('plugin_aigateway.fields.model'),
+      sortKey: 'model',
       mobile: 'title',
       render: (r) => (
         <div>
@@ -30,7 +34,7 @@ export function UsageTab() {
         </div>
       ),
     },
-    { key: 'kind', title: t('plugin_aigateway.fields.kind'), mobile: 'sub', render: (r) => <Badge variant="outline">{t(`plugin_aigateway.kind.${r.kind}`)}</Badge> },
+    { key: 'kind', title: t('plugin_aigateway.fields.kind'), sortKey: 'kind', mobile: 'sub', render: (r) => <Badge variant="outline">{t(`plugin_aigateway.kind.${r.kind}`)}</Badge> },
     { key: 'prompt', title: t('plugin_aigateway.fields.promptTokens'), align: 'end', render: (r) => <span className="num">{r.promptTokens}</span> },
     { key: 'completion', title: t('plugin_aigateway.fields.completionTokens'), align: 'end', render: (r) => <span className="num">{r.completionTokens}</span> },
     { key: 'total', title: t('plugin_aigateway.fields.totalTokens'), align: 'end', render: (r) => <span className="num font-medium">{r.totalTokens}</span> },
@@ -38,6 +42,7 @@ export function UsageTab() {
     {
       key: 'createdAt',
       title: t('plugin_aigateway.fields.createdAt'),
+      sortKey: 'created_at',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
   ]
@@ -91,6 +96,7 @@ export function UsageTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-aigateway-usage"
         pagination={{
           page,

@@ -17,6 +17,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/ai"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -426,8 +427,11 @@ func roundScore(v float64) float64 { return math.Round(v*1000) / 1000 }
 // ---- 管理 ----
 
 // DocumentQuery 目前只有全量列表（知识库文档量级小），status 预留。
+// Sort/Desc 是表头排序参数（白名单见 ListDocuments）。
 type DocumentQuery struct {
 	Status string
+	Sort   string
+	Desc   bool
 }
 
 // ListDocuments 列出文档（新在前）。
@@ -437,7 +441,13 @@ func (s *Service) ListDocuments(ctx context.Context, q DocumentQuery) ([]Documen
 		db = db.Where("status = ?", q.Status)
 	}
 	var rows []Document
-	if err := db.Order("id DESC").Limit(500).Find(&rows).Error; err != nil {
+	// 排序白名单：标题/状态/大小/时间，白名单外回退 created_at
+	if err := db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"title":      "title",
+		"status":     "status",
+		"size":       "size",
+		"created_at": "created_at",
+	}, "created_at")).Limit(500).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	return rows, nil

@@ -67,8 +67,18 @@ export default function StatsCard() {
   return (
     <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
       <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0 rtl:divide-x-reverse">
-        <KpiCell title={t('dashboard.stat.users')} value={fmt(data.users.value)} delta={deltaBadge(data.users, t)} />
-        <KpiCell title={t('dashboard.stat.todayLogin')} value={fmt(data.todayLogin.value)} delta={deltaBadge(data.todayLogin, t)} />
+        <KpiCell
+          title={t('dashboard.stat.users')}
+          value={fmt(data.users.value)}
+          delta={deltaBadge(data.users, t)}
+          detail={data.users.base !== undefined ? t('dashboard.kpi.prevDetail', { base: fmt(data.users.base) }) : undefined}
+        />
+        <KpiCell
+          title={t('dashboard.stat.todayLogin')}
+          value={fmt(data.todayLogin.value)}
+          delta={deltaBadge(data.todayLogin, t)}
+          detail={data.todayLogin.base !== undefined ? t('dashboard.kpi.prevDetail', { base: fmt(data.todayLogin.base) }) : undefined}
+        />
         <KpiCell title={t('dashboard.stat.unreadMessages')} value={fmt(data.unreadMessages.value)} delta={deltaBadge(data.unreadMessages, t)} />
         <KpiCell
           title={t('dashboard.stat.storage')}

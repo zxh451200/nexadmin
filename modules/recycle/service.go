@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/recbin"
@@ -43,6 +44,8 @@ type ListFilter struct {
 	To      string
 	Page    int
 	Size    int
+	Sort    string // 表头排序字段（白名单见 Service.List）
+	Desc    bool
 }
 
 // List 按删除时间倒序。deleted_by 存的是操作人 ID，批量查昵称翻译成展示名
@@ -73,7 +76,12 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]Item, int64, error)
 		return nil, 0, err
 	}
 	var rows []recbin.Entry
-	if err := tx.Order("deleted_at DESC").Offset((f.Page - 1) * f.Size).Limit(f.Size).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/类型/删除时间，白名单外回退 deleted_at
+	if err := tx.Order(core.OrderBy(f.Sort, f.Desc, map[string]string{
+		"name":       "name",
+		"type":       "type",
+		"deleted_at": "deleted_at",
+	}, "deleted_at")).Offset((f.Page - 1) * f.Size).Limit(f.Size).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	names := s.userNames(ctx, rows)

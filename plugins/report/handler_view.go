@@ -13,7 +13,8 @@ import (
 
 func (h *handler) listReports(c *gin.Context) {
 	kw, page, size := h.keywordPage(c)
-	list, total, err := h.svc.ListReports(c.Request.Context(), kw, page, size)
+	sort, desc := sortDesc(c)
+	list, total, err := h.svc.ListReports(c.Request.Context(), kw, sort, desc, page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -55,7 +56,8 @@ func (h *handler) deleteReport(c *gin.Context) {
 
 func (h *handler) listScreens(c *gin.Context) {
 	kw, page, size := h.keywordPage(c)
-	list, total, err := h.svc.ListScreensManage(c.Request.Context(), kw, page, size)
+	sortField, desc := response.ParseSort(c)
+	list, total, err := h.svc.ListScreensManage(c.Request.Context(), kw, sortField, desc, page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -121,7 +123,8 @@ func bindRun(c *gin.Context) (runBody, bool) {
 
 func (h *handler) viewReports(c *gin.Context) {
 	kw, page, size := h.keywordPage(c)
-	list, total, err := h.svc.ListReports(c.Request.Context(), kw, page, size)
+	sort, desc := sortDesc(c)
+	list, total, err := h.svc.ListReports(c.Request.Context(), kw, sort, desc, page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -234,7 +237,7 @@ func (h *handler) overview(c *gin.Context) {
 	if !ok {
 		return
 	}
-	_, reports, err := h.svc.ListReports(c.Request.Context(), "", 1, 1)
+	_, reports, err := h.svc.ListReports(c.Request.Context(), "", "", false, 1, 1)
 	if err != nil {
 		response.Fail(c, err)
 		return

@@ -30,6 +30,27 @@
         {{if .QRCodeCaption}}<figcaption>{{.QRCodeCaption}}</figcaption>{{end}}
       </figure>
       {{end}}
+      {{/* 办公地点（站点设置可配，多个）：地点卡 + 地图（zh 系→天地图，其他→谷歌 iframe），
+          地图厂商未启用时只渲染地点卡。 */}}
+      {{if .Offices}}
+      <div class="sl-offices">
+        <span class="sl-contact-label">{{.T "contact.offices"}}</span>
+        {{range .Offices}}
+        <div class="sl-office-card">
+          {{if .Name}}<strong class="sl-office-name">{{.Name}}</strong>{{end}}
+          {{if .Address}}<p class="sl-office-address">{{.Address}}</p>{{end}}
+        </div>
+        {{end}}
+        {{if and .MapProvider (index .Offices 0).HasCoords}}
+        {{if eq .MapProvider "google"}}
+        <iframe class="sl-office-map" src="https://maps.google.com/maps?q={{(index .Offices 0).Lat}},{{(index .Offices 0).Lng}}&hl={{.Lang.HTMLLang}}&z=15&output=embed" loading="lazy" title="{{.T "contact.officeMap"}}"></iframe>
+        {{else}}
+        <div class="sl-office-map" data-office-map data-lng="{{(index .Offices 0).Lng}}" data-lat="{{(index .Offices 0).Lat}}" data-label="{{(index .Offices 0).Name}}"></div>
+        {{end}}
+        {{end}}
+      </div>
+      {{if eq .MapProvider "tianditu"}}<script src="https://api.tianditu.gov.cn/api?v=4.0&tk={{.TiandituTK}}"></script>{{end}}
+      {{end}}
     </div>
     <form class="sl-contact-form" method="post" action="{{.URL "/contact"}}" data-contact-form novalidate>
       <h2 class="sl-contact-form-title">{{.T "contact.formTitle"}}</h2>

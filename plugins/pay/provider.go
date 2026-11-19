@@ -404,6 +404,13 @@ func (c Capabilities) supportsMethod(method string) bool {
 	return false
 }
 
+// SupportsCurrency / SupportsMethod 是给插件调用方的导出版本：website 等业务插件
+// 拿到 ChannelView 后要按能力矩阵筛渠道（见 website/order.go），判断逻辑留在
+// pay 包里，口径才不会随着复制的副本漂移。
+func (c Capabilities) SupportsCurrency(currency string) bool { return c.supportsCurrency(currency) }
+
+func (c Capabilities) SupportsMethod(method string) bool { return c.supportsMethod(method) }
+
 // canonicalMethods 返回去重后的规范方式列表，给能力矩阵接口展示用
 // （前端下拉要的是规范名，不是渠道各自接受的别名串）。
 func (c Capabilities) canonicalMethods() []string {

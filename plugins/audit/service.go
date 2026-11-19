@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -35,11 +36,14 @@ type ConfigView struct {
 
 // LogQuery 是列表筛选条件。From/To 是 yyyy-MM-dd（UTC，含当天）。
 // Table/Action 是逗号拼接多值（空切片 = 不限）；Operator 是关键词（保持单值）。
+// Sort/Desc 是表头排序参数（白名单见 ListLogs）。
 type LogQuery struct {
 	Tables         []string
 	Operator       string
 	Actions        []string
 	From, To       string
+	Sort           string
+	Desc           bool
 	Page, PageSize int
 }
 
@@ -159,7 +163,13 @@ func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error
 		return nil, 0, err
 	}
 	var list []Log
-	err := tx.Omit("changes").Order("created_at DESC, id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&list).Error
+	// 排序白名单：表/动作/操作人/时间，白名单外回退 created_at
+	err := tx.Omit("changes").Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"table_name":    "table_name",
+		"action":        "action",
+		"operator_name": "operator_name",
+		"created_at":    "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&list).Error
 	return list, total, err
 }
 

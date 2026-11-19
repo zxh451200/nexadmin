@@ -53,6 +53,8 @@ type ListQuery struct {
 	Keyword  string `form:"keyword"`
 	Type     string `form:"type"`     // 逗号分隔，可多值
 	IsPublic string `form:"isPublic"` // true|false
+	Sort     string `form:"sort"`     // 表头排序字段（白名单见 Service.List）
+	Desc     bool   `form:"desc"`
 }
 
 // 上传限制对应的参数键（0 表示不限制）。

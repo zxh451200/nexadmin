@@ -249,7 +249,7 @@ export function DataTable<T>({
                       onClick={() => sort!.onChange(c.sortKey!, active ? !sort!.desc : false)}
                       title={t('dataTable.sortByColumn', { column: typeof c.title === 'string' ? c.title : c.key })}
                       className={cn(
-                        '-mx-1 inline-flex max-w-full items-center gap-1 rounded-sm px-1 py-0.5 text-start transition-colors hover:text-foreground',
+                        'relative -mx-1 inline-flex max-w-full items-center gap-1 rounded-sm px-1 py-0.5 text-start transition-colors hover:text-foreground',
                         active ? 'text-foreground' : 'text-muted-foreground',
                       )}
                     >
@@ -261,8 +261,10 @@ export function DataTable<T>({
                           <ArrowUp className="size-3.5 shrink-0" aria-hidden="true" />
                         )
                       ) : (
+                        // 未激活的提示箭头改为绝对定位、不占布局宽度：否则窄列（如「状态」）
+                        // 会被这枚 shrink-0 图标挤出空间，标题被 truncate 成「状」，像掉了字
                         <ArrowUp
-                          className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover/th:opacity-40"
+                          className="pointer-events-none absolute end-0 top-1/2 size-3.5 -translate-y-1/2 opacity-0 transition-opacity group-hover/th:opacity-40"
                           aria-hidden="true"
                         />
                       )}

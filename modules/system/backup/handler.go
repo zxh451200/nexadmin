@@ -90,7 +90,8 @@ func audit(typ string) gin.HandlerFunc {
 // List GET /backups
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	list, total, err := h.svc.List(c.Request.Context(), page, size)
+	sortField, desc := response.ParseSort(c)
+	list, total, err := h.svc.List(c.Request.Context(), page, size, sortField, desc)
 	if err != nil {
 		fail(c, err)
 		return

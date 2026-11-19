@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/pkg/idgen"
 )
@@ -175,8 +176,8 @@ func (s *Service) loadReport(ctx context.Context, id idgen.ID) (ReportDef, error
 	return row, nil
 }
 
-// ListReports 列出本租户的报表（管理与查看共用；不含图表详情）。
-func (s *Service) ListReports(ctx context.Context, keyword string, page, size int) ([]ReportView, int64, error) {
+// ListReports 列出本租户的报表（管理与查看共用；不含图表详情）。表头排序白名单外回退默认的分组序。
+func (s *Service) ListReports(ctx context.Context, keyword, sort string, desc bool, page, size int) ([]ReportView, int64, error) {
 	tx, err := s.scoped(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -191,7 +192,13 @@ func (s *Service) ListReports(ctx context.Context, keyword string, page, size in
 	}
 	off, lim := pageOf(page, size)
 	var rows []ReportDef
-	if err := tx.Order("group_name, id DESC").Offset(off).Limit(lim).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/分组/创建/更新时间，白名单外回退 group_name（与既有默认序 group_name, id DESC 一致）
+	if err := tx.Order(core.OrderBy(sort, desc, map[string]string{
+		"name":       "name",
+		"group":      "group_name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+	}, "group_name")).Offset(off).Limit(lim).Find(&rows).Error; err != nil {
 		return nil, 0, dbErr(err)
 	}
 	out := make([]ReportView, len(rows))

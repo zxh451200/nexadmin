@@ -10,7 +10,9 @@
       "products": "产品管理",
       "productCategories": "产品类目",
       "messages": "留言管理",
-      "openSite": "打开官网"
+      "openSite": "打开官网",
+      "orders": "站点订单",
+      "faq": "常见问题"
     },
     "settings": {
       "title": "站点设置",
@@ -46,7 +48,10 @@
       "demoImportWarn": "将写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称、首页文案、导航与首页特性卡片等品牌门面内容；可重复执行。",
       "supplierProfile": "供应商实力档案",
       "supplierProfileHint": "这五行出现在商品详情左栏的供应商卡里，留空的项目自动隐藏。",
-      "estYearOff": "不展示"
+      "estYearOff": "不展示",
+      "offices": "办公地点",
+      "officesHint": "展示在联系页的地点卡与地图；地图厂商按访客语言判定（zh 系→天地图，其他→谷歌），Key 在「系统设置 → 地图服务」。",
+      "officeAdd": "添加地点"
     },
     "social": {
       "github": "GitHub",
@@ -209,8 +214,8 @@
       "tagDeleteConfirm": "确认删除标签「{{name}}」？它会同时从 {{count}} 篇新闻上摘掉。",
       "tagRequired": "请填写标签名称",
       "versions": "版本历史",
-      "versionsHint": "正文有变化的覆盖保存会留一份旧快照，最多保留最近 {{max}} 版；回滚是把历史内容再存一次，当前内容先归档，回滚本身也能再回滚。",
-      "versionsEmpty": "还没有历史版本：这篇新闻还没做过改动正文的覆盖保存。",
+      "versionsHint": "正文或译文有变化的覆盖保存会留一份旧快照，最多保留最近 {{max}} 版；回滚是把历史内容再存一次，当前内容先归档，回滚本身也能再回滚。",
+      "versionsEmpty": "还没有历史版本：这篇新闻还没做过改动正文或译文的覆盖保存。",
       "previewVersion": "预览",
       "hideVersion": "收起预览",
       "versionWords": "{{count}} 字",
@@ -575,7 +580,9 @@
       "staffCount": "如 51-100 或 1000+",
       "annualRevenue": "如 US$10M-50M",
       "mainMarkets": "可多选，如 欧洲、北美",
-      "responseTime": "如 ≤4h"
+      "responseTime": "如 ≤4h",
+      "officeName": "如：深圳总部",
+      "officeName2": "如：上海办事处"
     },
     "market": {
       "enabled": "启用官网插件市场",
@@ -604,6 +611,58 @@
       "baseNote": "基准（恒为 1）",
       "add": "添加币种",
       "hint": "最多 {{max}} 种币种；汇率 = 1 USD 兑该币种。USD 为基准不可改；价格按访客所选币种换算展示。"
+    },
+    "orders": {
+      "title": "站点订单",
+      "description": "官网商品页在线购买的成交记录；资金状态以「支付中台」为准（业务单号 SO… 用于对账）。",
+      "empty": "还没有订单：开启「产品在线购买」后，商品页的成交记录会出现在这里。",
+      "searchPlaceholder": "搜索订单号 / 商品 / 买家邮箱 / 电话",
+      "filterStatus": "按状态筛选",
+      "filterAll": "全部状态",
+      "deleteConfirm": "确定删除订单「{{orderNo}}」？此操作只删除业务记录，不影响支付中台的资金流水。",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 条订单？此操作只删除业务记录，不影响支付中台的资金流水。",
+      "qty": "数量 {{count}}",
+      "origAmount": "定价 {{currency}} {{amount}}",
+      "fields": {
+        "orderNo": "订单号",
+        "product": "商品",
+        "buyer": "买家",
+        "amount": "金额",
+        "status": "状态",
+        "createdAt": "下单时间"
+      },
+      "status": {
+        "pending": "待支付",
+        "paid": "已支付",
+        "failed": "支付失败",
+        "closed": "已关闭"
+      }
+    },
+    "faq": {
+      "title": "常见问题",
+      "description": "首页「常见问题」板块的问答条目；按排序展示，停用的条目不出现在官网上。",
+      "add": "新增常见问题",
+      "addTitle": "新增常见问题",
+      "editTitle": "编辑常见问题",
+      "empty": "还没有常见问题：添加后会在首页「常见问题」板块展示。",
+      "questionRequired": "请填写问题",
+      "questionPlaceholder": "如：产品支持哪些付款方式？",
+      "answerPlaceholder": "填写答案；换行会按段落展示",
+      "answerHint": "纯文本，公开页按段落展示。",
+      "searchPlaceholder": "搜索问题或答案",
+      "deleteConfirm": "确定删除「{{question}}」？删除后首页不再展示该条。",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 条常见问题？",
+      "fields": {
+        "question": "问题",
+        "answer": "答案",
+        "sort": "排序",
+        "enabled": "启用",
+        "actions": "操作"
+      },
+      "status": {
+        "on": "展示中",
+        "off": "已停用"
+      }
     }
   }
 }

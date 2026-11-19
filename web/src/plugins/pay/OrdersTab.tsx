@@ -8,6 +8,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -76,6 +77,8 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
   const [filters, setFilters] = useState<OrderQuery>(initialKeyword ? { keyword: initialKeyword } : {})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新下单在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   // 视图写进 URL：?view=stats 可以直接分享给同事
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
@@ -87,7 +90,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
   }
   const [detail, setDetail] = useState<PayOrder | null>(null)
 
-  const { data, isLoading, isError, refetch } = useOrders({ ...filters, page, pageSize })
+  const { data, isLoading, isError, refetch } = useOrders({ ...filters, page, pageSize, sort, desc })
   const { data: channels = [] } = useChannels()
   const close = useCloseOrder()
   const sync = useSyncOrder()
@@ -118,7 +121,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
   const onExport = async () => {
     setExporting(true)
     try {
-      await startExportJob(() => createOrderExportJob({ ...filters }))
+      await startExportJob(() => createOrderExportJob({ ...filters, sort, desc }))
     } catch {
       // 创建失败的原因由 http 拦截器统一弹出
     } finally {
@@ -185,7 +188,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
         )
       },
     },
-    { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', render: (o) => <span className="num">{formatMoney(o.amountMinor, o.currency)}</span> },
+    { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', sortKey: 'amount', render: (o) => <span className="num">{formatMoney(o.amountMinor, o.currency)}</span> },
     {
       key: 'refunded',
       title: t('plugin_pay.fields.refunded'),
@@ -198,7 +201,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
       align: 'end',
       render: (o) => (o.feeMinor > 0 ? <span className="num">{formatMoney(o.feeMinor, o.currency)}</span> : <span className="text-muted-foreground">-</span>),
     },
-    { key: 'channel', title: t('plugin_pay.fields.channel'), render: (o) => <Badge variant="outline">{o.channelCode}</Badge> },
+    { key: 'channel', title: t('plugin_pay.fields.channel'), sortKey: 'channel', render: (o) => <Badge variant="outline">{o.channelCode}</Badge> },
     { key: 'status', title: t('plugin_pay.fields.status'), mobile: 'sub', render: (o) => <Badge variant={payStatusVariant(o.status)}>{t(`plugin_pay.status.${o.status}`)}</Badge> },
     {
       // 到期时间只对 pending 有意义：超期未支付的单子一眼可见，别等关单才发现
@@ -218,6 +221,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
+      sortKey: 'created_at',
       render: (o) => <span className="num text-xs text-muted-foreground">{formatTime(o.createdAt, i18n.language)}</span>,
     },
   ]
@@ -310,6 +314,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-pay-orders"
         pagination={{
           page,

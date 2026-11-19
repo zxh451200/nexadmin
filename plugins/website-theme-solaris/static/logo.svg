@@ -1,7 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="150" height="38" viewBox="0 0 150 38" role="img" aria-label="SOLARIS ENERGY">
+  <defs>
+    <linearGradient id="sol-amber" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2b04e"/>
+      <stop offset="1" stop-color="#d68d3c"/>
+    </linearGradient>
+  </defs>
   <g fill="none">
-    <path d="M6 4l4 8-4 8-4-8z" fill="#d68d3c"/>
-    <text x="16" y="25" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-weight="700" letter-spacing="1.5" fill="#244f3d">SOLARIS</text>
-    <text x="17" y="36" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="700" letter-spacing="5" fill="#244f3d">ENERGY</text>
+    <!-- 轨道弧 + 卫星点 -->
+    <path d="M38 19A19 19 0 0 1 32.4 32.4" stroke="#d68d3c" stroke-opacity="0.5" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="32.4" cy="32.4" r="2.4" fill="#d68d3c"/>
+    <!-- 六边能量核 -->
+    <path d="M19 4 32 11.5 32 26.5 19 34 6 26.5 6 11.5Z" stroke="url(#sol-amber)" stroke-width="3.2" stroke-linejoin="round"/>
+    <!-- 闪电核 -->
+    <path d="M16 6l4 10h-4l3 10-9-12h5l-3-8z" fill="url(#sol-amber)" transform="translate(4.5 4.5) scale(0.95)"/>
+    <text x="44" y="25" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-weight="700" letter-spacing="1.5" fill="#244f3d">SOLARIS</text>
+    <text x="45" y="36" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="700" letter-spacing="5" fill="#244f3d">ENERGY</text>
   </g>
 </svg>

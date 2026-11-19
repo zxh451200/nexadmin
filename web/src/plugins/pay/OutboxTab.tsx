@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -55,10 +56,12 @@ export function OutboxTab() {
   const [filters, setFilters] = useState<OutboxQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [detail, setDetail] = useState<PayOutboxEvent | null>(null)
   const [discarding, setDiscarding] = useState<PayOutboxEvent | null>(null)
 
-  const { data, isLoading, isError, refetch } = useOutboxEvents({ ...filters, page, pageSize })
+  const { data, isLoading, isError, refetch } = useOutboxEvents({ ...filters, page, pageSize, sort, desc })
   const { data: counts } = useOutboxCounts()
   const retry = useRetryOutbox()
 
@@ -125,6 +128,7 @@ export function OutboxTab() {
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
+      sortKey: 'created_at',
       mobile: 'hidden',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
@@ -179,6 +183,7 @@ export function OutboxTab() {
         </Select>
       </FilterBar>
       <DataTable
+        sort={sortProp}
         columns={columns}
         data={data?.list ?? []}
         rowKey="eventId"

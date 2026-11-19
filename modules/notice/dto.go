@@ -57,6 +57,8 @@ type ListQuery struct {
 	Status   []string
 	Page     int
 	PageSize int
+	Sort     string // 表头排序字段（白名单见 Service.List）
+	Desc     bool
 	Scope    *datascope.Scope // 操作者的数据范围；nil = 不裁剪（仅内部调用），HTTP 入口必须设置
 }
 

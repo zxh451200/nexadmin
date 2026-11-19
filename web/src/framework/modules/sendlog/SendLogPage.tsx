@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DataTable } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
@@ -54,11 +55,13 @@ export default function SendLogPage() {
   const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<SendLog | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
 
-  const { data, isLoading } = useSendLogList({ page, pageSize, ...toQuery(applied) })
+  const { data, isLoading } = useSendLogList({ page, pageSize, ...toQuery(applied), sort, desc })
   const del = useDeleteSendLogs()
 
   const search = () => {
@@ -91,12 +94,14 @@ export default function SendLogPage() {
     {
       key: 'channel',
       title: t('sendlog.col.channel'),
+      sortKey: 'channel',
       mobile: 'title',
       render: (r) => <Badge variant={CHANNEL_VARIANT[r.channel]}>{t(`sendlog.channel.${r.channel}`)}</Badge>,
     },
     {
       key: 'scene',
       title: t('sendlog.col.scene'),
+      sortKey: 'scene',
       mobile: 'sub',
       render: (r) => t(`sendlog.scene.${r.scene}`, { defaultValue: r.scene }),
     },
@@ -130,8 +135,8 @@ export default function SendLogPage() {
           <span className="text-muted-foreground">-</span>
         ),
     },
-    { key: 'durationMs', title: t('sendlog.col.duration'), align: 'end', render: (r) => <span className="num">{r.durationMs} ms</span> },
-    { key: 'createdAt', title: t('sendlog.col.time'), render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
+    { key: 'durationMs', title: t('sendlog.col.duration'), align: 'end', sortKey: 'duration_ms', render: (r) => <span className="num">{r.durationMs} ms</span> },
+    { key: 'createdAt', title: t('sendlog.col.time'), sortKey: 'created_at', render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
   ]
 
   return (
@@ -163,6 +168,7 @@ export default function SendLogPage() {
         <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('sendlog.filter.time')} className="md:w-64" placeholder={t('sendlog.filter.time')} />
       </FilterBar>
       <DataTable<SendLog>
+        sort={sortProp}
         toolbar={
           <Can perm="sendlog:delete">
             <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>

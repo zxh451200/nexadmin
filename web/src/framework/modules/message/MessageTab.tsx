@@ -11,6 +11,7 @@ import { DictTag } from '@/framework/components/DictTag'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { dictText, useDictItems } from '@/framework/components/pickers/useDictItems'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -36,6 +37,8 @@ export function MessageTab({ unread }: { unread: number }) {
   const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认未读在前、新消息在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [detail, setDetail] = useState<Message | null>(null)
 
   const search = () => {
@@ -56,6 +59,8 @@ export function MessageTab({ unread }: { unread: number }) {
     unread: applied.onlyUnread ? '1' : undefined,
     from: applied.range.from,
     to: applied.range.to,
+    sort,
+    desc,
   })
   const markRead = useMarkRead()
   const readAll = useReadAll()
@@ -128,6 +133,7 @@ export function MessageTab({ unread }: { unread: number }) {
     {
       key: 'title',
       title: t('message.fields.title'),
+      sortKey: 'title',
       mobile: 'title',
       render: (m) => (
         <div className="flex min-w-0 items-center gap-2">
@@ -140,10 +146,11 @@ export function MessageTab({ unread }: { unread: number }) {
         </div>
       ),
     },
-    { key: 'category', title: t('message.fields.category'), mobile: 'sub', render: (m) => <DictTag dict="message_category" value={m.category} /> },
+    { key: 'category', title: t('message.fields.category'), sortKey: 'category', mobile: 'sub', render: (m) => <DictTag dict="message_category" value={m.category} /> },
     {
       key: 'createdAt',
       title: t('message.fields.time'),
+      sortKey: 'created_at',
       render: (m) => <span className="num text-muted-foreground">{formatTime(m.createdAt, i18n.language)}</span>,
     },
   ]
@@ -183,6 +190,7 @@ export function MessageTab({ unread }: { unread: number }) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="message-inbox"
         onRowClick={open}
         toolbar={
@@ -202,6 +210,8 @@ export function MessageTab({ unread }: { unread: number }) {
                 unread: applied.onlyUnread ? '1' : undefined,
                 from: applied.range.from,
                 to: applied.range.to,
+                sort,
+                desc,
               })}
             />
             <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>

@@ -170,8 +170,10 @@ func (h *handler) run(c *gin.Context) {
 // GET /plugins/imports?source=&status=&page=&pageSize= —— 导入台账。
 func (h *handler) list(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	sortField, desc := response.ParseSort(c)
 	list, total, err := h.svc.ListJobs(c.Request.Context(), JobQuery{
-		Source: response.ParseList(c.Query("source"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
+		Source: response.ParseList(c.Query("source"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Sort: sortField, Desc: desc, Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)

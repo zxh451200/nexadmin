@@ -55,11 +55,11 @@ export interface KbStatus {
 const BASE = '/plugins/kb'
 const KEY = ['plugin_kb'] as const
 
-/** 文档列表：后端支持 status 过滤（'' = 全部），供页头的状态筛选使用。 */
-export function useDocuments(status?: string) {
+/** 文档列表：后端支持 status 过滤（'' = 全部）与表头排序，供页头的状态筛选使用。 */
+export function useDocuments(status?: string, sort?: string, desc?: boolean) {
   return useQuery({
-    queryKey: [...KEY, 'documents', status ?? ''],
-    queryFn: () => api.get<KbDocument[]>(`${BASE}/documents`, status ? { status } : undefined),
+    queryKey: [...KEY, 'documents', status ?? '', sort ?? '', desc ?? null],
+    queryFn: () => api.get<KbDocument[]>(`${BASE}/documents`, { status: status || undefined, sort, desc }),
   })
 }
 

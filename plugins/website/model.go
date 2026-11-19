@@ -83,7 +83,33 @@ type Setting struct {
 	// PurchaseEnabled 打开产品在线购买：有定价的产品详情页出「立即购买」入口，
 	// 访客（匿名）下单 → pay 中台收款。默认关：升级不改存量站点的公开表单。
 	PurchaseEnabled bool `gorm:"column:purchase_enabled;not null;default:false" json:"purchaseEnabled"`
+	// OfficesJSON 是办公地点列表（[]Office）：联系页渲染地点卡与地图，
+	// 地图厂商按访客语言判定（zh 系→天地图，其他→谷歌），Key 配置在「系统设置 → 地图服务」。
+	OfficesJSON string `gorm:"column:offices;type:text" json:"-"`
 }
+
+// Office 是一个办公地点（联系页地点卡 + 地图打点）。
+type Office struct {
+	Name    string  `json:"name"`
+	Address string  `json:"address"`
+	Lng     float64 `json:"lng"`
+	Lat     float64 `json:"lat"`
+}
+
+// HasCoords 报告该地点有没有可用坐标（两个都为 0 视为未选点，只渲染地址卡）。
+func (o Office) HasCoords() bool { return o.Lat != 0 || o.Lng != 0 }
+
+// Faq 是常见问题条目（首页 FAQ 板块）：问题 + 答案，排序展示，enabled 关掉即整条隐藏。
+// 与 Feature 卡片同一范式（平台级、单语原文），i18n 后续随 Feature 一并补。
+type Faq struct {
+	database.PlatformModel
+	Question string `gorm:"size:300;not null" json:"question"`
+	Answer   string `gorm:"type:text;not null" json:"answer"`
+	Sort     int    `json:"sort"`
+	Enabled  bool   `json:"enabled"`
+}
+
+func (Faq) TableName() string { return "plg_website_faq" }
 
 func (Setting) TableName() string { return "plg_website_setting" }
 

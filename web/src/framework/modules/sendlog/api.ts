@@ -37,6 +37,10 @@ export interface SendLogQuery {
   recipient?: string
   startDate?: string
   endDate?: string
+  /** 表头排序字段（后端按白名单翻译成 ORDER BY） */
+  sort?: string
+  /** true = 倒序；后端 ParseSort 兼容 true/false 与 1/0 */
+  desc?: boolean
 }
 
 export function useSendLogList(query: SendLogQuery) {

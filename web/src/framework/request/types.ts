@@ -17,6 +17,10 @@ export interface PageQuery {
   page?: number
   pageSize?: number
   keyword?: string
+  /** 表头排序字段（后端按各模块白名单翻译成 ORDER BY，白名单外回退默认列） */
+  sort?: string
+  /** true = 倒序；后端 ParseSort 兼容 true/false 与 1/0 */
+  desc?: boolean
   [k: string]: unknown
 }
 

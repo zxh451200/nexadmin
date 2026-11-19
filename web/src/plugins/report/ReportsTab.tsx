@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Button } from '@/framework/ui/button'
 import { api } from '@/framework/request/http'
 import { useDeleteReport, useDeleteReports, useReportList, type Report } from './api'
@@ -18,7 +19,9 @@ export function ReportsTab() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const { data, isLoading } = useReportList({ page, pageSize })
+  // 表头排序：默认按分组升序（与后端回退序一致），改排序回第一页
+  const { sort, desc, sortProp } = useHeaderSort('group', false, () => setPage(1))
+  const { data, isLoading } = useReportList({ page, pageSize, sort, desc })
   const reports = data?.list ?? []
   const remove = useDeleteReport()
   const removeBatch = useDeleteReports()
@@ -70,8 +73,8 @@ export function ReportsTab() {
   }
 
   const columns: Column<Report>[] = [
-    { key: 'name', title: t('common.name'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{builtinText(t, r.name)}</span> },
-    { key: 'group', title: t('plugin_report.report.group'), mobile: 'sub', render: (r) => <span>{builtinText(t, r.groupName) || '-'}</span> },
+    { key: 'name', title: t('common.name'), sortKey: 'name', mobile: 'title', render: (r) => <span className="font-medium text-foreground">{builtinText(t, r.name)}</span> },
+    { key: 'group', title: t('plugin_report.report.group'), sortKey: 'group', mobile: 'sub', render: (r) => <span>{builtinText(t, r.groupName) || '-'}</span> },
     { key: 'remark', title: t('common.remark'), render: (r) => (r.remark ? <span className="block max-w-64 truncate text-muted-foreground" title={r.remark}>{r.remark}</span> : <span className="text-muted-foreground">-</span>) },
   ]
 
@@ -82,6 +85,7 @@ export function ReportsTab() {
         data={reports}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         pagination={{
           page,
           pageSize,

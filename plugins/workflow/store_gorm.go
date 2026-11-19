@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/nexadmin/flowlite/store"
+	"nexadmin/core"
 	"nexadmin/pkg/idgen"
 )
 
@@ -137,7 +138,13 @@ func (g gormDefs) List(ctx context.Context, q store.DefQuery) ([]*store.Definiti
 		return nil, 0, err
 	}
 	var rows []Def
-	err := base.Session(&gorm.Session{}).Order("id DESC").
+	// 表头排序白名单：名称/创建/更新时间，白名单外回退 id（与既有默认序一致）
+	err := base.Session(&gorm.Session{}).Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"name":       "name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+		"id":         "id",
+	}, "id")).
 		Offset((pageOf(q.Page) - 1) * sizeOf(q.PageSize)).Limit(sizeOf(q.PageSize)).Find(&rows).Error
 	if err != nil {
 		return nil, 0, err

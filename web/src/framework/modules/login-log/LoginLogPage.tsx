@@ -168,7 +168,7 @@ export default function LoginLogPage() {
       title: t('loginLog.col.os'),
       render: (r) => (r.os ? <span className="block max-w-[10rem] truncate" title={r.os}>{r.os}</span> : <span className="text-muted-foreground">-</span>),
     },
-    { key: 'status', title: t('loginLog.col.status'), sortKey: 'status', render: (r) => <DictTag dict="login_status" value={r.status} /> },
+    { key: 'status', title: t('loginLog.col.status'), render: (r) => <DictTag dict="login_status" value={r.status} /> },
     {
       key: 'failReason',
       title: t('loginLog.col.reason'),

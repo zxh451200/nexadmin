@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -178,14 +179,19 @@ func (s *service) SaveVideo(ctx context.Context, username string, req videoSaveR
 }
 
 // Videos 按创建时间倒序返回视频台账；播放地址按每条记录自己的厂商推导。
-func (s *service) Videos(ctx context.Context, page, pageSize int) ([]VideoItem, int64, error) {
+func (s *service) Videos(ctx context.Context, page, pageSize int, sort string, desc bool) ([]VideoItem, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&Video{})
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var rows []Video
-	if err := tx.Order("created_at DESC, id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/厂商/时间，白名单外回退 created_at
+	if err := tx.Order(core.OrderBy(sort, desc, map[string]string{
+		"name":       "name",
+		"provider":   "provider",
+		"created_at": "created_at",
+	}, "created_at")).Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	cfg, err := s.VideoConfig(ctx)

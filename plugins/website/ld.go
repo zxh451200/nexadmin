@@ -137,14 +137,31 @@ func productJSONLD(v *siteView, p *Product) template.JS {
 	if p.PriceMin > 0 {
 		// 报价随展示币种换算：爬虫（无币种 cookie）看到的是站点默认币种，
 		// 与页面渲染同一口径，rich result 的价格不会和正文打架。
-		amount, _ := strconv.ParseFloat(v.FxMoney(p.PriceMin, p.Currency), 64)
-		m["offers"] = map[string]any{
-			"@type":         "Offer",
-			"url":           v.Canonical(),
-			"price":         amount,
-			"priceCurrency": v.FxCur(p.Currency),
-			"itemCondition": "https://schema.org/NewCondition",
-			"availability":  "https://schema.org/InStock",
+		// 区间价（PriceMax > PriceMin）用 AggregateOffer 的 lowPrice/highPrice，
+		// 与页面「USD1200-1500」同一口径——只报低价会丢掉区间信息。
+		lo, _ := strconv.ParseFloat(v.FxMoney(p.PriceMin, p.Currency), 64)
+		cur := v.FxCur(p.Currency)
+		if p.PriceMax > p.PriceMin {
+			hi, _ := strconv.ParseFloat(v.FxMoney(p.PriceMax, p.Currency), 64)
+			m["offers"] = map[string]any{
+				"@type":         "AggregateOffer",
+				"url":           v.Canonical(),
+				"lowPrice":      lo,
+				"highPrice":     hi,
+				"priceCurrency": cur,
+				"offerCount":    1,
+				"itemCondition": "https://schema.org/NewCondition",
+				"availability":  "https://schema.org/InStock",
+			}
+		} else {
+			m["offers"] = map[string]any{
+				"@type":         "Offer",
+				"url":           v.Canonical(),
+				"price":         lo,
+				"priceCurrency": cur,
+				"itemCondition": "https://schema.org/NewCondition",
+				"availability":  "https://schema.org/InStock",
+			}
 		}
 	}
 	return marshalLD([]any{m, breadcrumbJSONLD(
@@ -178,8 +195,8 @@ func (h *siteHandler) rss(c *gin.Context) {
 	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
-	fmt.Fprintf(&b, `<rss version="2.0"><channel><title>%s</title><link>%s/</link><description>%s</description><language>%s</language><generator>NexAdmin</generator>`+"\n",
-		rssEsc.Replace(siteName), base, rssEsc.Replace(set.SiteDesc), lang.Code)
+	fmt.Fprintf(&b, `<rss version="2.0"><channel><title>%s</title><link>%s/</link><description>%s</description><language>%s</language><lastBuildDate>%s</lastBuildDate><generator>NexAdmin</generator>`+"\n",
+		rssEsc.Replace(siteName), base, rssEsc.Replace(set.SiteDesc), lang.Code, time.Now().Format(time.RFC1123Z))
 	for _, p := range posts {
 		desc := p.Summary
 		if desc == "" {
@@ -194,5 +211,6 @@ func (h *siteHandler) rss(c *gin.Context) {
 			rssEsc.Replace(p.Title), link, link, pub.Format(time.RFC1123Z), rssEsc.Replace(desc))
 	}
 	b.WriteString(`</channel></rss>`)
+	c.Header("Cache-Control", "public, max-age=3600")
 	c.Data(http.StatusOK, "application/rss+xml; charset=utf-8", []byte(b.String()))
 }

@@ -86,6 +86,19 @@
           <div class="pd-sum-row"><span>{{.T "product.sumFreight"}}</span><span data-pd-sum-freight>{{if gt .Product.FreightAmount 0.0}}{{.Product.Currency}}{{money .Product.FreightAmount}}{{else}}{{.T "product.freightTbd"}}{{end}}</span></div>
           <div class="pd-sum-total"><span>{{.T "product.sumTotal"}}</span><span data-pd-sum-total></span></div>
         </div>
+        {{if and .PurchaseEnabled .Product.PriceMin}}
+        <form class="pd-buy" data-pd-buy action="{{.URL "/website/orders"}}" method="post" novalidate><!-- novalidate：隐藏的邮箱字段会拦住提交，邮箱校验在 JS 与服务端都做 -->
+          <input type="hidden" name="slug" value="{{.Product.Slug}}">
+          <input type="hidden" name="qty" value="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}" data-pd-buy-qty>
+          <button type="submit" class="pd-cta pd-cta-primary" data-pd-buy-btn>{{.T "product.buyNow"}}</button>
+          <div class="pd-buy-fields" data-pd-buy-fields hidden>
+            <input type="email" name="email" required placeholder="{{.T "product.buyEmail"}}" aria-label="{{.T "product.buyEmail"}}">
+            <input type="text" name="phone" placeholder="{{.T "product.buyPhone"}}" aria-label="{{.T "product.buyPhone"}}">
+            <input type="text" name="remark" placeholder="{{.T "product.buyRemark"}}" aria-label="{{.T "product.buyRemark"}}">
+          </div>
+        </form>
+        {{end}}
+        {{if .OrderError}}<p class="pd-order-error" role="alert">{{.OrderError}}</p>{{end}}
         <a id="pd-cta" data-inquiry-open class="pd-cta pd-cta-primary" href="{{.URL "/contact"}}" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.sendInquiry"}}</a>
         {{/* 「联系商家」是直接对话入口：装了 IM 就开客服面板并预填开场白；
              没装 IM 时照旧按 href 走邮箱 / 联系页，不能只在 mailto 上挂着等系统邮件客户端 */}}

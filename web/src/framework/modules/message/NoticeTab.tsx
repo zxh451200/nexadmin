@@ -166,31 +166,6 @@ export function NoticeTab() {
           <Label htmlFor="notice-only-unread">{t('message.onlyUnread')}</Label>
         </div>
       </FilterBar>
-      <div className="flex flex-wrap gap-2 md:justify-end">
-        <Button variant="outline" onClick={onReadAll} disabled={readAll.isPending || !data?.total}>
-          {t('message.readAll')}
-        </Button>
-        <ExportCsvButton
-          filename="notices"
-          columns={[
-            { header: t('message.fields.title'), value: (n) => n.title },
-            { header: t('message.fields.type'), value: (n) => dictText(typeItems, n.type) },
-            { header: t('message.fields.level'), value: (n) => dictText(levelItems, n.level) },
-            { header: t('message.fields.status'), value: (n) => (n.read ? t('message.read') : t('message.unread')) },
-            { header: t('message.fields.publishedAt'), value: (n) => formatTime(n.publishedAt ?? '', i18n.language) },
-            { header: t('message.fields.content'), value: (n) => n.content },
-          ]}
-          getRows={() => fetchNoticesForExport({
-            keyword: applied.keyword?.trim() || undefined,
-            type: applied.type || undefined,
-            unread: applied.onlyUnread ? '1' : undefined,
-          })}
-        />
-        <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
-          <Trash2 aria-hidden="true" />
-          {t('message.clearNotices')}
-        </Button>
-      </div>
 
       <DataTable
         columns={columns}
@@ -198,6 +173,33 @@ export function NoticeTab() {
         rowKey="id"
         loading={isLoading}
         columnSettingsKey="notice-inbox"
+        toolbar={
+          <>
+            <ExportCsvButton
+              filename="notices"
+              columns={[
+                { header: t('message.fields.title'), value: (n) => n.title },
+                { header: t('message.fields.type'), value: (n) => dictText(typeItems, n.type) },
+                { header: t('message.fields.level'), value: (n) => dictText(levelItems, n.level) },
+                { header: t('message.fields.status'), value: (n) => (n.read ? t('message.read') : t('message.unread')) },
+                { header: t('message.fields.publishedAt'), value: (n) => formatTime(n.publishedAt ?? '', i18n.language) },
+                { header: t('message.fields.content'), value: (n) => n.content },
+              ]}
+              getRows={() => fetchNoticesForExport({
+                keyword: applied.keyword?.trim() || undefined,
+                type: applied.type || undefined,
+                unread: applied.onlyUnread ? '1' : undefined,
+              })}
+            />
+            <Button variant="outline" onClick={onReadAll} disabled={readAll.isPending || !data?.total}>
+              {t('message.readAll')}
+            </Button>
+            <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
+              <Trash2 aria-hidden="true" />
+              {t('message.clearNotices')}
+            </Button>
+          </>
+        }
         onRowClick={open}
         emptyText={applied.keyword || applied.type || applied.onlyUnread ? t('message.emptyFiltered') : t('message.emptyNotices')}
         pagination={{

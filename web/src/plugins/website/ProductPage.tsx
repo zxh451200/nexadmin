@@ -9,6 +9,7 @@ import { OptionPicker } from '@/framework/components/OptionPicker'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import {
   LocaleFormActions,
@@ -237,11 +238,18 @@ function CategoryPicker({
       disabled: isGroup && !selected,
       node: (
         <span className="flex w-full items-center gap-2">
+          {/* 层级用「缩进 + 破折号前缀」表达——企业站后台（WordPress / 织梦一类）最通用的做法，
+              比纯缩进更醒目：2 级「— 名称」，3 级「—— 名称」。 */}
           <span
-            className={cn('truncate', isGroup && 'font-medium')}
-            style={{ paddingInlineStart: `${(c.depth - 1) * 16}px` }}
+            className={cn('flex min-w-0 items-center', isGroup && 'font-medium')}
+            style={{ paddingInlineStart: `${(c.depth - 1) * 18}px` }}
           >
-            {c.title}
+            {c.depth > 1 ? (
+              <span aria-hidden="true" className="shrink-0 select-none pe-1.5 text-xs text-muted-foreground/60">
+                {'—'.repeat(c.depth - 1)}
+              </span>
+            ) : null}
+            <span className="truncate">{c.title}</span>
           </span>
           {isGroup ? (
             <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
@@ -268,6 +276,9 @@ function CategoryPicker({
       onOpenChange={setOpen}
       disabled={disabled}
       title={t('plugin_website.product.categories')}
+      // 表单里这类目字段常只占 1/3 列宽，弹层若等宽，缩进后的二级名字会被截。
+      // 抬一个最小宽度，层级 + 名称 + 计数才有地方排开。
+      contentClassName="min-w-72"
       trigger={
         <PickerTrigger
           className={className}
@@ -588,7 +599,7 @@ function ProductFormBody({
           <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
         </FormSection>
         <FormSection title={t('plugin_website.product.tradeSection')}>
-        {/* 价格三件套 + 数量/交期各占一整行 3 列，运费并入下面 2 列行——7 个字段 3 列排必出孤行 */}
+        {/* 价格三件套 + 数量/交期各占一整行 3 列 */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <SharedFieldShell labelKey="plugin_website.product.priceMin">
             <Input
@@ -648,7 +659,7 @@ function ProductFormBody({
             />
           </SharedFieldShell>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <SharedFieldShell labelKey="plugin_website.product.port">
             <ConstantPicker
               value={port}
@@ -680,21 +691,22 @@ function ProductFormBody({
               onChange={(e) => setFreightAmount(e.target.value)}
             />
           </SharedFieldShell>
-          {/* 认证资质不做固定下拉：各行业认证差异大（CE/UL/UN38.3/IEC/ISO/FCC…），
-              运营直接写名字，详情页按名称自动配图标。标签形态与搜索关键词同款，
-              但词内允许空格（UL 1973、ISO 9001），只按逗号/顿号/分号收词。 */}
-          <SharedFieldShell labelKey="plugin_website.product.certifications" hint={t('plugin_website.hint.certifications')}>
-            <TagsInput
-              value={certifications}
-              onChange={setCertifications}
-              separators={CERT_SEPARATORS}
-              joinWith=", "
-              placeholder="CE, UL 1973, UN38.3, ISO 9001"
-              ariaLabel={t('plugin_website.product.certifications')}
-              disabled={sharedDisabled}
-            />
-          </SharedFieldShell>
         </div>
+        {/* 认证资质不做固定下拉：各行业认证差异大（CE/UL/UN38.3/IEC/ISO/FCC…），
+            运营直接写名字，详情页按名称自动配图标。标签形态与搜索关键词同款，
+            但词内允许空格（UL 1973、ISO 9001），只按逗号/顿号/分号收词。
+            独占整行：标签墙换行后会比单行输入框高一截，并排就高低参差。 */}
+        <SharedFieldShell labelKey="plugin_website.product.certifications" hint={t('plugin_website.hint.certifications')}>
+          <TagsInput
+            value={certifications}
+            onChange={setCertifications}
+            separators={CERT_SEPARATORS}
+            joinWith=", "
+            placeholder="CE, UL 1973, UN38.3, ISO 9001"
+            ariaLabel={t('plugin_website.product.certifications')}
+            disabled={sharedDisabled}
+          />
+        </SharedFieldShell>
         <SharedGroup labelKey="plugin_website.product.specs">
           <SpecsEditor specs={specs} onChange={setSpecs} disabled={sharedDisabled} />
         </SharedGroup>
@@ -983,9 +995,11 @@ export default function ProductPage() {
   const [statusTab, setStatusTab] = useState<string>(ALL)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认「最近更新在前」（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('updated_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
   const effectiveStatus = statusTab === ALL ? filters.status : statusTab
-  const { data, isLoading } = useProducts({ ...filters, status: effectiveStatus, page, pageSize })
+  const { data, isLoading } = useProducts({ ...filters, status: effectiveStatus, page, pageSize, sort, desc })
   const extraLocales = languages.filter((l) => !l.default)
   const remove = useDeleteProduct()
   const removeBatch = useDeleteProducts()
@@ -1079,6 +1093,7 @@ export default function ProductPage() {
     {
       key: 'title',
       title: t('plugin_website.product.titleColumn'),
+      sortKey: 'title',
       mobile: 'title',
       render: (r) => (
         <span className="flex min-w-0 items-center gap-2">
@@ -1147,6 +1162,7 @@ export default function ProductPage() {
     {
       key: 'price',
       title: t('plugin_website.product.priceColumn'),
+      sortKey: 'price',
       mobile: 'hidden',
       render: (r) => {
         const text = priceText(r)
@@ -1168,19 +1184,8 @@ export default function ProductPage() {
     {
       key: 'status',
       title: t('plugin_website.product.statusColumn'),
+      // 状态只有上架/下架/草稿几个固定值，排序没意义；而且排序按钮的箭头会把窄列的表头挤成「状」
       render: (r) => statusBadge(r.status, t),
-    },
-    {
-      key: 'link',
-      title: '',
-      align: 'end',
-      render: (r) => (r.status === 'online' ? (
-        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-          <a href={`/products/${r.slug}`} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" />
-          </a>
-        </Button>
-      ) : null),
     },
   ]
 
@@ -1245,6 +1250,7 @@ export default function ProductPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-website-products"
         pagination={{
           page,
@@ -1289,6 +1295,13 @@ export default function ProductPage() {
         )}
         rowActions={(row) => (
           <Can perm="website:product">
+            {row.status === 'online' ? (
+              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+                <a href={`/products/${row.slug}`} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                </a>
+              </Button>
+            ) : null}
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.preview')} onClick={() => void onPreview(row)}>
               <Eye aria-hidden="true" />
             </Button>

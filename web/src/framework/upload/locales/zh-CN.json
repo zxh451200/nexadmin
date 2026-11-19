@@ -8,6 +8,7 @@
     "failed": "上传失败",
     "retry": "重试",
     "drag": "拖动调整顺序",
+    "sortHint": "按住图块拖动可调整顺序",
     "maxCount": "最多上传 {{count}} 个文件",
     "errSize": "「{{name}}」超过大小限制（{{limit}} MB）",
     "errType": "「{{name}}」的文件类型不被允许",

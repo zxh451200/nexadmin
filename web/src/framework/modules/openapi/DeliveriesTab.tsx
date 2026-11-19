@@ -12,6 +12,7 @@ import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { fmtDateTime } from '../oper-log/format'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DELIVERY_STATUSES, useDeliveries, useRetryDelivery, useWebhooks, type Delivery, type DeliveryStatus } from './api'
 
 const STATUS_VARIANT: Record<DeliveryStatus, BadgeProps['variant']> = {
@@ -47,6 +48,8 @@ export function DeliveriesTab() {
   const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [detail, setDetail] = useState<Delivery | null>(null)
 
   const { data: webhooks } = useWebhooks()
@@ -58,6 +61,8 @@ export function DeliveriesTab() {
     webhookId: applied.webhookId.length ? applied.webhookId.join(',') : undefined,
     status: applied.status.length ? applied.status.join(',') : undefined,
     event: applied.event === ANY ? undefined : applied.event,
+    sort,
+    desc,
   })
   const retry = useRetryDelivery()
 
@@ -93,6 +98,7 @@ export function DeliveriesTab() {
     {
       key: 'event',
       title: t('openapi.deliveries.fields.event'),
+      sortKey: 'event',
       mobile: 'sub',
       render: (d) => <code className="font-mono text-xs">{d.event}</code>,
     },
@@ -107,7 +113,7 @@ export function DeliveriesTab() {
       title: t('openapi.deliveries.fields.responseCode'),
       render: (d) => (d.responseStatus ? <span className="num font-mono">{d.responseStatus}</span> : <span className="text-muted-foreground">-</span>),
     },
-    { key: 'createdAt', title: t('openapi.deliveries.fields.createdAt'), render: (d) => time(d.createdAt) },
+    { key: 'createdAt', title: t('openapi.deliveries.fields.createdAt'), sortKey: 'created_at', render: (d) => time(d.createdAt) },
     { key: 'nextRetryAt', title: t('openapi.deliveries.fields.nextRetryAt'), render: (d) => time(d.nextAttemptAt) },
   ]
 
@@ -148,6 +154,7 @@ export function DeliveriesTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         emptyText={t('openapi.deliveries.empty')}
         pagination={{
           page,

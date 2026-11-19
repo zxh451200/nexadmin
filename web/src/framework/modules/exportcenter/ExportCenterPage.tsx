@@ -10,6 +10,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Segmented } from '@/framework/components/Segmented'
 import type { Column } from '@/framework/components/table/types'
 import { usePageLive, useRefreshOnResume } from '@/framework/hooks/use-page-active'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import { Button } from '@/framework/ui/button'
@@ -52,6 +53,8 @@ export default function ExportCenterPage() {
   const [all, setAll] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认创建时间倒序（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [busy, setBusy] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
@@ -64,6 +67,8 @@ export default function ExportCenterPage() {
       type: applied.type,
       status: applied.status,
       all,
+      sort,
+      desc,
     },
     (q) => (live && q.state.data?.list.some((j) => isActive(j.status)) ? POLL_MS : false),
   )
@@ -151,7 +156,7 @@ export default function ExportCenterPage() {
   }
 
   const columns: Column<Job>[] = [
-    { key: 'type', title: t('jobs.col.type'), mobile: 'title', render: (j) => typeLabel(j.type) },
+    { key: 'type', title: t('jobs.col.type'), sortKey: 'type', mobile: 'title', render: (j) => typeLabel(j.type) },
     {
       key: 'status',
       title: t('jobs.col.status'),
@@ -190,6 +195,7 @@ export default function ExportCenterPage() {
     {
       key: 'createdAt',
       title: t('jobs.col.createdAt'),
+      sortKey: 'created_at',
       render: (j) => (
         <div className="flex flex-col items-start gap-0.5">
           <span className="num">{fmtDateTime(j.createdAt, i18n.language)}</span>
@@ -236,6 +242,7 @@ export default function ExportCenterPage() {
         />
       </FilterBar>
       <DataTable<Job>
+        sort={sortProp}
         toolbar={
           <>
             <Can perm="job:all">

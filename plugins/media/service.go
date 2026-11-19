@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
@@ -69,8 +70,9 @@ func (s *service) Stats(ctx context.Context) (Stats, error) {
 	return Stats{Total: total, Done: done, Pending: total - done}, nil
 }
 
-// Pending 返回还没有 WebP 副本的原图，按创建时间倒序分页。
-func (s *service) Pending(ctx context.Context, page, pageSize int) ([]Image, int64, error) {
+// Pending 返回还没有 WebP 副本的原图，按创建时间倒序分页（sort/desc 是表头排序参数，
+// 白名单：名称/大小/时间，白名单外回退 created_at）。
+func (s *service) Pending(ctx context.Context, page, pageSize int, sort string, desc bool) ([]Image, int64, error) {
 	tx := s.scoped(ctx).Where(optimizedSource).Where("NOT " + hasWebp)
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -78,7 +80,11 @@ func (s *service) Pending(ctx context.Context, page, pageSize int) ([]Image, int
 	}
 	var rows []fileRow
 	if err := tx.Select("id, name, mime_type, size, token, created_at").
-		Order("created_at DESC, id DESC").
+		Order(core.OrderBy(sort, desc, map[string]string{
+			"name":       "name",
+			"size":       "size",
+			"created_at": "created_at",
+		}, "created_at")).
 		Offset((page - 1) * pageSize).Limit(pageSize).Scan(&rows).Error; err != nil {
 		return nil, 0, err
 	}

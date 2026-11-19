@@ -202,12 +202,15 @@ export function OpportunitiesTab() {
   const [filters, setFilters] = useState<OpportunityQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存（改排序不重置筛选条件）；空 = 后端默认排序
+  const [sort, setSort] = useState('')
+  const [desc, setDesc] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CrmOpportunity | null>(null)
   // 多选状态叫 picked，与客户页保持一致。
   const [picked, setPicked] = useState<string[]>([])
 
-  const { data, isLoading } = useOpportunities({ ...filters, page, pageSize })
+  const { data, isLoading } = useOpportunities({ ...filters, page, pageSize, sort: sort || undefined, desc })
   const remove = useDeleteOpportunity()
   const removeBatch = useDeleteOpportunities()
 
@@ -240,6 +243,7 @@ export function OpportunitiesTab() {
     {
       key: 'title',
       title: t('plugin_crm.fields.title'),
+      sortKey: 'title',
       mobile: 'title',
       render: (o) => <span className="font-medium text-foreground">{o.title}</span>,
     },
@@ -266,12 +270,14 @@ export function OpportunitiesTab() {
       key: 'amount',
       title: t('plugin_crm.fields.amountMinor'),
       align: 'end',
+      sortKey: 'amount_minor',
       render: (o) => (o.amountMinor > 0 ? <span className="num">{formatMoney(o.amountMinor, o.currency)}</span> : <span className="text-muted-foreground">-</span>),
     },
-    { key: 'owner', title: t('plugin_crm.fields.owner'), render: (o) => o.owner || '-' },
+    { key: 'owner', title: t('plugin_crm.fields.owner'), sortKey: 'owner', render: (o) => o.owner || '-' },
     {
       key: 'createdAt',
       title: t('plugin_crm.fields.createdAt'),
+      sortKey: 'created_at',
       render: (o) => <span className="num text-xs text-muted-foreground">{formatTime(o.createdAt, i18n.language)}</span>,
     },
   ]
@@ -320,6 +326,15 @@ export function OpportunitiesTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={{
+          key: sort,
+          desc,
+          onChange: (key, d) => {
+            setSort(key)
+            setDesc(d)
+            setPage(1)
+          },
+        }}
         columnSettingsKey="plugin-crm-opportunities"
         pagination={{
           page,

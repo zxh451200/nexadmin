@@ -247,6 +247,7 @@ pay:
   PAY_SIGN_INVALID: 回调验签失败
   PAY_CHANNEL_UNAVAILABLE: 支付渠道不可用或类型未知
   PAY_CHANNEL_ERROR: 渠道拒绝了该操作
+  PAY_CHANNEL_CODE_TAKEN: 渠道编码已被占用，请换一个编码或编辑现有渠道
   PAY_NOT_FOUND: 资金单不存在
   PAY_TENANT_MISMATCH: 资金单与当前租户不匹配
   PAY_IDEMPOTENCY_CONFLICT: 幂等键已用于不同的请求体
@@ -782,6 +783,15 @@ website:
   message_not_found: "留言不存在或已删除"
   message_ids_empty: "请至少选择一条留言"
   message_status_invalid: "留言状态不合法"
+  order_status_invalid: "订单状态不合法"
+  order_ids_empty: "请至少选择一条订单"
+  order_not_found: "订单不存在或已删除"
+  faq_question_required: "请填写问题"
+  faq_question_too_long: "问题最多 300 个字"
+  faq_answer_too_long: "答案最多 5000 个字"
+  faq_not_found: "常见问题不存在或已删除"
+  faq_ids_empty: "请至少选择一个常见问题"
+  faq_enabled_invalid: "启用状态不合法"
   file_empty: "文件为空"
   image_too_large: "图片不能超过 %s"
   image_type_unsupported: "只支持 %s 图片"

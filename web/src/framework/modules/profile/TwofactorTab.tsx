@@ -199,11 +199,12 @@ export function TwofactorTab() {
         <div className="flex flex-col gap-4 text-sm">
           <div className="flex flex-col gap-1.5">
             <Label>{t('profile.twofactor.secretLabel')}</Label>
-            <code className="num break-all rounded-md bg-muted px-2 py-1.5">{secret}</code>
+            {/* 只读 Input：与下方动态码输入框同款框型，避免同一弹窗里两种框样式 */}
+            <Input readOnly value={secret} className="font-mono" onFocus={(e) => e.currentTarget.select()} aria-label={t('profile.twofactor.secretLabel')} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>{t('profile.twofactor.uriLabel')}</Label>
-            <code className="break-all rounded-md bg-muted px-2 py-1.5 text-xs">{uri}</code>
+            <Input readOnly value={uri} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} aria-label={t('profile.twofactor.uriLabel')} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="totp-confirm-code">{t('profile.twofactor.codeLabel')}</Label>

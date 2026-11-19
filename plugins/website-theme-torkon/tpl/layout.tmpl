@@ -85,7 +85,7 @@
       <span class="tk-hsep" aria-hidden="true"></span>
       <a class="tk-hlink" href="{{.URL "/contact"}}">{{icon "mail"}}<span>{{.T "theme.torkon.account"}}</span></a>
       <details class="tk-lang">
-        <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Short}}</summary>
+        <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Label}}</summary>
         <div class="tk-langmenu">
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>

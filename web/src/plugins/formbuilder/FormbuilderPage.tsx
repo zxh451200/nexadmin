@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Badge } from '@/framework/ui/badge'
@@ -50,10 +51,12 @@ export default function FormbuilderPage() {
   const [filters, setFilters] = useState<Filters>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [createOpen, setCreateOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
 
-  const { data, isLoading } = useForms({ ...filters, page, pageSize })
+  const { data, isLoading } = useForms({ ...filters, page, pageSize, sort, desc })
   const copy = useCopyForm()
   const remove = useDeleteForm()
   const removeBatch = useDeleteForms()
@@ -131,6 +134,7 @@ export default function FormbuilderPage() {
     {
       key: 'name',
       title: t('plugin_formbuilder.fields.name'),
+      sortKey: 'name',
       mobile: 'title',
       render: (f) => (
         <div className="flex min-w-0 flex-col">
@@ -161,7 +165,7 @@ export default function FormbuilderPage() {
       title: t('plugin_formbuilder.fields.deadline'),
       render: (f) => (f.deadlineAt ? <span className="num">{formatTime(f.deadlineAt, i18n.language)}</span> : <span className="text-muted-foreground">-</span>),
     },
-    { key: 'updatedAt', title: t('common.updatedAt'), render: (f) => <span className="num">{formatTime(f.updatedAt, i18n.language)}</span> },
+    { key: 'updatedAt', title: t('common.updatedAt'), sortKey: 'updated_at', render: (f) => <span className="num">{formatTime(f.updatedAt, i18n.language)}</span> },
   ]
 
   return (
@@ -201,6 +205,7 @@ export default function FormbuilderPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-formbuilder-forms"
         pagination={{
           page,

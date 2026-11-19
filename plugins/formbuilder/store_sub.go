@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/database"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -237,7 +238,11 @@ func (s *gormStore) PageSubmissions(ctx context.Context, q SubQuery) ([]Submissi
 		return nil, err
 	}
 	var list []Submission
-	err = db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&list).Error
+	// 排序白名单：提交人/时间，白名单外回退 created_at（与原 id DESC 的「最新在前」口径一致）
+	err = db.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"username":   "username",
+		"created_at": "created_at",
+	}, "created_at")).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&list).Error
 	return list, err
 }
 

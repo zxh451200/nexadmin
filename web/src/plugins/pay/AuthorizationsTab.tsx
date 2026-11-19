@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -60,10 +61,12 @@ export function AuthorizationsTab() {
   const [filters, setFilters] = useState<AuthQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [createOpen, setCreateOpen] = useState(false)
   const [capture, setCapture] = useState<PayAuthorization | null>(null)
 
-  const { data, isLoading, isError, refetch } = useAuthorizations({ ...filters, page, pageSize })
+  const { data, isLoading, isError, refetch } = useAuthorizations({ ...filters, page, pageSize, sort, desc })
   const voidAuth = useVoidAuth()
 
   const onVoid = async (a: PayAuthorization) => {
@@ -161,6 +164,7 @@ export function AuthorizationsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        sort={sortProp}
         columnSettingsKey="plugin-pay-authorizations"
         pagination={{
           page,

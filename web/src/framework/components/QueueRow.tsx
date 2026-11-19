@@ -29,7 +29,8 @@ export function QueueRow({
     // 选中态用 primary 色底 + 内描边：accent/60 在浅色下和悬停几乎一个色，扫一眼分不出选没选中
     <div
       className={cn(
-        'relative rounded-md transition-colors',
+        // group/row：行内元素（如按需浮现的勾选框）跟随整行 hover 显隐
+        'group/row relative rounded-md transition-colors',
         selected ? 'bg-primary/10 ring-1 ring-inset ring-primary/30 hover:bg-primary/15' : 'hover:bg-accent/40',
       )}
     >
@@ -85,7 +86,7 @@ const AVATAR_GRADIENTS = [
 ] as const
 
 /** 行首头像位：品牌渐变小方块，和主按钮、Logo 同一套形状与配色语言；给 seed 时按会话稳定着色 */
-export function QueueAvatar({ children, seed }: { children: ReactNode; seed?: string }) {
+export function QueueAvatar({ children, seed, className }: { children: ReactNode; seed?: string; className?: string }) {
   let h = 0
   if (seed) {
     for (let i = 0; i < seed.length; i++) {
@@ -98,6 +99,7 @@ export function QueueAvatar({ children, seed }: { children: ReactNode; seed?: st
       className={cn(
         'flex size-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br text-[11px] font-semibold text-white',
         g ?? 'bg-brand-gradient text-primary-foreground',
+        className,
       )}
     >
       {children}

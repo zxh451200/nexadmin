@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,10 +13,13 @@ import (
 
 // Filter 是列表筛选。Owner 为 0 表示不限所有者（管理员看全部）。
 // Types/Statuses 是逗号拼接多值（空切片 = 不限）；Statuses 里可含 StatusActive（展开为排队+执行）。
+// Sort/Desc 是表头排序参数（白名单见 GormStore.List，白名单外回退 created_at DESC）。
 type Filter struct {
 	Owner    idgen.ID
 	Types    []string
 	Statuses []string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }
@@ -107,7 +111,21 @@ func (s *GormStore) List(ctx context.Context, f Filter) ([]*Job, int64, error) {
 	if size < 1 {
 		size = 10
 	}
-	err := q.Order("created_at DESC, id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error
+	// 排序白名单：请求值只当键用、列名永远从这里出（与 core.OrderBy 同一纪律；
+	// 本包不引 nexadmin/core 避免依赖环，所以就地实现这一小段）
+	order := "created_at DESC, id DESC"
+	if col, ok := map[string]string{
+		"type":       "type",
+		"status":     "status",
+		"created_at": "created_at",
+	}[strings.ToLower(strings.TrimSpace(f.Sort))]; ok {
+		dir := "DESC"
+		if !f.Desc {
+			dir = "ASC"
+		}
+		order = col + " " + dir + ", id DESC"
+	}
+	err := q.Order(order).Offset((page - 1) * size).Limit(size).Find(&rows).Error
 	return rows, total, err
 }
 

@@ -17,15 +17,28 @@
     },
     "kpi": {
       "delta": "{{value}}%",
-      "storageDetail": "总量 {{total}} GB"
+      "storageDetail": "总量 {{total}} GB",
+      "prevDetail": "上期 {{base}}"
     },
     "onlineTitle": "实时在线",
     "onlineNow": "人在线",
     "onlineJustNow": "刚刚",
     "onlineEmpty": "当前没有在线用户",
     "storageValue": "{{used}} / {{total}} GB",
-    "loginTrend": "近 30 天登录趋势",
-    "requestTrend": "近 30 天请求量",
+    "loginTrend": "登录趋势",
+    "requestTrend": "请求量趋势",
+    "trendRange": {
+      "d7": "7 天",
+      "d14": "14 天",
+      "d30": "30 天"
+    },
+    "trendSummary": {
+      "logins": "登录合计",
+      "failures": "失败合计",
+      "requests": "请求合计",
+      "errors": "错误合计",
+      "window": "近 {{days}} 天"
+    },
     "operRatio": "操作类型占比",
     "series": {
       "logins": "登录成功",
@@ -53,6 +66,7 @@
     "recentNotices": "最近公告",
     "noNotices": "暂无公告",
     "viewMore": "查看更多",
+    "viewReport": "查看报表",
     "important": "重要",
     "loadFailed": "数据加载失败",
     "cardFailed": "该卡片加载失败",

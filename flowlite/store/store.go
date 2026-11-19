@@ -35,10 +35,13 @@ type Definition struct {
 	UpdatedAt  time.Time
 }
 
-// DefQuery 是定义列表过滤条件。
+// DefQuery 是定义列表过滤条件。Sort/Desc 是宿主的表头排序参数（请求侧字段名，
+// 由实现侧翻译成列名；零值 = 实现自选默认序），引擎与内存实现不解释它。
 type DefQuery struct {
 	Keyword  string
 	Status   string
+	Sort     string
+	Desc     bool
 	Page     int
 	PageSize int
 }

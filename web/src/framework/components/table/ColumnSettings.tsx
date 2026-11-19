@@ -14,7 +14,8 @@ interface Props<T> {
 
 export function ColumnSettings<T>({ columns, hidden, onToggle, onReset }: Props<T>) {
   const { t } = useTranslation()
-  const items = columns.filter((c) => c.hideable !== false)
+  // 空标题的列（如纯图标的外链列）没有可显示的名字，进列设置只会多出一个空选项，直接过滤掉
+  const items = columns.filter((c) => c.hideable !== false && !!c.title)
   if (items.length === 0) return null
   return (
     <Popover>

@@ -33,6 +33,9 @@ export interface RecycleQuery {
   /** 删除日期范围（YYYY-MM-DD，含当天），任一可省 */
   from?: string
   to?: string
+  /** 表头排序字段（后端白名单见 recycle Service.List） */
+  sort?: string
+  desc?: boolean
 }
 
 export function useRecycleList(query: RecycleQuery) {

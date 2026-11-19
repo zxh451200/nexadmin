@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -41,6 +42,8 @@ export default function MessagePage() {
   const { start: startExportJob } = useAsyncJob()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存；默认最新留言在前（与后端回退一致）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
   const [draft, setDraft] = useState<{ keyword?: string; status?: string[] }>({})
   const [filters, setFilters] = useState<{ keyword?: string; status?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
@@ -50,6 +53,8 @@ export default function MessagePage() {
     pageSize,
     keyword: filters.keyword || undefined,
     status: filters.status,
+    sort,
+    desc,
   })
   const setStatus = useSetMessageStatus()
   const remove = useDeleteMessages()
@@ -165,6 +170,7 @@ export default function MessagePage() {
     {
       key: 'createdAt',
       title: t('plugin_website.message.createdAt'),
+      sortKey: 'created_at',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
   ]
@@ -202,6 +208,7 @@ export default function MessagePage() {
         />
       </FilterBar>
       <DataTable
+        sort={sortProp}
         toolbar={
           <Can perm="website:message">
             <Button type="button" variant="outline" onClick={() => void onExport()} disabled={exporting}>

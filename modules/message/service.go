@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/modules/notice"
 	"nexadmin/pkg/idgen"
@@ -34,7 +35,8 @@ func (s *Service) own(ctx context.Context, uid idgen.ID) *gorm.DB {
 	return s.db.WithContext(ctx).Model(&Message{}).Where("user_id = ?", int64(uid))
 }
 
-// List 未读优先，其后按时间倒序。
+// List 未读优先，其后按时间倒序；表头指定排序时（白名单内）由排序接管次序，
+// 时间列的白名单表达式仍把未读排在前面。
 func (s *Service) List(ctx context.Context, uid idgen.ID, q ListQuery) ([]View, int64, error) {
 	tx := s.own(ctx, uid)
 	if q.Unread {
@@ -60,7 +62,12 @@ func (s *Service) List(ctx context.Context, uid idgen.ID, q ListQuery) ([]View, 
 		return nil, 0, err
 	}
 	var rows []Message
-	err := tx.Order("CASE WHEN read_at IS NULL THEN 0 ELSE 1 END").Order("created_at DESC").
+	// 排序白名单：标题/分类/时间；时间列的表达式（未读在前是白名单常量，不随方向变化）
+	err := tx.Order(core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"title":      "title",
+		"category":   "category",
+		"created_at": "CASE WHEN read_at IS NULL THEN 0 ELSE 1 END, created_at",
+	}, "CASE WHEN read_at IS NULL THEN 0 ELSE 1 END, created_at")).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error
 	if err != nil {
 		return nil, 0, err

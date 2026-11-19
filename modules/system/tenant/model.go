@@ -188,10 +188,13 @@ func (UsageDaily) TableName() string { return "sys_tenant_usage_daily" }
 
 // ListQuery 是 GET /tenants 与 GET /tenant-packages 的查询参数。
 // Status/PackageID 是逗号拼接多值（status 已是 IN 语义；packageId 由 handler 解析后按 IN 收窄）。
+// Sort/Desc 是表头排序参数（白名单见 ListTenants/ListPackages）。
 type ListQuery struct {
 	Keyword   string `form:"keyword"`
 	Status    string `form:"status"`
 	PackageID string `form:"packageId"`
+	Sort      string `form:"sort"`
+	Desc      bool   `form:"desc"`
 }
 
 // Option 是 GET /tenant-packages/options 的返回项。

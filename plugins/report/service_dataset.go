@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/pkg/idgen"
 )
@@ -132,8 +133,8 @@ func (s *Service) SaveDataset(ctx context.Context, id idgen.ID, f DatasetForm) (
 	return &v, nil
 }
 
-// ListDatasets 分页列出本租户的数据集。
-func (s *Service) ListDatasets(ctx context.Context, keyword string, page, size int) ([]DatasetView, int64, error) {
+// ListDatasets 分页列出本租户的数据集；表头排序白名单外回退默认的 id DESC。
+func (s *Service) ListDatasets(ctx context.Context, keyword, sort string, desc bool, page, size int) ([]DatasetView, int64, error) {
 	tx, err := s.scoped(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -148,7 +149,13 @@ func (s *Service) ListDatasets(ctx context.Context, keyword string, page, size i
 	}
 	off, lim := pageOf(page, size)
 	var rows []Dataset
-	if err := tx.Order("id DESC").Offset(off).Limit(lim).Find(&rows).Error; err != nil {
+	// 排序白名单：名称/创建/更新时间，白名单外回退 id（与既有默认序一致）
+	if err := tx.Order(core.OrderBy(sort, desc, map[string]string{
+		"name":       "name",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+		"id":         "id",
+	}, "id")).Offset(off).Limit(lim).Find(&rows).Error; err != nil {
 		return nil, 0, dbErr(err)
 	}
 	out := make([]DatasetView, 0, len(rows))
@@ -232,7 +239,7 @@ type DatasetOption struct {
 
 // ListDatasetOptions 列出本租户的数据集及其可用字段。白名单已撤销的数据集字段为空（编辑器里不可再选）。
 func (s *Service) ListDatasetOptions(ctx context.Context) ([]DatasetOption, error) {
-	list, _, err := s.ListDatasets(ctx, "", 1, 200)
+	list, _, err := s.ListDatasets(ctx, "", "", true, 1, 200)
 	if err != nil {
 		return nil, err
 	}
