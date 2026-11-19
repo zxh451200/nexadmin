@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { FileDropField } from '@/framework/components/FileDropField'
+import { FilePickerDialog, PickFromLibraryButton } from '@/framework/components/FilePickerDialog'
+import type { FileItem } from '@/framework/modules/file/api'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -18,6 +20,7 @@ import { Textarea } from '@/framework/ui/textarea'
 import { errMsg } from '@/lib/errMsg'
 import {
   uploadDocument,
+  uploadDocumentFromLibrary,
   useAsk,
   useDeleteDocument,
   useDocumentChunks,
@@ -34,13 +37,17 @@ import {
 type UploadState = 'pending' | 'uploading' | 'done' | 'failed'
 
 /** 上传弹窗：一期只收 txt/md（≤2MB），同步切分并向量化，成功即入列。
- * 多文件逐个串行上传：后端单次同步切块 + 向量化（十几秒级），并行只会互相挤占。 */
+ * 多文件逐个串行上传：后端单次同步切块 + 向量化（十几秒级），并行只会互相挤占。
+ * 支持两条来源：本地直传（FileDropField）与文件库选取（fileId 引用，不重复占存储），
+ * 两条队列在同一个串行循环里提交，行状态共用一张表。 */
 function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<File[]>([])
+  const [libPicked, setLibPicked] = useState<FileItem[]>([])
+  const [pickOpen, setPickOpen] = useState(false)
   const [states, setStates] = useState<Record<string, UploadState>>({})
   const [busy, setBusy] = useState(false)
-  const ready = files.length > 0 && !busy
+  const ready = (files.length > 0 || libPicked.length > 0) && !busy
   const okCount = Object.values(states).filter((s) => s === 'done').length
   const failCount = Object.values(states).filter((s) => s === 'failed').length
 
@@ -48,32 +55,40 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
     if (!ready) return
     setBusy(true)
     const failed = new Set<string>()
-    setStates(Object.fromEntries(files.map((f) => [f.name, 'pending' as UploadState])))
+    setStates(Object.fromEntries([...files.map((f) => [f.name, 'pending' as const]), ...libPicked.map((p) => [p.name, 'pending' as const])]))
     let ok = 0
     let fail = 0
-    for (const file of files) {
-      setStates((s) => ({ ...s, [file.name]: 'uploading' }))
+    const runOne = async (name: string, run: () => Promise<KbDocument>) => {
+      setStates((s) => ({ ...s, [name]: 'uploading' }))
       try {
-        const doc = await uploadDocument(file)
+        const doc = await run()
         ok++
-        setStates((s) => ({ ...s, [file.name]: 'done' }))
+        setStates((s) => ({ ...s, [name]: 'done' }))
         toast.success(t('plugin_kb.uploadDone', { name: doc.title, count: doc.chunkCount }))
       } catch (e) {
         fail++
         // uploadDocument 走原生 fetch、不经 http 拦截器：这条 toast 是失败原因的唯一反馈。
         // 失败原因同时落在行上（超限 / 格式不支持 / 抽取失败一眼定位）与 toast 里
-        failed.add(file.name)
-        setStates((s) => ({ ...s, [file.name]: 'failed' }))
-        toast.error(`${file.name}: ${errMsg(e, t('common.operateFailed'))}`)
+        failed.add(name)
+        setStates((s) => ({ ...s, [name]: 'failed' }))
+        toast.error(`${name}: ${errMsg(e, t('common.operateFailed'))}`)
       }
+    }
+    for (const file of files) {
+      await runOne(file.name, () => uploadDocument(file))
+    }
+    for (const picked of libPicked) {
+      await runOne(picked.name, () => uploadDocumentFromLibrary(picked.id, picked.name))
     }
     setBusy(false)
     if (ok > 0 && fail === 0) {
       setFiles([])
+      setLibPicked([])
       onOpenChange(false)
     } else if (ok > 0) {
       // 部分成功：留下失败行在弹窗里，用户可以只补传失败的文件
       setFiles((fs) => fs.filter((f) => failed.has(f.name)))
+      setLibPicked((ps) => ps.filter((p) => failed.has(p.name)))
     } else {
       toast.error(t('plugin_kb.uploadAllFailed', { fail }))
     }
@@ -85,7 +100,9 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
       onOpenChange={(o) => {
         if (!o) {
           setFiles([])
+          setLibPicked([])
           setStates({})
+          setPickOpen(false)
         }
         onOpenChange(o)
       }}
@@ -111,6 +128,45 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
           files={files}
           onChange={setFiles}
         />
+        <div className="flex items-center justify-end">
+          {/* 从文件库选取：已传过的文档直接引用（fileId），不再重复占一份存储 */}
+          <PickFromLibraryButton onClick={() => setPickOpen(true)} />
+        </div>
+        {libPicked.length > 0 ? (
+          <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+            {libPicked.map((p) => {
+              const st = states[p.name]
+              return (
+                <li key={p.id} className="flex items-center gap-2 px-3 py-2">
+                  {st === 'done' ? (
+                    <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-success" />
+                  ) : st === 'failed' ? (
+                    <CircleX aria-hidden="true" className="size-4 shrink-0 text-destructive" />
+                  ) : st === 'uploading' ? (
+                    <Loader2 aria-hidden="true" className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+                  ) : (
+                    <FileText aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate" title={p.name}>
+                    {p.name}
+                  </span>
+                  {st ? <span className="shrink-0 text-xs text-muted-foreground">{t(`plugin_kb.uploadState.${st}`)}</span> : null}
+                  {!st ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('common.delete')}
+                      disabled={busy}
+                      onClick={() => setLibPicked((ps) => ps.filter((x) => x.id !== p.id))}
+                    >
+                      <Trash2 className="size-4 text-destructive" aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
         {Object.keys(states).length > 0 ? (
           <ul className="divide-y divide-border rounded-lg border border-border text-sm">
             {files.map((f, i) => {
@@ -136,6 +192,20 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
           </ul>
         ) : null}
         <p className="text-xs text-muted-foreground">{t('plugin_kb.uploadHint')}</p>
+        <FilePickerDialog
+          open={pickOpen}
+          onOpenChange={setPickOpen}
+          kind="file"
+          multiple
+          value={[]}
+          onConfirm={(_urls, items) => {
+            // 只追加新勾选的：同一份文件重复选不进队列
+            setLibPicked((ps) => {
+              const have = new Set(ps.map((p) => p.id))
+              return [...ps, ...items.filter((it) => !have.has(it.id))]
+            })
+          }}
+        />
       </div>
     </ResponsiveDialog>
   )

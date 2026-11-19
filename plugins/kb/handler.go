@@ -4,17 +4,21 @@
 package kb
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"nexadmin/core"
 	"nexadmin/core/ai"
 	"nexadmin/core/auth"
 	"nexadmin/core/response"
+	"nexadmin/modules/file"
+	"nexadmin/pkg/idgen"
 	"strconv"
 )
 
@@ -42,6 +46,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.Use(core.RequirePlatformFeature())
 	g.GET("/documents", core.Perm("kb:list"), h.list)
 	g.POST("/documents", core.Perm("kb:edit"), h.upload)
+	g.POST("/documents/from-file", core.Perm("kb:edit"), h.uploadFromLibrary)
 	g.GET("/documents/:id/chunks", core.Perm("kb:list"), h.chunks)
 	g.PUT("/documents/:id", core.Perm("kb:edit"), h.rename)
 	g.DELETE("/documents/:id", core.Perm("kb:delete"), d.OperLogMiddleware("kb", "delete"), h.remove)
@@ -116,6 +121,82 @@ func (h *handler) upload(c *gin.Context) {
 	}
 	doc, err := h.svc.Ingest(c.Request.Context(), IngestInput{
 		Title: title, Source: fh.Filename, Mime: mime, Size: fh.Size, Text: text,
+	})
+	respond(c, doc, err)
+}
+
+// libraryUploadBody 是「从文件库选取」的请求体：fileId 指向 sys_file 已上传文件。
+type libraryUploadBody struct {
+	FileID string `json:"fileId" binding:"required"`
+	Title  string `json:"title"`
+}
+
+// uploadFromLibrary POST /plugins/kb/documents/from-file —— 复用文件库已上传的文件建文档：
+// 不重复占存储、同一份 PDF 可以同时进多个知识库。读出的内容走与直传完全相同的
+// 格式校验、大小上限与文本抽取管线。
+func (h *handler) uploadFromLibrary(c *gin.Context) {
+	var body libraryUploadBody
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	id, err := idgen.Parse(body.FileID)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	ref, ferr := file.OpenByID(c.Request.Context(), id)
+	switch {
+	case errors.Is(ferr, file.ErrNoContent):
+		response.Fail(c, response.BadRequest("kb.document_required"))
+		return
+	case errors.Is(ferr, gorm.ErrRecordNotFound):
+		response.Fail(c, response.NotFound("error.not_found"))
+		return
+	case ferr != nil:
+		// 文件模块未装配 / 存储读取失败：不落成「格式不支持」这类误导文案
+		response.Fail(c, response.Internal())
+		return
+	}
+	defer func() { _ = ref.Body.Close() }()
+
+	ext := strings.ToLower(ref.Name)
+	if i := strings.LastIndexByte(ext, '.'); i >= 0 {
+		ext = ext[i:]
+	} else {
+		ext = ""
+	}
+	mime, ok := acceptExt[ext]
+	if !ok {
+		response.Fail(c, response.BadRequest("kb.document_type"))
+		return
+	}
+	if ref.Size <= 0 || ref.Size > maxDocBytes {
+		response.Fail(c, response.BadRequest("kb.document_too_large"))
+		return
+	}
+	rawBytes, err := io.ReadAll(io.LimitReader(ref.Body, maxDocBytes+1))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if len(rawBytes) > maxDocBytes {
+		response.Fail(c, response.BadRequest("kb.document_too_large"))
+		return
+	}
+	text, err := extractText(ext, string(rawBytes))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	title := strings.TrimSpace(body.Title)
+	if title == "" {
+		title = strings.TrimSuffix(ref.Name, ext)
+	}
+	if utf8.RuneCountInString(title) > 200 {
+		title = string([]rune(title)[:200])
+	}
+	doc, err := h.svc.Ingest(c.Request.Context(), IngestInput{
+		Title: title, Source: ref.Name, Mime: mime, Size: ref.Size, Text: text,
 	})
 	respond(c, doc, err)
 }

@@ -146,3 +146,11 @@ export function uploadDocument(file: File, title?: string): Promise<KbDocument> 
     return json.data as KbDocument
   })
 }
+
+/**
+ * 从文件库选一篇已上传文档建知识库文档：后端按 fileId 读内容，走与直传完全相同的
+ * 格式校验与文本抽取管线，不重复占存储。库里的文件名即默认标题。
+ */
+export function uploadDocumentFromLibrary(fileId: string, title?: string): Promise<KbDocument> {
+  return api.post<KbDocument>(`${BASE}/documents/from-file`, { fileId, title: title || undefined })
+}

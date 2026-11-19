@@ -43,6 +43,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	h := &Handler{svc: svc}
 	tus := &tusHandler{svc: svc}
+	// 装配完成即注册进程级默认服务：kb 等调用方经 OpenByID 按 id 复用已上传文件。
+	SetDefault(svc)
 
 	r.GET("/file-groups", core.Perm(PermList), h.ListGroups)
 	r.POST("/file-groups", core.Perm(PermUpload), h.CreateGroup)
