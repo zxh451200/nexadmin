@@ -332,7 +332,7 @@ p { margin: 0; }
 @media (max-width: 900px) { .au-cta-item { border-inline-start: 0; padding-inline-start: 0; } }
 
 /* ---- 页脚 ---- */
-.au-footer { background: #080d12; color: #93a1ae; font-size: 12.8px; }
+.au-footer { background: #080d12; border-top: 1px solid rgba(255, 255, 255, .07); color: #93a1ae; font-size: 12.8px; }
 .au-footer-grid { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1.1fr; gap: 34px; padding-top: 54px; padding-bottom: 38px; }
 .au-footer-brand .au-brand-logo { height: 30px; filter: brightness(0) invert(1); }
 .au-footer-brand p { margin-top: 14px; max-width: 30ch; line-height: 1.7; }
@@ -457,7 +457,7 @@ p { margin: 0; }
 .chat-launcher svg { width: 19px; height: 19px; }
 .chat-panel { width: 380px; max-width: calc(100vw - 32px); height: 560px; max-height: min(78dvh, 660px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #e2e8f0; border-radius: 4px; box-shadow: 0 36px 80px -16px rgba(11, 18, 24, .45); animation: chat-rise .18s cubic-bezier(.16, 1, .3, 1); }
 @keyframes chat-rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
-.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 8px 9px 11px; background: #0b1218; color: #fff; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 9px 8px 9px 11px; background: #0b1218; color: #fff; }
 .chat-identity { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .chat-avatar { position: relative; width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 2px; background: #1273de; color: #fff; }
 .chat-avatar svg { width: 15px; height: 15px; }

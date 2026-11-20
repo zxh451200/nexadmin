@@ -56,6 +56,9 @@ func assetVersion(name string) string {
 var iconPaths = map[string]string{
 	"building": `<path d="M3 21l18 0" /><path d="M9 8l1 0" /><path d="M9 12l1 0" /><path d="M9 16l1 0" /><path d="M14 8l1 0" /><path d="M14 12l1 0" /><path d="M14 16l1 0" /><path d="M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16" />`,
 	"shield":   `<path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />`,
+	// 联系页价值点列表的打勾：与 uiIconPaths["check"] 同一枚 Tabler 勾，两套表都要有，
+	// 不然一边补了另一边悄悄落进 defaultIcon 圆圈（2026-11-19 实见）。
+	"check":    `<path d="M5 12l5 5l10 -10" />`,
 	"key":      `<path d="M16.555 3.843l3.602 3.602a2.877 2.877 0 0 1 0 4.069l-2.643 2.643a2.877 2.877 0 0 1 -4.069 0l-.301 -.301l-6.558 6.558a2 2 0 0 1 -1.239 .578l-.175 .008h-1.172a1 1 0 0 1 -.993 -.883l-.007 -.117v-1.172a2 2 0 0 1 .467 -1.284l.119 -.13l.414 -.414h2v-2h2v-2l2.144 -2.144l-.301 -.301a2.877 2.877 0 0 1 0 -4.069l2.643 -2.643a2.877 2.877 0 0 1 4.069 0z" /><path d="M15 9h.01" />`,
 	"plug":     `<path d="M9.785 6l8.215 8.215l-2.054 2.054a5.81 5.81 0 1 1 -8.215 -8.215l2.054 -2.054z" /><path d="M4 20l3.5 -3.5" /><path d="M15 4l-3.5 3.5" /><path d="M20 9l-3.5 3.5" />`,
 	"file":     `<path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" />`,
@@ -751,26 +754,7 @@ type orderView struct {
 // TN 是按数量选单复数的文案：n==1 用 <key>.one，其余用 <key>.other。
 // 中文两种写法相同；新增有单复数规则的语言时按该语言字典补齐即可。
 func (v *siteView) TN(n any, key string, args ...any) string {
-	one := false
-	switch x := n.(type) {
-	case int:
-		one = x == 1
-	case int64:
-		one = x == 1
-	case float64:
-		one = x == 1
-	}
-	l := languageOr(v.Lang.Code)
-	k := key + ".other"
-	if one {
-		k = key + ".one"
-	}
-	if d := dicts[l.Code]; d != nil {
-		if _, ok := d[k]; !ok {
-			k = key
-		}
-	}
-	return trf(l.Code, k, args...)
+	return trn(v.Lang.Code, key, n, args...)
 }
 
 // Home 返回当前语言的首页链接。
@@ -910,7 +894,7 @@ func (v *siteView) Switch(l Language) string {
 func (v *siteView) JSStrings() template.JS {
 	m := map[string]string{}
 	for _, k := range []string{
-		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
+		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "codeCopy", "menuOpen", "menuClose", "emailCopy", "emailCopied",
 		"zoom", "zoomClose", "zoomPrev", "zoomNext", "zoomError",
 		"zoomIn", "zoomOut", "zoomOneToOne", "zoomReset", "zoomPlay", "zoomRotateLeft", "zoomRotateRight", "zoomFlipX", "zoomFlipY",
 		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent", "contactErrConsent",

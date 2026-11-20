@@ -644,6 +644,11 @@ p { margin: 0; }
 .sl-contact { background: var(--sl-paper); }
 .sl-contact-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 48px; align-items: start; }
 .sl-contact-intro { margin-top: 12px; max-width: 38ch; color: var(--sl-muted); font-size: 14px; }
+/* 价值点列表（对齐 Linear contact 页左栏口径）：16px 打勾价值点，联系我们会得到什么。
+   勾选图标不带渠道卡的白底描边方块——那是「联系方式」的容器语言，价值点是轻量清单。 */
+.sl-contact-values { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; font-size: 16px; line-height: 1.5; color: var(--sl-ink); }
+.sl-contact-values li { display: flex; gap: 10px; align-items: flex-start; }
+.sl-contact-values .sl-contact-ico { width: auto; height: auto; margin-top: 3px; border: 0; border-radius: 0; background: none; color: var(--sl-forest); }
 .sl-contact-channels { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
 .sl-contact-channels li { display: flex; gap: 12px; align-items: flex-start; }
 .sl-contact-ico { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none; border: 1px solid var(--sl-line); border-radius: 2px; background: #fff; color: var(--sl-forest); }
@@ -689,7 +694,7 @@ p { margin: 0; }
 }
 .chat-panel { width: 380px; max-width: calc(100vw - 32px); height: 560px; max-height: min(78dvh, 660px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid var(--sl-line, #dfe3d8); border-radius: 4px; box-shadow: 0 36px 80px -16px rgba(20, 40, 28, .45); animation: chat-rise .18s cubic-bezier(.16, 1, .3, 1); }
 @keyframes chat-rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
-.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 8px 9px 11px; background: var(--sl-forest, #1f4633); color: #fff; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 9px 8px 9px 11px; background: var(--sl-forest, #1f4633); color: #fff; }
 .chat-identity { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .chat-avatar { position: relative; width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--sl-amber, #df8b3d); color: #fff; }
 .chat-avatar svg { width: 15px; height: 15px; }

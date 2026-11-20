@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { DndContext, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { DragCursorHost, pointerFirstCollision, useSortableSensors } from '@/framework/components/table/use-sortable-sensors'
 import {
   LocaleFormActions,
   LocaleFormProvider,
@@ -238,6 +242,58 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
 const TABS = ['brand', 'home', 'seo', 'footer', 'features'] as const
 type TabKey = (typeof TABS)[number]
 
+/** 办公地点的可排序行：手柄拖拽 + 键盘（空格拿起、方向键移动）；条目之间只用分隔线，
+    不再给每条套卡片框——「外层框 + 分组框 + 条目框」三层嵌套太重。 */
+function SortableOfficeRow({
+  index, disabled, onRemove, children,
+}: {
+  index: number
+  disabled?: boolean
+  onRemove: () => void
+  children: ReactNode
+}) {
+  const { t } = useTranslation()
+  const sortable = !disabled
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: String(index), disabled: !sortable })
+  // 被拖行自身不做补间，跟手
+  const style = { transform: CSS.Transform.toString(transform), transition: isDragging ? undefined : transition }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex gap-2 border-b border-border/60 py-3 first:pt-0 last:border-b-0 last:pb-0',
+        isDragging && 'relative z-20 rounded-md bg-card/95 shadow-md',
+      )}
+    >
+      <button
+        type="button"
+        aria-label={t('plugin_website.settings.officeDrag')}
+        disabled={!sortable}
+        className={cn(
+          'mt-1 flex h-7 w-6 shrink-0 cursor-grab touch-none items-start justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing',
+          !sortable && 'pointer-events-none opacity-0',
+        )}
+        {...listeners}
+      >
+        <GripVertical className="size-4" aria-hidden="true" />
+      </button>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 shrink-0"
+        disabled={disabled}
+        aria-label={t('common.delete')}
+        onClick={onRemove}
+      >
+        <Trash2 aria-hidden="true" />
+      </Button>
+    </div>
+  )
+}
+
 /**
  * 表单主体：整份表单只有一套，切语言换的是数据源。
  * 可翻译字段交给 LocaleFormProvider，站点名/logo/联系方式等共用字段留在本地 state。
@@ -267,6 +323,12 @@ function SettingsFormBody({
   const seed = useSeedThemeDemo()
   // 分享图与封面同一套规则：https:// 或 / 开头，别的拦住——og:image 跟着指向它
   const ogInvalid = shared.ogImageUrl.trim() !== '' && !/^(https?:\/\/|\/)/i.test(shared.ogImageUrl.trim())
+  // 成立年份：非空时必须在 1900 ~ 明年之间——手输年份挡手滑（0 = 留空不展示）。
+  // 输满 4 位才判范围：半截输入（「20」→ 2015 的路上）不该闪错误。
+  const estYearInvalid =
+    shared.establishedYear > 0 &&
+    String(shared.establishedYear).length >= 4 &&
+    (shared.establishedYear < 1900 || shared.establishedYear > new Date().getFullYear() + 1)
 
   // 提示文案与「添加」按钮的上限都按后端下发的生效值渲染，同一组数值不再前后各抄一份。
   const mediaHint = { types: limits.media.labels.join(' / '), max: `${limits.media.maxMb}MB` }
@@ -313,6 +375,17 @@ function SettingsFormBody({
   const patchOffice = (i: number, patch: Partial<WebsiteOffice>) =>
     onSharedChange({ ...shared, offices: shared.offices.map((o, idx) => (idx === i ? { ...o, ...patch } : o)) })
 
+  // 地点拖拽排序：官网联系页地点卡按数组顺序渲染，这里的顺序就是展示顺序。
+  const officeSensors = useSortableSensors()
+  const onOfficeDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const from = Number(active.id)
+    const to = Number(over.id)
+    if (Number.isNaN(from) || Number.isNaN(to)) return
+    onSharedChange({ ...shared, offices: arrayMove(shared.offices, from, to) })
+  }
+
   // 邮箱格式校验：设置侧此前没有（投稿侧有）；留空合法——联系邮箱选填
   const emailInvalid = shared.contactEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.contactEmail.trim())
   // 留言同意开着时政策地址必填，格式与后端 footerURLValid 同规则：站内路径/锚点或完整 http(s) 地址。
@@ -356,6 +429,10 @@ function SettingsFormBody({
     }
     if (headInvalid) {
       toast.error(t(`plugin_website.settings.headInvalid${headInvalid === 'script' ? 'Script' : headInvalid === 'style' ? 'Style' : 'DocTag'}`))
+      return
+    }
+    if (estYearInvalid) {
+      toast.error(t('plugin_website.settings.establishedYearInvalid'))
       return
     }
     try {
@@ -641,22 +718,21 @@ function SettingsFormBody({
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <SharedFieldShell labelKey="plugin_website.fields.establishedYear" hint={t('plugin_website.hint.establishedYear')}>
-                    {/* 年份下拉：1970 至今年，「不展示」哨兵 = off（0） */}
-                    <Select
-                      value={shared.establishedYear > 0 ? String(shared.establishedYear) : 'off'}
+                    {/* 年份 = 精确数字，走输入框而不是 57 项下拉（同组字段口径：留空即隐藏，
+                        「不展示」不再做成哨兵选项——那是给离散选项用的，年份是连续值） */}
+                    <Input
+                      value={shared.establishedYear > 0 ? String(shared.establishedYear) : ''}
+                      inputMode="numeric"
                       disabled={sharedDisabled}
-                      onValueChange={(v) => onSharedChange({ ...shared, establishedYear: v === 'off' ? 0 : Number(v) })}
-                    >
-                      <SelectTrigger aria-label={t('plugin_website.fields.establishedYear')}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="off">{t('plugin_website.settings.estYearOff')}</SelectItem>
-                        {Array.from({ length: new Date().getFullYear() - 1970 + 1 }, (_, i) => new Date().getFullYear() - i).map((y) => (
-                          <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      placeholder={t('plugin_website.placeholder.establishedYear', { defaultValue: '' })}
+                      aria-label={t('plugin_website.fields.establishedYear')}
+                      aria-invalid={estYearInvalid}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+                        onSharedChange({ ...shared, establishedYear: digits === '' ? 0 : Number(digits) })
+                      }}
+                    />
+                    {estYearInvalid ? <span className="text-xs text-destructive">{t('plugin_website.settings.establishedYearInvalid')}</span> : null}
                   </SharedFieldShell>
                   <SharedFieldShell labelKey="plugin_website.fields.staffCount">
                     <ConstantPicker
@@ -705,8 +781,10 @@ function SettingsFormBody({
                   </SharedFieldShell>
                 </div>
                 {/* 办公地点：联系页地点卡 + 地图打点（厂商按访客语言判定，Key 在「系统设置 → 地图服务」）。
-                    坐标用地图插件的位置字段选点，没装插件也能手填经纬度。 */}
-                <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                    坐标用地图插件的位置字段选点，没装插件也能手填经纬度。
+                    条目不再各自套卡片框（三层框太重）：外层一个框，条目间用分隔线；
+                    顺序支持拖拽（官网联系页地点卡按数组顺序渲染）。 */}
+                <div className="flex flex-col gap-1 rounded-lg border border-border p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">{t('plugin_website.settings.offices')}</span>
@@ -723,35 +801,44 @@ function SettingsFormBody({
                       {t('plugin_website.settings.officeAdd')}
                     </Button>
                   </div>
-                  {shared.offices.map((o, i) => (
-                    <div key={i} className="flex flex-col gap-2 rounded-md border border-border p-2.5">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={o.name}
-                          disabled={sharedDisabled}
-                          maxLength={100}
-                          placeholder={t('plugin_website.placeholder.officeName', { defaultValue: '' })}
-                          aria-label={t('plugin_website.fields.officeName')}
-                          onChange={(e) => patchOffice(i, { name: e.target.value })}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={sharedDisabled}
-                          aria-label={t('common.delete')}
-                          onClick={() => onSharedChange({ ...shared, offices: shared.offices.filter((_, j) => j !== i) })}
-                        >
-                          <Trash2 aria-hidden="true" />
-                        </Button>
-                      </div>
-                      <LocationField
-                        value={{ lng: o.lng, lat: o.lat, address: o.address }}
-                        onChange={(p) => patchOffice(i, { lng: p.lng, lat: p.lat, address: p.address ?? '' })}
-                        disabled={sharedDisabled}
-                      />
-                    </div>
-                  ))}
+                  {shared.offices.length > 0 ? (
+                    <DndContext
+                      sensors={officeSensors}
+                      collisionDetection={pointerFirstCollision}
+                      onDragOver={(e) => {
+                        const w = (window as unknown as Record<string, unknown>)
+                        w.__dndOver = String(e.over?.id ?? 'null')
+                        w.__dndDelta = String(e.delta.y)
+                      }}
+                      onDragEnd={(e) => { (window as unknown as Record<string, unknown>).__dndOver = 'end:' + String(e.over?.id ?? 'null'); onOfficeDragEnd(e) }}
+                      onDragCancel={() => { (window as unknown as Record<string, unknown>).__dndOver = 'canceled' }}
+                    >
+                      <DragCursorHost />
+                      <SortableContext items={shared.offices.map((_, i) => String(i))} strategy={verticalListSortingStrategy}>
+                        <div className="flex flex-col">
+                          {shared.offices.map((o, i) => (
+                            <SortableOfficeRow key={i} index={i} disabled={sharedDisabled} onRemove={() => onSharedChange({ ...shared, offices: shared.offices.filter((_, j) => j !== i) })}>
+                              <Input
+                                value={o.name}
+                                disabled={sharedDisabled}
+                                maxLength={100}
+                                placeholder={t('plugin_website.placeholder.officeName', { defaultValue: '' })}
+                                aria-label={t('plugin_website.fields.officeName')}
+                                onChange={(e) => patchOffice(i, { name: e.target.value })}
+                              />
+                              <LocationField
+                                value={{ lng: o.lng, lat: o.lat, address: o.address }}
+                                onChange={(p) => patchOffice(i, { lng: p.lng, lat: p.lat, address: p.address ?? '' })}
+                                disabled={sharedDisabled}
+                              />
+                            </SortableOfficeRow>
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  ) : (
+                    <p className="py-2 text-xs text-muted-foreground">{t('plugin_website.settings.officesEmpty')}</p>
+                  )}
                 </div>
               </div>
               <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl" hint={t('plugin_website.hint.qrCodeUrl', mediaHint)}>
@@ -908,10 +995,10 @@ function SettingsFormBody({
           ) : null}
         </section>
         <LocaleFormActions />
-        {/* 保存条常驻：五个分区共用一份表单，切分区不丢改动，也不该让人以为每个分区各存一次 */}
+        {/* 保存条常驻：五个分区共用一份表单，切分区不丢改动，也不该让人以为每个分区各存一次。
+            「有未保存的修改」文案撤掉：保存按钮就在旁边，这行字只会制造噪音（2026-11-20 用户反馈）。 */}
         <div className="flex items-center gap-3">
-          {dirty ? <span className="text-xs text-warning">{t('plugin_website.settings.unsaved')}</span> : null}
-          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || consentInvalid || !!headInvalid}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || consentInvalid || !!headInvalid || estYearInvalid}>{t('common.save')}</Button>
         </div>
       </div>
     </div>

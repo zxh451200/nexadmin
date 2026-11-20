@@ -157,27 +157,43 @@ export function BindingsTab() {
   const row = 'flex flex-col gap-3 py-2.5 sm:flex-row sm:items-center sm:justify-between'
 
   return (
-    // 账号绑定自带一张卡（外层 TabsContent 对它的 tab 是平铺的），卡内一行一条
-    <div className="rounded-lg border border-border bg-card p-4 md:p-6">
-      <div className="flex max-w-2xl flex-col gap-6">
+    // 账号绑定自带一张卡（外层 TabsContent 对它的 tab 是平铺的）：卡片随内容限宽，
+    // 不在宽屏下右侧留一大块空卡底；卡内一行一条
+    <div className="max-w-2xl rounded-lg border border-border bg-card p-4 md:p-6">
+      <div className="flex flex-col gap-6">
       <section className="flex flex-col">
         <h3 className="pb-1 text-sm font-medium text-foreground">{t('profile.bindings.phoneTitle')}</h3>
         <div className="divide-y divide-border/60 border-t border-border/60">
           <div className={row}>
-            <div className="min-w-0">
-              <p className="text-sm text-foreground">
-                {data?.phone ? t('profile.bindings.phoneBound', { phone: data.phone }) : t('profile.bindings.phoneUnbound')}
-              </p>
+            {/* 行结构与第三方账号一致：名称 + 绑定徽章 + 副文本在左，动作在右 */}
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">{t('profile.bindings.phoneTitle')}</span>
+                <Badge variant={data?.phone ? 'success' : 'secondary'}>
+                  {data?.phone ? t('profile.bindings.bound') : t('profile.bindings.notBound')}
+                </Badge>
+              </div>
+              {data?.phone ? (
+                <span className="num truncate text-xs text-muted-foreground">{t('profile.bindings.phoneBound', { phone: data.phone })}</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">{t('profile.bindings.phoneHint')}</span>
+              )}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => setPhoneOpen(true)}>
-                {data?.phone ? t('profile.bindings.change') : t('profile.bindings.bind')}
-              </Button>
               {data?.phone ? (
-                <Button type="button" variant="ghost" className="text-destructive" onClick={() => onUnbind('phone', t('profile.bindings.phoneTitle'))}>
-                  {t('profile.bindings.unbind')}
+                <>
+                  <Button type="button" variant="outline" onClick={() => setPhoneOpen(true)}>
+                    {t('profile.bindings.change')}
+                  </Button>
+                  <Button type="button" variant="ghost" className="text-destructive" onClick={() => onUnbind('phone', t('profile.bindings.phoneTitle'))}>
+                    {t('profile.bindings.unbind')}
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" onClick={() => setPhoneOpen(true)}>
+                  {t('profile.bindings.bind')}
                 </Button>
-              ) : null}
+              )}
             </div>
           </div>
         </div>

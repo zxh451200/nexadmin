@@ -31,7 +31,6 @@ import { FormSection } from '@/framework/components/FormLayout'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { Uploader } from '@/framework/components/Uploader'
 import { VideoUrlField } from '@/framework/components/VideoUrlField'
-import { FilePickerDialog, PickFromLibraryButton } from '@/framework/components/FilePickerDialog'
 import { OptionList, type Option } from '@/framework/components/pickers/OptionList'
 import { useDictItems } from '@/framework/components/pickers/useDictItems'
 import { PickerShell } from '@/framework/components/pickers/PickerShell'
@@ -311,7 +310,7 @@ function CategoryPicker({
 }
 
 /** 图集：宫格图块（批量直传、拖拽排序、点块看大图、悬停删除），上限与后端 maxImagesPerProduct 对齐；
- * 「从文件库选择」为缩略图网格弹窗（与封面/视频同款入口）——勾选即增删图集 URL，上限满时入口换成额度提示。 */
+ * 「从文件库选择」由 Uploader 的 image 内建入口提供（缩略图网格弹窗，勾选即追加）。 */
 function ImagesField({
   images, onChange, disabled,
 }: {
@@ -320,7 +319,6 @@ function ImagesField({
   disabled?: boolean
 }) {
   const { t } = useTranslation()
-  const [pickOpen, setPickOpen] = useState(false)
   const atLimit = images.length >= IMAGES_MAX
   return (
     <SharedGroup labelKey="plugin_website.product.images">
@@ -339,23 +337,10 @@ function ImagesField({
         }))}
         onChange={(files) => onChange(files.map((f) => f.url))}
         entryFluid
-        entryExtra={
-          atLimit ? (
-            <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
-          ) : (
-            <PickFromLibraryButton onClick={() => setPickOpen(true)} disabled={disabled} />
-          )
-        }
       />
-      <FilePickerDialog
-        open={pickOpen}
-        onOpenChange={setPickOpen}
-        kind="image"
-        multiple
-        value={images}
-        onConfirm={(urls) => onChange(urls.slice(0, IMAGES_MAX))}
-        disabled={disabled}
-      />
+      {atLimit ? (
+        <p className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</p>
+      ) : null}
     </SharedGroup>
   )
 }
@@ -1229,7 +1214,8 @@ export default function ProductPage() {
             onChange={(v) => setDraft((d) => ({ ...d, missing: v.length ? v : undefined }))}
             options={extraLocales.map((l) => ({
               value: l.code,
-              label: t('plugin_website.i18n.filterNoTranslation', { lang: l.label }),
+              // 触发器标题「缺译」已说明语义，选项只留语言名——「English：无译文」是状态短语，当选项标签读着别扭
+              label: l.label,
             }))}
             className="md:w-52"
             placeholder={t('plugin_website.i18n.filterLabel')}

@@ -5,6 +5,7 @@ package website
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,7 @@ import (
 
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/importspec"
 )
 
 // FaqQuery 是管理端 FAQ 列表查询。Enabled 为空字符串 = 全部，否则 "true"/"false"。
@@ -127,6 +129,95 @@ func (s *Service) DeleteFaqs(ctx context.Context, ids []idgen.ID) (int64, error)
 // utf8Len 是字符数（区别于字节），FAQ 限长按字符算。
 func utf8Len(s string) int { return len([]rune(s)) }
 
+// ReorderFaqs 把传入顺序写回 sort（=序号×10）：拖拽排序的落库。事务内逐条更新，
+// 有 id 不存在即整批拒绝——并发删除下不给「成功但少改」的假象（与 ReorderNavs 同口径）。
+func (s *Service) ReorderFaqs(ctx context.Context, ids []idgen.ID) error {
+	if len(ids) == 0 {
+		return response.BadRequest("website.faq_ids_empty")
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i, id := range ids {
+			res := tx.Model(&Faq{}).Where("id = ?", int64(id)).Update("sort", (i+1)*10)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return response.NotFound("website.faq_not_found")
+			}
+		}
+		return nil
+	})
+}
+
+// ---- 导入：接入通用导入中心（importspec.Provider），与产品导入同一机制 ----
+
+// SourceFaqs 是常见问题导入源在导入中心台账里的标识。
+const SourceFaqs = "website_faqs"
+
+// faqImportColumns 是导入模板的列定义：列名与导出表头一致（问题/答案/排序/状态）。
+// 导出的 xlsx 末尾多一列「更新时间」，导入中心会忽略没登记的列——导出的文件可以直接改完再导回。
+func faqImportColumns() []importspec.Column {
+	return []importspec.Column{
+		{Key: "question", Label: "问题", Required: true, Example: "支持哪些付款方式？"},
+		{Key: "answer", Label: "答案", Example: "支持 T/T、PayPal 等方式"},
+		{Key: "sort", Label: "排序", Example: "10"},
+		{Key: "status", Label: "状态", Example: "展示中"},
+	}
+}
+
+// faqEnabledAliases 把导入表里的状态别名收敛到 enabled：导出用词为主，常见布尔写法顺手认。
+var faqEnabledAliases = map[string]bool{
+	"展示中": true, "启用": true, "开启": true, "是": true, "true": true, "on": true, "enabled": true, "yes": true,
+	"已停用": false, "停用": false, "隐藏": false, "否": false, "false": false, "off": false, "disabled": false, "no": false,
+}
+
+// importFaqRow 把导入中心解析好的一行映射成 FAQ 落库。认行键是问题文本：完全相同
+// （去空白）的问题更新既有条目，否则新增。状态留空按启用；排序留空的新行接在当前
+// 最大排序之后——全部挤在 0 会顶着「sort 升序」的默认排序插到最前面。
+func (s *Service) importFaqRow(ctx context.Context, row map[string]string) error {
+	question := strings.TrimSpace(row["question"])
+	if question == "" {
+		return rowError(ctx, response.BadRequest("website.faq_question_required"))
+	}
+	sort, err := parseImportInt(row["sort"])
+	if err != nil {
+		return rowError(ctx, response.BadRequest("website.import_number_invalid"))
+	}
+	enabled := true
+	if raw := strings.ToLower(strings.TrimSpace(row["status"])); raw != "" {
+		v, ok := faqEnabledAliases[raw]
+		if !ok {
+			return rowError(ctx, response.BadRequest("website.faq_import_status_invalid"))
+		}
+		enabled = v
+	}
+	id, err := s.faqIDByQuestion(ctx, question)
+	if err != nil {
+		return rowError(ctx, err)
+	}
+	if id == 0 && sort == 0 {
+		var maxSort int
+		if err := s.db.WithContext(ctx).Model(&Faq{}).Select("COALESCE(MAX(sort), 0)").Scan(&maxSort).Error; err != nil {
+			return rowError(ctx, err)
+		}
+		sort = maxSort + 10
+	}
+	_, err = s.SaveFaq(ctx, id, FaqForm{Question: question, Answer: row["answer"], Sort: sort, Enabled: enabled})
+	return rowError(ctx, err)
+}
+
+// faqIDByQuestion 按问题文本（精确、去空白）找已有 FAQ：查库出错原样上抛，没查到返回 0（新建）。
+func (s *Service) faqIDByQuestion(ctx context.Context, question string) (idgen.ID, error) {
+	var row Faq
+	if err := s.db.WithContext(ctx).Select("id").Where("question = ?", question).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return row.ID, nil
+}
+
 // ---- HTTP 层 ----
 
 // GET /plugins/website/faqs —— 管理端列表（分页/关键词/启用状态/排序）。
@@ -188,4 +279,18 @@ func (h *handler) deleteFaq(c *gin.Context) {
 		return
 	}
 	respond(c, nil, h.svc.DeleteFaq(c.Request.Context(), id))
+}
+
+// FaqReorderForm 是拖拽排序请求体：ids 按目标顺序排列。
+type FaqReorderForm struct {
+	IDs []idgen.ID `json:"ids"`
+}
+
+// PUT /plugins/website/faqs/reorder
+func (h *handler) reorderFaqs(c *gin.Context) {
+	var f FaqReorderForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	respond(c, nil, h.svc.ReorderFaqs(c.Request.Context(), f.IDs))
 }

@@ -18,11 +18,21 @@ export interface TileAction {
  *   右上角与左上角的拖拽手柄对称，两者都不挡画面主体。
  * - 悬停或键盘聚焦时浮出，隐藏时不接事件（否则透明按钮会偷走「点图放大」的那一下）。
  * - 触屏没有 hover（hover:none）时始终显示，否则手机上这些按钮永远摸不到。
+ * - compact：96px 级小图块（单图/单视频字段）用——默认按钮组在 96px 上要占掉 62% 的上缘，
+ *   图反而成了背景板；小一号（桌面 24px）只覆盖 54%，旁边有输入行兜底不伤可用性。
  *
  * 之前单图字段是「整块黑色蒙版居中两枚图标」、图集是「底部常驻白条 + 替换/删除」，
  * 同一种操作两副样子，还都盖住画面——统一到这里。
  */
-export function TileActions({ actions, className }: { actions: TileAction[]; className?: string }) {
+export function TileActions({
+  actions,
+  className,
+  compact = false,
+}: {
+  actions: TileAction[]
+  className?: string
+  compact?: boolean
+}) {
   if (actions.length === 0) return null
   return (
     <div
@@ -43,7 +53,8 @@ export function TileActions({ actions, className }: { actions: TileAction[]; cla
           disabled={a.disabled}
           onClick={a.onSelect}
           className={cn(
-            'inline-flex size-8 items-center justify-center rounded-md bg-black/55 text-white shadow-xs backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 md:size-7',
+            'inline-flex items-center justify-center rounded-md bg-black/55 text-white shadow-xs backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+            compact ? 'size-7 md:size-6' : 'size-8 md:size-7',
             a.destructive && 'hover:bg-destructive',
           )}
         >

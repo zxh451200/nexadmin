@@ -5,6 +5,13 @@
       <p class="sl-eyebrow">{{.T "contact.eyebrow"}}</p>
       <h1 class="sl-page-title">{{.T "contact.title"}}</h1>
       <p class="sl-page-sub">{{.TF "contact.lede" .SiteName}}</p>
+      {{/* 价值点列表（对齐 Linear contact 页的左栏口径）：联系我们会得到什么。
+          品牌主题站 DocsEnabled=false，支持分流行不渲染，只出价值点。 */}}
+      <ul class="sl-contact-values">
+        <li><span class="sl-contact-ico" aria-hidden="true">{{icon "check"}}</span>{{.T "contact.valueDemo"}}</li>
+        <li><span class="sl-contact-ico" aria-hidden="true">{{icon "check"}}</span>{{.T "contact.valuePlan"}}</li>
+        <li><span class="sl-contact-ico" aria-hidden="true">{{icon "check"}}</span>{{.T "contact.valueOnboard"}}</li>
+      </ul>
       <ul class="sl-contact-channels">
         {{if .ContactEmail}}
         <li>

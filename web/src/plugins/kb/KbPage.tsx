@@ -121,17 +121,18 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <FileDropField
           multiple
           accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           files={files}
           onChange={setFiles}
         />
-        <div className="flex items-center justify-end">
-          {/* 从文件库选取：已传过的文档直接引用（fileId），不再重复占一份存储 */}
-          <PickFromLibraryButton onClick={() => setPickOpen(true)} />
-        </div>
+        {/* 从文件库选取：已传过的文档直接引用（fileId），不再重复占一份存储。
+            左对齐紧跟拖拽区——它是「拖拽/点选」之外的另一条入口，不是页面主操作，
+            不再单独占一行飘在右侧，中间夹一大块空白。 */}
+        <PickFromLibraryButton onClick={() => setPickOpen(true)} />
+        <p className="text-xs text-muted-foreground">{t('plugin_kb.uploadHint')}</p>
         {libPicked.length > 0 ? (
           <ul className="divide-y divide-border rounded-lg border border-border text-sm">
             {libPicked.map((p) => {
@@ -191,7 +192,6 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             })}
           </ul>
         ) : null}
-        <p className="text-xs text-muted-foreground">{t('plugin_kb.uploadHint')}</p>
         <FilePickerDialog
           open={pickOpen}
           onOpenChange={setPickOpen}
@@ -578,24 +578,8 @@ export default function KbPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('plugin_kb.title')}
-        description={t('plugin_kb.description')}
-        actions={
-          <>
-            <Can perm="kb:edit">
-              <Button variant="outline" onClick={() => setSettingsOpen(true)}>
-                <BotMessageSquare aria-hidden="true" />
-                {t('plugin_kb.settingsTitle')}
-              </Button>
-              <Button onClick={() => setUploadOpen(true)}>
-                <Upload aria-hidden="true" />
-                {t('plugin_kb.upload')}
-              </Button>
-            </Can>
-          </>
-        }
-      />
+      {/* 动作按钮放表格工具栏左侧（与产品管理等列表页同一口径），不悬浮在标题右侧 */}
+      <PageHeader title={t('plugin_kb.title')} description={t('plugin_kb.description')} />
 
       {status.data && (!status.data.embedReady || !status.data.chatReady) ? (
         <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-warning">
@@ -649,21 +633,33 @@ export default function KbPage() {
           )
         }}
         toolbar={
-          <SimpleSelect
-            className="w-44"
-            aria-label={t('plugin_kb.filterStatus')}
-            value={statusFilter}
-            onChange={(v) => {
-              setStatusFilter(v as 'all' | 'ready' | 'failed' | 'reembed')
-              setSelected([])
-            }}
-            options={[
-              { value: 'all', label: t('plugin_kb.filterAll') },
-              { value: 'ready', label: t('plugin_kb.status.ready') },
-              { value: 'failed', label: t('plugin_kb.status.failed') },
-              { value: 'reembed', label: t('plugin_kb.filterReembed') },
-            ]}
-          />
+          <>
+            <Can perm="kb:edit">
+              <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+                <BotMessageSquare aria-hidden="true" />
+                {t('plugin_kb.settingsTitle')}
+              </Button>
+              <Button onClick={() => setUploadOpen(true)}>
+                <Upload aria-hidden="true" />
+                {t('plugin_kb.upload')}
+              </Button>
+            </Can>
+            <SimpleSelect
+              className="w-44"
+              aria-label={t('plugin_kb.filterStatus')}
+              value={statusFilter}
+              onChange={(v) => {
+                setStatusFilter(v as 'all' | 'ready' | 'failed' | 'reembed')
+                setSelected([])
+              }}
+              options={[
+                { value: 'all', label: t('plugin_kb.filterAll') },
+                { value: 'ready', label: t('plugin_kb.status.ready') },
+                { value: 'failed', label: t('plugin_kb.status.failed') },
+                { value: 'reembed', label: t('plugin_kb.filterReembed') },
+              ]}
+            />
+          </>
         }
       />
 

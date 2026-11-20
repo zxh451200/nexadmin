@@ -230,16 +230,16 @@ export function JobsTab({ onViewLogs }: Props) {
         )}
         toolbar={
           <>
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label={t('plugin_cron.autoRefresh')} />
-              {t('plugin_cron.autoRefresh')}
-            </label>
             <Can perm="cron:edit">
               <Button onClick={() => openForm(null)}>
                 <Plus aria-hidden="true" />
                 {t('plugin_cron.create')}
               </Button>
             </Can>
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label={t('plugin_cron.autoRefresh')} />
+              {t('plugin_cron.autoRefresh')}
+            </label>
           </>
         }
         rowActions={(j) => (

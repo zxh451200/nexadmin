@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, FileText, Globe, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
+import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, ExternalLink, FileText, Globe, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -1001,6 +1001,97 @@ function lastMineIndex(messages: ImMessage[]): number {
   return -1
 }
 
+export interface ChatStructuredCard {
+  /** 方括号里的标记原文（咨询商品 / 收货地址 / Shipping address…），随访客语言走 */
+  marker: string
+  /** 标记行的剩余部分：商品卡是商品名；地址卡没有 */
+  title: string
+  /** 键值行（key 可空——商品卡的「USD78000」这类裸行） */
+  rows: Array<{ key: string; value: string }>
+  /** 消息里的首个 http(s) 链接（商品卡的商品页） */
+  url?: string
+  /** 空行之后的留言正文 */
+  note?: string
+}
+
+/** 访客端名片/商品卡的文本协议解析：chat-enhance.js 把结构化动作拼成
+ *  「[标记] 标题\n键: 值\n…\n\n用户留言」发进来，坐席端把它还原成卡片，
+ *  而不是一坨大字块。协议极简（方括号标记 + 冒号键值），解析失败一律退回普通文本。
+ *  - 商品卡：[咨询商品] 商品名 + 价格/起订量/数量 裸行 + 商品链接
+ *  - 地址卡：[收货地址] + 收件人/电话/国家/省份/城市/邮编/详细地址 键值行
+ *  - 空行之后是访客自己的留言正文，单独一段渲染。 */
+function parseChatStructured(content: string): ChatStructuredCard | null {
+  const lines = String(content ?? '').split('\n')
+  const head = (lines[0] ?? '').match(/^\[(.{1,24})\]\s*(.*)$/) // [标记] 可选标题
+  if (!head) return null
+  const card: ChatStructuredCard = { marker: head[1].trim(), title: head[2].trim(), rows: [] }
+  let blank = false
+  const note: string[] = []
+  for (const raw of lines.slice(1)) {
+    const line = raw.replace(/\r$/, '')
+    if (!blank && line.trim() === '') {
+      blank = true // 空行之后全是访客自己的话
+      continue
+    }
+    if (!blank) {
+      const t = line.trim()
+      if (!t) continue
+      if (/^https?:\/\//i.test(t)) {
+        card.url = card.url ?? t
+        continue
+      }
+      const kv = t.match(/^([^:：]{1,20})[:：]\s*(.+)$/)
+      if (kv) {
+        card.rows.push({ key: kv[1].trim(), value: kv[2].trim() })
+        continue
+      }
+      card.rows.push({ key: '', value: t }) // 价格这类裸行
+      continue
+    }
+    note.push(line)
+  }
+  card.note = note.join('\n').trim() || undefined
+  // 至少有点内容才当卡片：防止访客手打的「[笑] 今天天气不错」被误判
+  return card.rows.length || card.url || card.title ? card : null
+}
+
+/** 结构化消息卡片：嵌在气泡内的一小块面板——标记徽章 + 标题 + 键值行 + 链接 + 留言。
+ *  底/框走半透明黑白而非语义色：卡片在紫色（我方）与灰（对方）两种气泡里都要成立。 */
+function StructuredMessageCard({ card }: { card: ChatStructuredCard }) {
+  return (
+    <div className="min-w-56 rounded-lg border border-black/10 bg-black/[0.04] p-2.5 dark:border-white/25 dark:bg-white/10">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="rounded border border-current/30 px-1.5 py-0 text-[10px] font-semibold">{card.marker}</span>
+        {card.title ? <span className="text-sm font-semibold">{card.title}</span> : null}
+      </div>
+      {card.rows.length ? (
+        <dl className="mt-1.5 space-y-0.5">
+          {card.rows.map((r, i) => (
+            <div key={i} className="flex gap-2 text-[13px] leading-5">
+              {r.key ? <dt className="shrink-0 opacity-75">{r.key}</dt> : null}
+              <dd className={cn('min-w-0 break-all', !r.key && 'font-medium')}>{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {card.url ? (
+        <a
+          href={card.url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1.5 inline-flex max-w-full items-center gap-1 text-xs underline underline-offset-2 opacity-90 transition-opacity hover:opacity-100"
+        >
+          <ExternalLink aria-hidden="true" className="size-3 shrink-0" />
+          <span className="truncate">{card.url}</span>
+        </a>
+      ) : null}
+      {card.note ? (
+        <div className="mt-1.5 whitespace-pre-wrap border-t border-current/20 pt-1.5">{card.note}</div>
+      ) : null}
+    </div>
+  )
+}
+
 function ChatPane({
   conv,
   messages,
@@ -1331,6 +1422,8 @@ function ChatPane({
           const mine = m.senderType === 'agent' || m.senderType === 'bot'
           const att = messageAttachment(m)
           const attUrl = att ? imAttachmentUrl(att.token) : ''
+          // 访客端名片/商品卡消息 → 卡片渲染；附件消息与系统事件不参与解析
+          const card = !att && m.content ? parseChatStructured(m.content) : null
           const recallable =
             mine && !m.recalledAt && m.senderId && m.senderId === userId &&
             Date.now() - new Date(m.createdAt).getTime() < 120_000
@@ -1412,7 +1505,11 @@ function ChatPane({
                         <FileAttachment att={att} url={attUrl} />
                       )
                     ) : null}
-                    {m.content ? <div className="whitespace-pre-wrap wrap-break-word">{m.content}</div> : null}
+                    {m.content ? (
+                      card
+                        ? <StructuredMessageCard card={card} />
+                        : <div className="whitespace-pre-wrap wrap-break-word">{m.content}</div>
+                    ) : null}
                   </ChatBubble>
                 </div>
               </div>

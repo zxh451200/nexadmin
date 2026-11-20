@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Copy, Download, ExternalLink, Eye, History, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -141,6 +141,13 @@ function PostFormBody({
   // 一个栏目都没有时新建入口直接摊开：否则用户面对空面板只剩「分类与标签…」一条路。
   const catFormShown = catFormOpen || (!categories.length && !categoriesLoading)
   const atTagLimit = tags.length >= tagsMax
+  // 行内快建的焦点管理：展开即聚焦第一个字段（名称），收起后焦点回入口按钮——
+  // 之前展开后焦点还留在按钮上，键盘用户要重新寻路。
+  const catTitleRef = useRef<HTMLInputElement>(null)
+  const catToggleRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (catFormShown) catTitleRef.current?.focus()
+  }, [catFormShown])
   // slug 是所有语言共用的，但每门语言有各自的路径前缀；提示按当前编辑的语言拼。
   const pathPrefix = lf.locales.find((l) => l.code === lf.active)?.prefix
   const articlePath = `${pathPrefix ? `/${pathPrefix}` : ''}/news/${slug || '…'}`
@@ -151,6 +158,7 @@ function PostFormBody({
     const title = newCatTitle.trim()
     if (!title) {
       toast.error(t('plugin_website.post.categoryRequired'))
+      catTitleRef.current?.focus()
       return
     }
     // slug 留空 = 服务端按标题走 pkg/slug 行业标准生成；手填了才做本地格式校验
@@ -166,6 +174,7 @@ function PostFormBody({
       setNewCatTitle('')
       setNewCatSlug('')
       setCatFormOpen(false)
+      catToggleRef.current?.focus() // 面板收起后焦点回入口，别丢到 body
     } catch {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
     }
@@ -282,9 +291,16 @@ function PostFormBody({
                 disabled={sharedDisabled}
               />
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setCatFormOpen((v) => !v)}>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0"
+                  ref={catToggleRef}
+                  aria-expanded={catFormShown}
+                  onClick={() => setCatFormOpen((v) => !v)}
+                >
                   <Plus aria-hidden="true" />
-                  {t('plugin_website.post.categoryAdd')}
+                  {catFormShown ? t('plugin_website.post.categoryCollapse') : t('plugin_website.post.categoryAdd')}
                 </Button>
                 {/* 分类与标签是全局清单，译文态下也能进去维护——它不动这篇新闻的挂载 */}
                 <Button variant="link" size="sm" className="ms-auto h-auto p-0" onClick={onManageCategories}>
@@ -299,8 +315,15 @@ function PostFormBody({
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Input
+                      ref={catTitleRef}
                       value={newCatTitle}
                       onChange={(e) => setNewCatTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void addCategory()
+                        }
+                      }}
                       placeholder={t('plugin_website.post.categoryTitle')}
                       aria-label={t('plugin_website.post.categoryTitle')}
                       className="w-40"
@@ -310,6 +333,12 @@ function PostFormBody({
                     <Input
                       value={newCatSlug}
                       onChange={(e) => setNewCatSlug(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void addCategory()
+                        }
+                      }}
                       placeholder={t('plugin_website.post.categorySlugAuto')}
                       aria-label={t('plugin_website.post.categorySlug')}
                       className="w-40 font-mono"
@@ -1012,6 +1041,7 @@ export default function PostPage() {
       key: 'views',
       title: t('plugin_website.fields.views'),
       align: 'end',
+      width: 96,
       sortKey: 'views',
       render: (r) => <span className="num text-muted-foreground">{r.views}</span>,
     },
@@ -1072,7 +1102,8 @@ export default function PostPage() {
             onChange={(v) => setDraft((d) => ({ ...d, missing: v.length ? v : undefined }))}
             options={extraLocales.map((l) => ({
               value: l.code,
-              label: t('plugin_website.i18n.filterNoTranslation', { lang: l.label }),
+              // 触发器标题「缺译」已说明语义，选项只留语言名——「English：无译文」是状态短语，当选项标签读着别扭
+              label: l.label,
             }))}
             className="md:w-52"
             placeholder={t('plugin_website.i18n.filterLabel')}

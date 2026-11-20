@@ -12,13 +12,16 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mozillazg/go-pinyin"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	htmlrenderer "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 
 	"nexadmin/docs"
@@ -305,18 +308,91 @@ func firstDoc() docItem { return docGroups[0].Items[0] }
 
 // GFM 扩展：表格/删除线/任务列表/自动链接（文档里大量使用表格）。
 // WithAutoHeadingID：为标题生成锚点 id，供“本页目录”跳转。
+// WithUnsafe：放行文档里的原始 HTML。docs/*.md 是仓库内受信任内容，权限表用 <br>
+// 分隔多个接口；默认会被丢成注释，导致接口代码挤在一起、只能按任意字符断行。
 // 代码高亮用 github-dark 内联样式：正文代码块两套主题下都固定深底（配色由 chroma 内联输出，无需额外 CSS）。
 var mdRenderer = goldmark.New(
 	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+	goldmark.WithRendererOptions(htmlrenderer.WithUnsafe()),
 	goldmark.WithExtensions(
 		extension.GFM,
 		highlighting.NewHighlighting(highlighting.WithStyle("github-dark")),
 	),
 )
 
-// tocRe 从渲染 HTML 提取 h2/h3 锚点（goldmark 自动生成 heading id）。
+// tocRe 从渲染 HTML 提取 h2/h3 锚点（heading id 由 rewriteHeadingIDs 统一成可读 slug）。
 var tocRe = regexp.MustCompile(`<h([23]) id="([^"]+)"[^>]*>(.*?)</h[23]>`)
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
+
+// goldmark 默认按标题里能识别的拉丁字符生成 id，纯中文标题会退化成 #heading / #1-。
+// 这里在渲染后把 h2–h6 的 id 重写成 ASCII slug：汉字转拼音、拉丁字母与数字原样保留，
+// 其余字符作为分隔；重复标题追加 -2/-3。分享链接因此始终是无百分号编码的短 ASCII 串。
+var headingTagRe = regexp.MustCompile(`<h([2-6]) id="([^"]*)"([^>]*)>(.*?)</h([2-6])>`)
+
+// pinyinArgs 用无音调、单读音的默认口径：锚点只需稳定和可读，不需要处理多音字。
+var pinyinArgs = pinyin.NewArgs()
+
+func docHeadingSlug(text string) string {
+	text = strings.TrimSpace(html.UnescapeString(htmlTagRe.ReplaceAllString(text, "")))
+	words := make([]string, 0, 12)
+	var latin strings.Builder
+	flush := func() {
+		if latin.Len() > 0 {
+			words = append(words, latin.String())
+			latin.Reset()
+		}
+	}
+	for _, r := range text {
+		switch {
+		case unicode.Is(unicode.Han, r):
+			flush()
+			if py := pinyin.Pinyin(string(r), pinyinArgs); len(py) > 0 {
+				words = append(words, py[0]...)
+			}
+		case (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'):
+			latin.WriteRune(unicode.ToLower(r))
+		default:
+			flush()
+		}
+	}
+	flush()
+	s := strings.Join(words, "-")
+	// 超长标题按音节边界截断，避免分享链接过长。
+	if len(s) > 60 {
+		s = strings.TrimRight(s[:60], "-")
+		if i := strings.LastIndexByte(s, '-'); i > 0 {
+			s = s[:i]
+		}
+	}
+	return strings.Trim(s, "-")
+}
+
+func rewriteHeadingIDs(s string) string {
+	seen := map[string]int{}
+	return headingTagRe.ReplaceAllStringFunc(s, func(tag string) string {
+		m := headingTagRe.FindStringSubmatch(tag)
+		if m == nil {
+			return tag
+		}
+		id := docHeadingSlug(m[4])
+		if id == "" {
+			return tag
+		}
+		if seen[id] > 0 {
+			base := id
+			for n := 2; ; n++ {
+				candidate := fmt.Sprintf("%s-%d", base, n)
+				if seen[candidate] == 0 {
+					id = candidate
+					break
+				}
+			}
+		}
+		seen[id] = 1
+		open := `<h` + m[1] + ` id="` + html.EscapeString(id) + `"` + m[3] + `>`
+		return open + m[4] + `</h` + m[5] + `>`
+	})
+}
 
 func extractTOC(s string) []DocTocItem {
 	out := []DocTocItem{}
@@ -361,7 +437,7 @@ func renderDocHTML(file string) (template.HTML, error) {
 			s = s[:i] + s[i+j+len("</h1>"):]
 		}
 	}
-	out := template.HTML(s)
+	out := template.HTML(rewriteHeadingIDs(s))
 	docHTMLCache.Store(file, out)
 	return out, nil
 }

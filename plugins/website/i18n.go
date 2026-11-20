@@ -296,6 +296,31 @@ func trf(code, key string, args ...any) string {
 	return fmt.Sprintf(tr(code, key), args...)
 }
 
+// trn 按数量选择单复数文案：n==1 取 <key>.one，其余取 <key>.other；字典里缺该复数键时退回 <key>。
+// 与模板里的 {{.TN}} 同一口径，供服务端自己拼文案时复用（如评分 AJAX 返回的 note）。
+func trn(code, key string, n any, args ...any) string {
+	l := languageOr(code)
+	one := false
+	switch x := n.(type) {
+	case int:
+		one = x == 1
+	case int64:
+		one = x == 1
+	case float64:
+		one = x == 1
+	}
+	k := key + ".other"
+	if one {
+		k = key + ".one"
+	}
+	if d := dicts[l.Code]; d != nil {
+		if _, ok := d[k]; !ok {
+			k = key
+		}
+	}
+	return trf(l.Code, k, args...)
+}
+
 // ---- 请求语言 ----
 
 const langCookie = "nex_site_lang"

@@ -140,22 +140,29 @@ export function TwofactorTab() {
   return (
     <div className="flex max-w-md flex-col gap-5">
       <p className="text-sm text-muted-foreground">{t('profile.twofactor.description')}</p>
-      <div className="flex items-center gap-2">
-        {enabled ? <Badge variant="success">{t('profile.twofactor.enabledOn')}</Badge> : <Badge variant="outline">{t('profile.twofactor.enabledOff')}</Badge>}
+      {/* 状态与动作合并成一行（行排法同 BindingsTab）：badge 独占一行时左右全空，像没排完 */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          {enabled ? <Badge variant="success">{t('profile.twofactor.enabledOn')}</Badge> : <Badge variant="outline">{t('profile.twofactor.enabledOff')}</Badge>}
+          {enabled ? (
+            <span className="text-xs text-muted-foreground">
+              {t('profile.twofactor.recoveryLeft', { count: status.data?.recoveryLeft ?? 0 })}
+            </span>
+          ) : null}
+        </div>
         {enabled ? (
-          <span className="text-xs text-muted-foreground">
-            {t('profile.twofactor.recoveryLeft', { count: status.data?.recoveryLeft ?? 0 })}
-          </span>
-        ) : null}
+          <Button variant="outline" onClick={() => void onRegen()} disabled={regen.isPending}>
+            {t('profile.twofactor.regen')}
+          </Button>
+        ) : (
+          <Button onClick={() => void startEnroll()} disabled={enroll.isPending}>
+            {t('profile.twofactor.startEnroll')}
+          </Button>
+        )}
       </div>
 
       {enabled ? (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void onRegen()} disabled={regen.isPending}>
-              {t('profile.twofactor.regen')}
-            </Button>
-          </div>
           {/* 解绑前置两样：当前密码 + 验证码（防被盗会话直接关掉二次验证） */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="totp-disable-code">{t('profile.twofactor.codeLabel')}</Label>

@@ -72,6 +72,7 @@ export function MediaDialog({ kind, onClose, onInsert }: MediaDialogProps) {
           <>
             <Uploader
               kind={kind}
+              pickFromLibrary={false}
               visibility={kind === 'image' ? 'public' : 'private'}
               value={files}
               onChange={(v) => {

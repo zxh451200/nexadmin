@@ -5,7 +5,11 @@ summary: 从派生项目、构建与初始化，到真实后端开发、免费�
 
 # NexAdmin 快速开始
 
-业务开发从派生项目开始，**不要在框架母版里写业务代码**。本文命令除第一步外均在派生项目根目录运行；需要 Go 1.26+、Node 22 与 npm，以及可连接的空 MySQL / MariaDB / PostgreSQL 数据库。首次安装依赖需要网络。
+业务开发从派生项目开始，**不要在框架母版里写业务代码**。本文命令除第一步外均在派生项目根目录运行；需要 Go 1.27.3+、Node 22 与 npm，以及可连接的空 MySQL / MariaDB / PostgreSQL 数据库。首次安装依赖需要网络。
+
+读完并跟着做完，你会得到一个可登录的本地管理后台、一份初始化好的真实数据库，以及一个验证通过的免费插件。
+
+![首次跑通四步：派生、构建、初始化、登录](/website-assets/docs/quickstart-flow.zh.svg)
 
 ## 1. 派生自己的工程
 
@@ -74,7 +78,7 @@ VITE_MOCK=false npm --prefix web run dev
 
 打开 `http://localhost:5173/admin/`。Vite 将 `/api` 代理到 8080；这时使用真实数据库与刚创建的账号。PowerShell 可用 `$env:VITE_MOCK='false'; npm --prefix web run dev`。
 
-**默认差异：**母版和默认派生项目的 `web/.env.development` 都是 `VITE_MOCK=true`，直接 `npm --prefix web run dev` 使用模拟接口，适合先做页面，不能证明数据库、权限或插件挂载有效。只有显式值 `true` 才开启 mock；生产 `.env.production` 为 `false`，构建时也不要用环境变量覆盖成 `true`。无需修改框架的 `.env.development` 来联调。
+**默认差异**：母版和默认派生项目的 `web/.env.development` 都是 `VITE_MOCK=true`，直接 `npm --prefix web run dev` 使用模拟接口，适合先做页面，不能证明数据库、权限或插件挂载有效。只有显式值 `true` 才开启 mock；生产 `.env.production` 为 `false`，构建时也不要用环境变量覆盖成 `true`。无需修改框架的 `.env.development` 来联调。
 
 生成一个业务模块骨架后再补逻辑：
 
@@ -90,6 +94,8 @@ go build ./... && go vet ./... && go test ./...
 ```
 
 ## 5. 安装和使用插件
+
+![插件从源码到生效：免费插件装完即用，专业插件要导授权，涉及根路由的必须重启](/website-assets/docs/plugin-lifecycle.zh.svg)
 
 ### 免费插件
 

@@ -5,6 +5,14 @@
       <h1 class="page-title">{{.T "contact.title"}}</h1>
       <p class="contact-lede">{{.TF "contact.lede" .SiteName}}</p>
 
+      {{/* 价值点列表（对齐 Linear contact 页的左栏口径）：告诉访客「联系我们会得到什么」，
+          而不是只留一个邮箱——左栏因此不再是孤零零的一行字。 */}}
+      <ul class="contact-values">
+        <li><span class="contact-ico" aria-hidden="true">{{icon "check"}}</span>{{.T "contact.valueDemo"}}</li>
+        <li><span class="contact-ico" aria-hidden="true">{{icon "check"}}</span>{{.T "contact.valuePlan"}}</li>
+        <li><span class="contact-ico" aria-hidden="true">{{icon "check"}}</span>{{.T "contact.valueOnboard"}}</li>
+      </ul>
+
       <ul class="contact-channels">
         {{if .ContactEmail}}
         <li>
@@ -25,6 +33,12 @@
         </li>
         {{end}}
       </ul>
+
+      {{if .DocsEnabled}}
+      {{/* 销售与求助分流（Linear 同款口径）：找我们谈合作的走表单，技术问题的去文档，
+          两类访客各回各家，表单里混进来的「怎么用」也就少了。 */}}
+      <p class="contact-support">{{.T "contact.supportNote"}}<a href="{{.URL "/docs"}}">{{.T "layout.docsCenter"}} →</a></p>
+      {{end}}
 
       {{/* 办公地点（站点设置可配，多个）：地点卡纯 HTML 可被收录；地图按访客语言
           判定厂商（zh 系→天地图，其他→谷歌），对应厂商未启用时只渲染地点卡。 */}}

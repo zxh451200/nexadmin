@@ -213,12 +213,12 @@
     </div>
     <nav class="footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
-      <a href="{{.Home}}">{{.T "layout.home"}}</a>
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
       <a href="/admin/login">{{.T "layout.admin"}}</a>
     </nav>
     <nav class="footer-col" aria-label="{{.T "layout.docs"}}">
       <h4>{{.T "layout.docs"}}</h4>
+      <a href="{{.URL "#quickstart"}}">{{.T "layout.quickstart"}}</a>
       <a href="{{.URL "/docs"}}">{{.T "layout.docsCenter"}}</a>
       <a href="{{.URL "/docs/features"}}">{{.T "layout.docsFeatures"}}</a>
       <a href="{{.URL "/docs/config"}}">{{.T "layout.docsConfig"}}</a>
@@ -230,10 +230,9 @@
       <h4>{{.T "layout.resources"}}</h4>
       {{/* 新闻与 RSS 按需显示：一篇新闻都没有时入口指向空列表页，不如不出现。 */}}
       {{if .Posts}}<a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
-      <a href="{{.BaseURL}}/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>{{end}}
+      <a href="/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>{{end}}
       <a href="{{.URL "/p/about"}}">{{.T "layout.about"}}</a>
       <a href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
-      <a href="{{.URL "#quickstart"}}">{{.T "layout.quickstart"}}</a>
     </nav>
     {{if .FriendLinks}}
     <nav class="footer-col" aria-label="{{.T "layout.friends"}}">

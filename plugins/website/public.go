@@ -87,6 +87,12 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 	// render 阶段按访客 cookie（nex-site-currency）升级。表为空时 fx 不启用，
 	// 模板 FxCur/FxMoney 原样返回，价格行为与旧版一致。
 	rates, _ := parseCurrencyRates(set.CurrencyRatesJSON)
+	// FAQ 目前只有原文一份（表里没有 i18n 字段）：非默认语言不渲染该板块，
+	// 免得英文首页混进中文问答；等 FAQ 支持译文再按语言取。
+	var faqs []Faq
+	if languageOr(lang).Code == defaultLang.Code {
+		faqs = h.svc.PublicFaqs(ctx)
+	}
 	v := &siteView{
 		fx: &fx{rates: rates, display: set.DefaultCurrency},
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
@@ -106,7 +112,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		SeoKeywords: set.SeoKeywords, MarketEnabled: set.MarketEnabled,
 		PurchaseEnabled: set.PurchaseEnabled,
 		Offices:         parseOffices(set.OfficesJSON),
-		Faqs:            h.svc.PublicFaqs(ctx),
+		Faqs:            faqs,
 		Consent: set.ContactConsent, ConsentURL: set.ContactConsentURL,
 		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),

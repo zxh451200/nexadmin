@@ -22,6 +22,8 @@ nexadmin new → develop (user area only) → git commit → nexadmin upgrade --
 
 The project root `.nexadmin.manifest.json` is authoritative (`framework_paths` / `user_paths`). The table below is the convention:
 
+![Upgrade boundary: the framework area is overwritten, your area is kept](/website-assets/docs/upgrade-boundary.en.svg)
+
 | Class | Paths | On upgrade | What you may do |
 | --- | --- | --- | --- |
 | Framework area | `core/` `modules/` `pkg/` `cmd/` `web/src/framework/` `migrations/framework/` `docs/` `deploy/` `scripts/` `config/default.yaml` `config/license-keys.pub` `config/license-revoked.json` | Overwritten (the last two are distributed by the vendor with release packages; kept if absent from the package) | Do not modify. Hand-edited files are saved as `.bak` with a WARN on upgrade |

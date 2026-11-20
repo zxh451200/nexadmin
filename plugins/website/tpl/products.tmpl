@@ -87,13 +87,18 @@
           <form class="pc-sort" method="get" action="{{.URL "/products"}}" data-sort-form>
             {{if .ProductTermSlug}}<input type="hidden" name="category" value="{{.ProductTermSlug}}">{{end}}
             {{if .ProductQuery}}<input type="hidden" name="q" value="{{.ProductQuery}}">{{end}}
-            <label for="pc-sort">{{.T "products.sortLabel"}}</label>
-            <select id="pc-sort" name="sort" data-sort-select>
-              <option value="latest"{{if eq .ProductSort "latest"}} selected{{end}}>{{.T "products.sortLatest"}}</option>
-              <option value="price_asc"{{if eq .ProductSort "price_asc"}} selected{{end}}>{{.T "products.sortPriceAsc"}}</option>
-              <option value="price_desc"{{if eq .ProductSort "price_desc"}} selected{{end}}>{{.T "products.sortPriceDesc"}}</option>
-            </select>
-            <button type="submit" class="pc-sort-submit">{{.T "products.sortSubmit"}}</button>
+            <details class="pc-sort-menu" data-sort-menu>
+              <summary class="pc-sort-trigger">
+                <span class="pc-sort-key">{{.T "products.sortLabel"}}</span>
+                <span class="pc-sort-cur">{{if eq .ProductSort "price_asc"}}{{.T "products.sortPriceAsc"}}{{else if eq .ProductSort "price_desc"}}{{.T "products.sortPriceDesc"}}{{else}}{{.T "products.sortLatest"}}{{end}}</span>
+                <span class="pc-sort-caret" aria-hidden="true">{{uiIcon "chevron-down"}}</span>
+              </summary>
+              <div class="pc-sort-pop" aria-label="{{.T "products.sortLabel"}}">
+                <button type="submit" name="sort" value="latest" class="pc-sort-opt{{if eq .ProductSort "latest"}} is-current{{end}}"{{if eq .ProductSort "latest"}} aria-current="true"{{end}}>{{.T "products.sortLatest"}}</button>
+                <button type="submit" name="sort" value="price_asc" class="pc-sort-opt{{if eq .ProductSort "price_asc"}} is-current{{end}}"{{if eq .ProductSort "price_asc"}} aria-current="true"{{end}}>{{.T "products.sortPriceAsc"}}</button>
+                <button type="submit" name="sort" value="price_desc" class="pc-sort-opt{{if eq .ProductSort "price_desc"}} is-current{{end}}"{{if eq .ProductSort "price_desc"}} aria-current="true"{{end}}>{{.T "products.sortPriceDesc"}}</button>
+              </div>
+            </details>
           </form>
           {{if or .ProductQuery .ProductTermName}}<a class="pc-clear" href="{{.URL "/products"}}">{{.T "products.clearFilter"}}</a>{{end}}
         </div>

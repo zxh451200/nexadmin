@@ -1,6 +1,8 @@
 {
   "uploader": {
     "pickFromLibrary": "从文件库选择",
+    "avatarTitle": "头像",
+    "avatarHint": "点击头像上传，或将图片拖到这里",
     "kind_image": "图片",
     "kind_video": "视频",
     "kind_file": "文件",

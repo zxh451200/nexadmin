@@ -775,7 +775,28 @@ func (h *siteHandler) marketRate(c *gin.Context) {
 		if h.log != nil {
 			h.log.Warn("website: 保存评分失败", zap.String("plugin", e.ID), zap.Error(err))
 		}
+		if wantsJSON(c) {
+			c.JSON(http.StatusOK, gin.H{"ok": false, "error": tr(lang.Code, "plugin.rateFailed")})
+			return
+		}
 		c.String(http.StatusInternalServerError, tr(lang.Code, "plugin.rateFailed"))
+		return
+	}
+	// 脚本提交：返回 JSON，前端就地更新评分文案与星星，不整页跳转（也就不会滚回 #rating）。
+	// 无 JS 时保持 303 回原页锚点，行为不变。
+	if wantsJSON(c) {
+		st := h.marketStats(c.Request.Context())[e.ID]
+		avg := ""
+		if st.RatingCount > 0 {
+			avg = fmt.Sprintf("%.1f", float64(st.RatingSum)/float64(st.RatingCount))
+		}
+		note := tr(lang.Code, "plugin.ratingNone")
+		if st.RatingCount > 0 {
+			note = trn(lang.Code, "plugin.ratingSummary", st.RatingCount, avg, st.RatingCount)
+		}
+		// 与模板同一处留白：两句文案之间必须有一个空格，否则英文会连成一串。
+		note += " " + trn(lang.Code, "plugin.ratingMine", score, score)
+		c.JSON(http.StatusOK, gin.H{"ok": true, "score": score, "note": note})
 		return
 	}
 	c.Redirect(http.StatusSeeOther, lang.Path("/plugins/"+e.ID)+"#rating")

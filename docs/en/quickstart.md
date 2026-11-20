@@ -5,7 +5,11 @@ summary: Derive a project, build and initialize it, develop against real APIs, v
 
 # NexAdmin Quickstart
 
-Start business development in a derived project, **not in the framework template**. Except for step 1, run commands from the derived project root. Prerequisites: Go 1.26+, Node 22 with npm, and a reachable empty MySQL / MariaDB / PostgreSQL database. Initial dependency installation needs network access.
+Start business development in a derived project, **not in the framework template**. Except for step 1, run commands from the derived project root. Prerequisites: Go 1.27.3+, Node 22 with npm, and a reachable empty MySQL / MariaDB / PostgreSQL database. Initial dependency installation needs network access.
+
+By the end you will have a locally running admin console you can log into, an initialized real database, and one verified free plugin.
+
+![First run in four steps: derive, build, initialize, sign in](/website-assets/docs/quickstart-flow.en.svg)
 
 ## 1. Derive your project
 
@@ -90,6 +94,8 @@ go build ./... && go vet ./... && go test ./...
 ```
 
 ## 5. Install and use plugins
+
+![Plugin lifecycle: free plugins work right after start, pro plugins need a licence, plugins touching the root router need a restart](/website-assets/docs/plugin-lifecycle.en.svg)
 
 ### Free plugins
 

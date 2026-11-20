@@ -465,7 +465,7 @@ export default function FilePage() {
               <Card className="overflow-hidden rounded-xl">
                 <div ref={gridRef} className="select-none p-3">
                 {isLoading ? (
-                  <div className={GRID_CLASS}>
+                  <div className={cn('file-grid', GRID_CLASS)}>
                     {Array.from({ length: 10 }, (_, i) => (
                       <Skeleton key={i} className="aspect-4/3 w-full rounded-lg" />
                     ))}
@@ -473,7 +473,7 @@ export default function FilePage() {
                 ) : rows.length === 0 ? (
                   <EmptyState title={t('fileMgr.empty')} />
                 ) : (
-                  <ul className={GRID_CLASS}>
+                  <ul className={cn('file-grid', GRID_CLASS)}>
                     {rows.map((f) => {
                       const checked = selected.includes(f.id)
                       return (

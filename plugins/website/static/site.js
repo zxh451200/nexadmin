@@ -127,17 +127,21 @@
     if (copyBtn) {
       var src = document.querySelector(copyBtn.getAttribute('data-copy'));
       if (!src) return;
-      var original = copyBtn.textContent;
+      var label = copyBtn.querySelector('[data-copy-label]');
+      var original = label ? label.textContent : copyBtn.textContent;
+      var setLabel = function (text) {
+        if (label) label.textContent = text; else copyBtn.textContent = text;
+      };
       copyText(src.textContent.trim()).then(function () {
-        copyBtn.textContent = msg('copied', 'Copied');
+        setLabel(msg('copied', 'Copied'));
         copyBtn.classList.add('copied');
         window.setTimeout(function () {
-          copyBtn.textContent = original;
+          setLabel(original);
           copyBtn.classList.remove('copied');
         }, 1800);
       }).catch(function () {
-        copyBtn.textContent = msg('copyManual', 'Copy manually');
-        window.setTimeout(function () { copyBtn.textContent = original; }, 1800);
+        setLabel(msg('copyManual', 'Copy manually'));
+        window.setTimeout(function () { setLabel(original); }, 1800);
       });
       return;
     }
@@ -786,6 +790,7 @@
     i18n = readI18n();
     injectCSS('site-tip-style', TIP_CSS);
     initContactForm();
+    initRatingForm();
     initOfficeMap();
     initChat();
     initShare();
@@ -1004,7 +1009,97 @@
         }
       });
       docSearch();
+      onWin(document, 'keydown', function (e) {
+        var slash = e.key === '/';
+        var cmdK = (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey);
+        if (!slash && !cmdK) return;
+        var t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        e.preventDefault();
+        docsInput.focus();
+        docsInput.select();
+      });
     }
+
+    // 文档代码块：右上角复制图标。按钮放在 pre 外的包裹层里，横向滚动时长命令不会把按钮带走。
+    document.querySelectorAll('.docs-body pre > code').forEach(function (code, idx) {
+      var pre = code.parentElement;
+      if (!pre || pre.querySelector('.docs-code-copy')) return;
+      var id = 'docs-code-' + idx;
+      code.id = id;
+      var wrap = document.createElement('div');
+      wrap.className = 'docs-code-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'docs-code-copy';
+      btn.setAttribute('data-copy', '#' + id);
+      btn.setAttribute('aria-label', msg('codeCopy', 'Copy code'));
+      btn.title = msg('codeCopy', 'Copy code');
+      btn.innerHTML = '<svg class="ico-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>' +
+        '<svg class="ico-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+      var label = document.createElement('span');
+      label.className = 'sr-only';
+      label.setAttribute('data-copy-label', '');
+      label.textContent = msg('codeCopy', 'Copy code');
+      btn.appendChild(label);
+      wrap.appendChild(btn);
+    });
+
+    // 文档本页目录：随滚动高亮当前小节；左侧文档树仍保持页面级 active。
+    var tocTargets = Array.prototype.slice.call(document.querySelectorAll('.docs-toc a[href^="#"]'))
+      .map(function (a) {
+        var raw = a.getAttribute('href').slice(1);
+        var id = raw;
+        // 中文标题的 href 会被模板做百分号编码，getElementById 需要解码后的 id。
+        try { id = decodeURIComponent(raw); } catch (e) { /* 保留原值 */ }
+        return { link: a, el: document.getElementById(id) };
+      })
+      .filter(function (item) { return !!item.el; });
+    if (tocTargets.length) {
+      var syncToc = function () {
+        var current = null;
+        tocTargets.forEach(function (item) {
+          if (item.el.getBoundingClientRect().top <= 132) current = item.link;
+        });
+        if (!current && window.scrollY < 120) current = tocTargets[0].link;
+        tocTargets.forEach(function (item) {
+          var on = item.link === current;
+          item.link.classList.toggle('active', on);
+          if (on) item.link.setAttribute('aria-current', 'true');
+          else item.link.removeAttribute('aria-current');
+        });
+      };
+      syncToc();
+      onWin(window, 'scroll', syncToc, { passive: true });
+    }
+
+    // 文档表格：首列相邻同值合并成 rowspan。权限表按模块分组，逐行重复的 log/notice
+    // 会把首列撑成一条条空块；合并后分组关系更清楚，也不影响单元格内容与搜索。
+    document.querySelectorAll('.docs-body table').forEach(function (table) {
+      if (table.getAttribute('data-merged-rows')) return;
+      table.setAttribute('data-merged-rows', '1');
+      var rows = Array.prototype.slice.call(table.tBodies[0] ? table.tBodies[0].rows : []);
+      var i = 0;
+      while (i < rows.length) {
+        var cell = rows[i].cells[0];
+        if (!cell || cell.children.length) { i++; continue; }
+        var label = cell.textContent.trim();
+        if (!label) { i++; continue; }
+        var span = 1;
+        while (i + span < rows.length) {
+          var next = rows[i + span].cells[0];
+          if (!next || next.children.length || next.textContent.trim() !== label) break;
+          span++;
+        }
+        if (span > 1) {
+          cell.rowSpan = span;
+          for (var j = 1; j < span; j++) rows[i + j].deleteCell(0);
+        }
+        i += span;
+      }
+    });
 
     // 选项卡：同步 aria-selected 与 hidden，方向键 / Home / End 切换。
     document.querySelectorAll('[data-tabs]').forEach(function (list) {
@@ -1280,6 +1375,48 @@
           show(errText(err && err.code), false);
         })
         .then(function () { if (submit) submit.disabled = false; });
+    });
+  }
+
+  // ---- 插件评分：fetch 提交并就地更新星星与文案；脚本不可用时表单整页 POST，服务端 303 回评分区 ----
+  function initRatingForm() {
+    var form = document.querySelector('[data-rating-form]');
+    if (!form || !window.fetch || !window.FormData) return;
+    var note = document.querySelector('[data-rating-note]');
+    var stars = form.querySelectorAll('.rating-star');
+    form.addEventListener('submit', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('button[name="score"]') : null;
+      if (!btn || !form.contains(btn)) return;
+      e.preventDefault();
+      if (btn.disabled) return;
+      stars.forEach(function (s) { s.disabled = true; });
+      var score = parseInt(btn.value, 10);
+      var fd = new FormData(form);
+      fd.set('score', btn.value);
+      fetch(form.action, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: new URLSearchParams(fd),
+        credentials: 'same-origin'
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (body) {
+          if (!body || !body.ok) throw new Error('rate failed');
+          if (note) note.textContent = body.note || '';
+          stars.forEach(function (s) {
+            var on = parseInt(s.value, 10) <= score;
+            s.classList.toggle('on', on);
+            s.setAttribute('aria-pressed', on ? 'true' : 'false');
+          });
+        })
+        .catch(function () {
+          // 失败就退回整页提交：用户点击的分数仍保留在按钮上。
+          stars.forEach(function (s) { s.disabled = false; });
+          window.location.href = form.action.replace(/\/rate\/?$/, '') + '#rating';
+        })
+        .then(function () {
+          stars.forEach(function (s) { s.disabled = false; });
+        });
     });
   }
 
@@ -1874,13 +2011,23 @@
     });
   }
 
-  // ---- 产品列表排序：选完立即提交 GET，保留分类与检索词（无 JS 时还有「应用」按钮） ----
+  // ---- 产品列表排序：自绘下拉（原生弹层跟不上主题）。选项本身就是提交按钮，
+  //      点了带 ?sort=… 原生跳转、隐藏的分类与检索词一起提交，没有 JS 也能用；
+  //      这里只补 <details> 自己不管的两件小事：点面板外收起、Esc 收起并回焦。 ----
   function initProductSort() {
-    var sel = document.querySelector('[data-sort-select]');
-    if (!sel) return;
-    sel.addEventListener('change', function () {
-      var form = sel.closest('form');
-      if (form) form.submit();
+    var menu = document.querySelector('[data-sort-menu]');
+    if (!menu || menu.dataset.bound) return;
+    menu.dataset.bound = '1';
+    var trigger = menu.querySelector('.pc-sort-trigger');
+
+    document.addEventListener('click', function (e) {
+      if (menu.open && !menu.contains(e.target)) menu.open = false;
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && menu.open) {
+        menu.open = false;
+        if (trigger) trigger.focus();
+      }
     });
   }
 

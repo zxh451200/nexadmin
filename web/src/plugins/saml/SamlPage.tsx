@@ -407,11 +407,8 @@ export default function SamlPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('plugin_saml.title')}
-        description={t('plugin_saml.description')}
-        actions={data.length > 0 ? newButton : undefined}
-      />
+      {/* 新建入口放列表工具行左侧（与全站列表页同一口径），不悬浮在标题右侧 */}
+      <PageHeader title={t('plugin_saml.title')} description={t('plugin_saml.description')} />
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -436,6 +433,7 @@ export default function SamlPage() {
         />
       ) : (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">{newButton}</div>
           {data.map((s) => (
             <Card key={s.id} className="space-y-3 p-4">
               <div className="flex flex-wrap items-center gap-2">

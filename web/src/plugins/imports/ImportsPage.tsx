@@ -282,11 +282,11 @@ export default function ImportsPage() {
       key: 'status',
       title: t('plugin_imports.fields.status'),
       render: (j) => (
-        <div className="flex min-w-32 flex-col gap-1">
+        <div className="flex flex-col items-start gap-1">
           <Badge variant={statusVariant(j.status)}>{t(`plugin_imports.status.${j.status}`)}</Badge>
           {/* 异步执行中显示进度：已处理行 / 总行数（done/failed 台账本来就是全量，不需要条） */}
           {(j.status === 'running' || j.status === 'pending') && j.totalRows > 0 ? (
-            <Progress value={Math.round(((j.okRows + j.failRows) / j.totalRows) * 100)} className="h-1.5" />
+            <Progress value={Math.round(((j.okRows + j.failRows) / j.totalRows) * 100)} className="h-1.5 w-32" />
           ) : null}
         </div>
       ),

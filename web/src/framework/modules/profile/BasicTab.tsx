@@ -9,7 +9,7 @@ import { DictSelect } from '@/framework/components/DictSelect'
 import { FormLayout } from '@/framework/components/FormLayout'
 import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Textarea } from '@/framework/ui/textarea'
@@ -93,15 +93,17 @@ export function BasicTab() {
           name="avatar"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('profile.basic.avatar')}</FormLabel>
               <Uploader
                 kind="image"
+                variant="avatar"
+                avatarLabel={t('profile.basic.avatar')}
+                avatarHint={t('profile.basic.avatarHint')}
                 visibility="public"
                 crop={{ aspect: 1, width: 256, height: 256 }}
                 value={toFiles(field.value)}
                 onChange={(files) => field.onChange(files[0]?.url ?? '')}
               />
-              <FormDescription>{t('profile.basic.avatarHint')}</FormDescription>
+              <FormMessage />
             </FormItem>
           )}
         />

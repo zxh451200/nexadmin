@@ -21,7 +21,7 @@ const EMPTY: MapsConfigInput = {
   tianditu: { enabled: false, publicKey: '', serverKey: '' },
 }
 
-const ORDER: MapProviderId[] = ['amap', 'baidu', 'google', 'osm', 'tianditu']
+const ORDER: MapProviderId[] = ['amap', 'baidu', 'google', 'tianditu', 'osm']
 
 /** 地图服务：作为「系统设置 → 存储与集成」的一个分区渲染，旧地址 /system/map 重定向到 ?tab=maps。 */
 export function MapSection() {

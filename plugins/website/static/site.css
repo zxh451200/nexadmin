@@ -13,6 +13,10 @@
 }
 
 :root {
+  /* 告诉浏览器本页是深色：原生控件（<select> 弹层、日期选择器、自动填充底色）
+     会跟着走深色绘制。不声明的话弹层按系统浅色画白底，而 option 又继承
+     了深色主题的白色文字，就成了白字白底——几乎看不清。 */
+  color-scheme: dark;
   /* Linear 式深色主题：近黑底、白/灰主按钮、低饱和靛紫仅作品牌点缀；
      亮色在 html[data-scheme="light"] 整块覆盖。 */
   --bg: #08090a;
@@ -25,15 +29,18 @@
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.12);
   --text: #f7f8f8;
-  --text-2: #8a8f98;
-  --text-3: #62666d;
-  --lead: #b4b8c0;
+  /* 对比度对齐 linear.app 实测：次级 #d0d6e0、最 muted 一档 #8a8f98（底 #08090a 上 ≈5.5:1） */
+  --text-2: #d0d6e0;
+  --text-3: #8a8f98;
+  --lead: #d0d6e0;
   --prose: #c3c7cf;
   --accent: #5e6ad2;
   --accent-soft: rgba(94, 109, 210, 0.14);
   --accent-2: #8a8ff0;
   --green: #4cb782;
   --red: #eb5757;
+  --warning-fg: #d9a02b;
+  --warning-border: #d9a02b;
   --radius: 8px;
   --radius-lg: 14px;
   --font: "Inter", -apple-system, "SF Pro Display", "SF Pro Text", BlinkMacSystemFont,
@@ -1470,7 +1477,12 @@ html[data-scheme="light"] .shot-light { display: block; }
 /* 首列多是两三个字的键名（「账号密码」「滑块拼图」），自动布局会把它压到一两个字就换行，
    给个下限让它保持单行；长路径类表格只是多占一点宽度，不影响滚动。 */
 .docs-body table th:first-child, .docs-body table td:first-child { min-width: 7.5em; }
+/* 首列合并后的分组名固定顶对齐，避免 rowspan 单元格被浏览器按基线居中 */
+.docs-body table td[rowspan] { vertical-align: top; }
 .docs-body h1 { margin-bottom: 0.8em; }
+/* 配图：宽度跟正文（图本身 960 宽，缩到 820 仍清楚），上下留白比段落大一点，读起来像独立的一块。
+   窄屏按比例缩到容器宽——不强行撑到 640，否则整页会横向滚动。 */
+.docs-body img { display: block; max-width: 100%; height: auto; margin: 24px 0 26px; }
 .docs-foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-3); }
 .docs-foot a { color: var(--text-2); }
 .docs-foot a:hover { color: var(--text); }
@@ -1743,7 +1755,8 @@ html[data-scheme="light"] .shot-light { display: block; }
 .plugin-checksum { font-size: 12.5px; color: var(--text-3); }
 .plugin-checksum:hover { color: var(--text); }
 
-.related-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+/* 列宽设上限：只有 1 个同类插件时不至于被 1fr 拉成整行横幅，留白难看。 */
+.related-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 320px)); gap: 10px; }
 .related-card {
   display: flex;
   align-items: center;
@@ -1794,6 +1807,14 @@ html[data-scheme="light"] .shot-light { display: block; }
   transition: color 0.15s;
 }
 .rating-star:hover, .rating-star.on { color: #e2b93b; }
+/* 悬停/聚焦第 N 颗时预览 1..N 全亮（常见评分控件直觉）：先置灰全部，再点亮前缀。
+   不用 :has 的话兄弟选择器只能往后选，做不出「回亮前面的星」。 */
+.rating-form fieldset:has(.rating-star:is(:hover, :focus-visible)) .rating-star { color: var(--text-3); }
+.rating-form fieldset:has(.rating-star:nth-of-type(1):is(:hover, :focus-visible)) .rating-star:nth-of-type(-n+1),
+.rating-form fieldset:has(.rating-star:nth-of-type(2):is(:hover, :focus-visible)) .rating-star:nth-of-type(-n+2),
+.rating-form fieldset:has(.rating-star:nth-of-type(3):is(:hover, :focus-visible)) .rating-star:nth-of-type(-n+3),
+.rating-form fieldset:has(.rating-star:nth-of-type(4):is(:hover, :focus-visible)) .rating-star:nth-of-type(-n+4),
+.rating-form fieldset:has(.rating-star:nth-of-type(5):is(:hover, :focus-visible)) .rating-star:nth-of-type(-n+5) { color: #e2b93b; }
 .rating-star:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: 6px; }
 
 #versions h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -1833,7 +1854,8 @@ html[data-scheme="light"] .shot-light { display: block; }
 
 /* ---- 页脚 ---- */
 
-.site-footer { border-top: 1px solid var(--border); background: var(--bg); overflow: hidden; }
+/* 页脚与内容区同底色，只靠一条发丝线分界（对齐 linear.app 的 0.8px 低对比顶线口径） */
+.site-footer { background: var(--bg); border-top: 1px solid var(--border); overflow: hidden; }
 .footer-grid {
   display: grid;
   grid-template-columns: 260px repeat(4, minmax(0, 1fr));
@@ -1910,8 +1932,19 @@ html:not([data-scheme="light"]) .contact-page {
 
 .contact-grid { display: grid; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1fr); gap: 88px; align-items: start; }
 .contact-intro { padding-top: 2px; }
-.contact-intro .page-title { font-size: clamp(30px, 3.2vw, 40px); font-weight: 600; letter-spacing: -0.032em; line-height: 1.1; }
-.contact-lede { margin: 14px 0 0; max-width: 40ch; color: var(--text-2); font-size: 15px; line-height: 1.75; }
+/* H1 对齐 Linear contact 页口径：48px 级、中字重（550）、适中负字距——
+   之前 600 偏重、40px 偏小，左栏的视觉分量压不过右栏表单。 */
+.contact-intro .page-title { font-size: clamp(32px, 3.6vw, 46px); font-weight: 550; letter-spacing: -0.026em; line-height: 1.12; }
+.contact-lede { margin: 14px 0 0; max-width: 40ch; color: var(--text-2); font-size: 15px; line-height: 1.6; }
+/* 价值点列表：Linear contact 页的「Get a demo / 选对方案 / 上线支持」三件事，
+   告诉访客联系我们会得到什么——15px 走正文档，与 lede 同级靠图标和间距分层。 */
+.contact-values { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.6; }
+.contact-values li { display: flex; align-items: flex-start; gap: 10px; }
+.contact-values .contact-ico { margin-top: 3px; color: var(--text); }
+/* 销售与求助分流：技术问题的访客去文档，不占表单线索。 */
+.contact-support { margin: 20px 0 0; font-size: 13px; color: var(--text-3); }
+.contact-support a { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; transition: color var(--motion-fast, 150ms) ease; }
+.contact-support a:hover { color: var(--text); }
 .contact-channels { list-style: none; padding: 0; margin: 30px 0 0; display: flex; flex-direction: column; gap: 14px; }
 .contact-channels li { display: flex; align-items: flex-start; gap: 10px; }
 /* 渠道图标去掉 38px 描边方块：Linear 的联系页里没有这种“按钮感”图标 */
@@ -1923,10 +1956,12 @@ html:not([data-scheme="light"]) .contact-page {
 .contact-qr { margin-top: 30px; }
 
 /* 表单：无边框、无底色、无内边距——只是页面上的字段序列 */
-.contact-form { display: flex; flex-direction: column; gap: 16px; max-width: 520px; padding: 0; border: 0; background: none; }
+.contact-form { display: flex; flex-direction: column; gap: 14px; max-width: 520px; padding: 0; border: 0; background: none; }
 .contact-form-title { margin: 0 0 2px; font-size: 14px; font-weight: 500; color: var(--text-2); }
-.field { display: flex; flex-direction: column; gap: 7px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
 .field-label { font-size: 13px; color: var(--text-2); }
+/* 控件高度对齐 Linear 的 32px 级（14px × 1.5 + 上下 5px + 描边 ≈ 33px）；
+   之前 9px 内边距做到 41px，比人家高一档，整页看着"什么都大一号"。 */
 .field input,
 .field textarea {
   width: 100%;
@@ -1934,7 +1969,7 @@ html:not([data-scheme="light"]) .contact-page {
   border: 1px solid var(--cf-border);
   background: var(--cf-bg);
   color: var(--text);
-  padding: 9px 12px;
+  padding: 5px 12px;
   font: inherit;
   font-size: 14px;
   line-height: 1.5;
@@ -1944,13 +1979,15 @@ html:not([data-scheme="light"]) .contact-page {
 .field textarea::placeholder { color: var(--text-3); }
 .field input:hover,
 .field textarea:hover { border-color: var(--cf-border-hover); }
-.field textarea { resize: vertical; min-height: 132px; }
+/* 多行框单独给回纵向内边距：5px 只适合单行控件 */
+.field textarea { resize: vertical; min-height: 120px; padding: 8px 12px; }
 /* 焦点只提亮描边 + 一圈极淡光晕，不用主题紫描边（Linear 的输入框焦点就是这么收着的） */
 .field input:focus-visible,
 .field textarea:focus-visible { outline: none; border-color: var(--cf-border-focus); box-shadow: 0 0 0 3px var(--cf-halo); }
 
 .contact-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
-.contact-form .btn-primary { width: auto; height: 38px; padding: 0 18px; border-radius: 999px; font-size: 13.5px; font-weight: 500; }
+/* 按钮与输入框同高（Linear 中型按钮 32px / 13px 字），否则一行里一高一低 */
+.contact-form .btn-primary { width: auto; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; }
 .contact-form-hint { margin: 0; font-size: 13px; color: var(--text-3); }
 .contact-form-hint a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--border-strong); }
 .contact-form-hint a:hover { color: var(--text); }
@@ -2146,6 +2183,7 @@ html:not([data-scheme="light"]) .contact-page {
 /* ---- 亮色主题：与深色同一套变量名，整体覆盖 ---- */
 
 html[data-scheme="light"] {
+  color-scheme: light;
   /* Linear 浅色主题：暖白底、黑主按钮、靛紫点缀 */
   --bg: #f7f8f8;
   --bg-soft: #ffffff;
@@ -2164,6 +2202,9 @@ html[data-scheme="light"] {
   --accent-2: #5e6ad2;
   --green: #2f9e6a;
   --red: #d44545;
+  /* 文档警示条沿用琥珀色，但浅底上必须压暗到 AA 以上（原 #d9a02b 仅 2.2:1） */
+  --warning-fg: #7a4f00;
+  --warning-border: #8a5a00;
   --wash: rgba(8, 9, 10, 0.02);
   --banner-bg: rgba(8, 9, 10, 0.024);
   --hover: rgba(8, 9, 10, 0.05);
@@ -2319,16 +2360,16 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 .docs-shell {
-  max-width: 1180px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 40px 24px 88px;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 176px;
+  grid-template-columns: 232px minmax(0, 1fr) 220px;
   grid-template-areas: "side main toc";
-  gap: 36px;
+  gap: 30px;
   align-items: start;
 }
-.docs-shell-index { max-width: 1120px; grid-template-columns: 232px minmax(0, 1fr); grid-template-areas: "side main"; }
+.docs-shell-index { max-width: 1280px; grid-template-columns: 232px minmax(0, 1fr); grid-template-areas: "side main"; }
 .docs-main { grid-area: main; min-width: 0; }
 .docs-side { grid-area: side; display: block; min-width: 0; position: sticky; top: 88px; max-height: calc(100vh - 104px); overflow-y: auto; }
 .docs-side ul { flex-direction: column; gap: 2px; }
@@ -2410,16 +2451,51 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
 .docs-body .docs-callout--tip { border-color: var(--green); }
 .docs-body .docs-callout--tip .docs-callout-title { color: var(--green); }
 .docs-body .docs-callout--important { border-color: var(--accent-2); }
-.docs-body .docs-callout--warning, .docs-body .docs-callout--caution { border-color: #d9a02b; }
+.docs-body .docs-callout--warning, .docs-body .docs-callout--caution { border-color: var(--warning-border); }
 .docs-body .docs-callout--warning .docs-callout-title,
-.docs-body .docs-callout--caution .docs-callout-title { color: #d9a02b; }
+.docs-body .docs-callout--caution .docs-callout-title { color: var(--warning-fg); }
 
 .docs-toc-side { grid-area: toc; position: sticky; top: 88px; padding-top: 4px; max-height: calc(100vh - 104px); overflow-y: auto; }
 .docs-toc-side .docs-group-title { margin-bottom: 10px; }
-.docs-toc-side .docs-toc { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.docs-toc-side a { display: block; font-size: 13px; line-height: 1.5; color: var(--text-2); padding: 2px 0; }
+/* 目录三层：折叠标题是标签（mono 小字），h2 是一级条目（正文字号），h3 是二级（再小一档 + 短横线 + 弱色） */
+.docs-toc-side .docs-disclosure > summary {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+  letter-spacing: 0.08em; color: var(--text-3);
+}
+.docs-toc-side .docs-disclosure[open] > summary { margin-bottom: 8px; }
+.docs-toc-side .docs-toc { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.docs-toc-side a { display: block; font-size: 12.5px; line-height: 1.5; color: var(--text-2); padding: 3px 0; }
+.docs-toc-side .toc-h2 a { font-weight: 500; }
+.docs-toc-side .toc-h3 a {
+  position: relative; padding-inline-start: 18px;
+  font-size: 12px; font-weight: 400; color: var(--text-3);
+}
+.docs-toc-side .toc-h3 a::before {
+  content: ""; position: absolute; inset-inline-start: 6px; top: 50%;
+  width: 5px; height: 1px; background: var(--border-strong);
+}
 .docs-toc-side a:hover { color: var(--text); }
-.docs-toc-side .toc-h3 a { padding-inline-start: 12px; }
+.docs-toc-side .toc-h3 a:hover { color: var(--text-2); }
+.docs-toc-side a.active { color: var(--accent-2); font-weight: 500; }
+
+/* 文档代码块复制按钮：代码块恒为深底，按钮颜色两套主题共用，贴在右上角不随横向滚动移动。 */
+.docs-code-wrap { position: relative; }
+.docs-code-wrap pre { padding-right: 46px; }
+.docs-code-copy {
+  position: absolute; top: 8px; right: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06); color: #b8c0cc;
+  cursor: pointer; opacity: 0.72;
+  transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+}
+.docs-code-wrap:hover .docs-code-copy,
+.docs-code-copy:focus-visible { opacity: 1; color: #f7f8f8; background: rgba(255, 255, 255, 0.13); border-color: rgba(255, 255, 255, 0.22); }
+.docs-code-copy:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.docs-code-copy svg { width: 14px; height: 14px; }
+.docs-code-copy .ico-check, .docs-code-copy.copied .ico-copy { display: none; }
+.docs-code-copy.copied .ico-check { display: block; color: #4cb782; }
 
 .docs-pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 40px; }
 .docs-page-link {
@@ -2434,7 +2510,7 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
 .docs-body .docs-foot { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); }
 
 /* 文档首页（linear.app/docs 式：侧栏 + 卡片）；侧栏分组默认收起，避免与右侧卡片重复成两堵墙。 */
-.docs-index-in { min-width: 0; max-width: 760px; }
+.docs-index-in { min-width: 0; max-width: 860px; }
 .docs-index-head { max-width: 720px; }
 .docs-index-head h1 { margin: 0; font-size: clamp(34px, 4vw, 40px); font-weight: 500; letter-spacing: -0.022em; }
 .docs-index-head .section-sub { max-width: 560px; }
@@ -2684,7 +2760,9 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  /* 头部除展开/关闭外还有注入的提示音、清空按钮：按钮命中区 30px、图标只有 17px，
+     gap 再给 12px，图标之间就空出 ~25px。收到 4px，视觉间距靠按钮自身的透明命中区提供。 */
+  gap: 4px;
   padding: 9px 8px 9px 11px;
   border-block-end: 1px solid var(--hairline);
 }
@@ -3082,9 +3160,33 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .pc-meta-title{font-size:18px;font-weight:600}
 .pc-meta-count{font-size:12px;opacity:.7}
 .pc-sort{display:flex;align-items:center;gap:6px;margin-inline-start:auto;font-size:12px}
-.pc-sort label{opacity:.7}
-.pc-sort select{height:32px;padding:0 8px;border:1px solid var(--pc-line);border-radius:3px;background:var(--pc-card);color:inherit;font:inherit;font-size:12px;cursor:pointer}
-.pc-sort-submit{height:32px;padding:0 10px;border:1px solid var(--pc-accent);border-radius:3px;background:transparent;color:var(--pc-accent);font:inherit;font-size:12px;cursor:pointer}
+/* 排序下拉：原生 <select> 的弹层由操作系统绘制，深色主题下会画成白底方块、
+   高亮用系统蓝，圆角与 hover 色都跟不过来。这里改成 details + radio 的自绘面板：
+   面板样式完全跟随主题，"选中"沿用站点的勾形而不是系统蓝条；无 JS 时
+   <details> 仍能展开、radio 仍能选，旁边的「应用」按钮（noscript）负责提交。 */
+.pc-sort-menu{position:relative}
+.pc-sort-trigger{display:flex;align-items:center;gap:7px;height:32px;padding:0 9px 0 10px;border:1px solid var(--pc-line);border-radius:7px;background:var(--pc-card);color:inherit;font:inherit;font-size:12px;line-height:1;cursor:pointer;list-style:none;user-select:none}
+.pc-sort-trigger::-webkit-details-marker{display:none}
+.pc-sort-trigger:hover{border-color:var(--border-strong)}
+.pc-sort-trigger:focus-visible{outline:2px solid var(--pc-accent);outline-offset:2px}
+.pc-sort-key{opacity:.6}
+.pc-sort-cur{font-weight:500}
+.pc-sort-caret{display:inline-flex;width:13px;height:13px;opacity:.55;transition:transform .15s ease}
+.pc-sort-caret svg{width:13px;height:13px}
+.pc-sort-menu[open] .pc-sort-caret{transform:rotate(180deg)}
+.pc-sort-pop{position:absolute;inset-inline-end:0;inset-block-start:calc(100% + 6px);z-index:30;min-width:190px;padding:4px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);box-shadow:0 18px 44px rgba(0,0,0,.45)}
+/* 每个选项是一个提交按钮：即使脚本没加载，点了也会带 ?sort=... 跳转（隐藏的
+   category/q 跟着一起提交），不依赖 JS 才生效。 */
+.pc-sort-opt{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--text-2);font:inherit;font-size:13px;line-height:1.4;text-align:start;cursor:pointer;appearance:none}
+.pc-sort-opt:hover{background:var(--hover);color:var(--text)}
+.pc-sort-opt:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+.pc-sort-opt::after{content:"";flex:none;width:9px;height:5px;margin-inline-end:2px;border:2px solid currentColor;border-top:0;border-right:0;transform:rotate(-45deg);opacity:0}
+.pc-sort-opt.is-current{color:var(--text);font-weight:500}
+.pc-sort-opt.is-current::after{opacity:1;color:var(--accent-2)}
+/* 原生 <select> 的弹层只能由浏览器画，CSS 无法完全接管；这里把每个 option 的
+   底色与文字显式绑到主题变量，配合 :root 的 color-scheme，任何浏览器都不会
+   回退成"白底 + 继承来的白字"。 */
+select option{background-color:var(--panel-2);color:var(--text)}
 .pc-clear{font-size:12px;color:var(--pc-accent);text-decoration:none}
 .pc-clear:hover{text-decoration:underline}
 .pc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
@@ -3173,9 +3275,11 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .pc-meta-title { font-size: 15px; font-weight: 600; }
 .pc-meta-count { font-size: 13px; color: var(--text-3); opacity: 1; }
 .pc-sort { font-size: 13px; }
-.pc-sort label { color: var(--text-3); opacity: 1; }
-.pc-sort select { height: 32px; border-radius: 7px; border-color: var(--border); background: var(--input-bg); font-size: 13px; }
-.pc-sort-submit { height: 32px; border: 0; border-radius: 999px; background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-size: 13px; font-weight: 500; }
+.pc-sort-key { color: var(--text-3); opacity: 1; }
+.pc-sort-trigger { height: 32px; border-radius: 7px; border-color: var(--border); background: var(--input-bg); font-size: 13px; }
+.pc-sort-pop { border-color: var(--border); }
+/* 亮色底下 45% 的黑影会把面板压得发脏，单独降一档 */
+html[data-scheme="light"] .pc-sort-pop { box-shadow: 0 18px 44px rgba(8, 9, 10, 0.14); }
 .pc-clear { font-size: 13px; color: var(--text-2); }
 .pc-grid { gap: 16px; }
 .pc-card { border-radius: 10px; background: var(--panel); }
@@ -3246,9 +3350,10 @@ html:not([data-scheme="light"]) {
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.12);
   --text: #f7f8f8;
-  --text-2: #8a8f98;
-  --text-3: #62666d;
-  --lead: #b4b8c0;
+  /* 对比度对齐 linear.app 实测：次级 #d0d6e0、最 muted 一档 #8a8f98（底 #08090a 上 ≈5.5:1） */
+  --text-2: #d0d6e0;
+  --text-3: #8a8f98;
+  --lead: #d0d6e0;
   --prose: #c3c7cf;
   --accent: #5e6ad2;
   --accent-2: #8a8ff0;
@@ -3289,8 +3394,8 @@ body { line-height: 1.7; }
 .topnav a { font-size: 14px; color: var(--text-2); }
 .topnav a:hover, .topnav a.active, .topnav a[aria-current="page"] { color: var(--text); }
 
-/* 4. 按钮与分区标题：主按钮保持克制，次级链接用强调色，标题不再过大压版。 */
-.btn { height: 42px; border-radius: var(--radius); font-size: 15px; }
+/* 4. 按钮与分区标题：胶囊形对齐 linear.app 全站口径，次级链接用强调色。 */
+.btn { height: 42px; border-radius: 999px; font-size: 15px; font-weight: 510; }
 .btn-sm { height: 34px; font-size: 13px; }
 .section-head h2, .qs-copy h2, .cta-in h2 { font-size: clamp(28px, 3vw, 42px); }
 .section-sub, .home-head .section-sub { font-size: 16px; line-height: 1.7; color: var(--lead); }
@@ -3373,8 +3478,7 @@ body { line-height: 1.7; }
 .term-badge, .pill, .chip { font-size: 12.5px; color: var(--text-2); }
 .product-specs th, .product-specs td, .docs-table th, .docs-table td { font-size: 14px; color: var(--text-2); }
 
-/* 9. 页脚：链接从几乎看不见的灰提到可读的次级灰。 */
-.site-footer { background: var(--bg-soft); border-top-color: var(--border-strong); }
+/* 9. 页脚：链接从几乎看不见的灰提到可读的次级灰；顶线只用发丝级 --border，深浅两套一致。 */
 .footer-desc, .footer-col a, .footer-bottom, .footer-note, .footer-qr figcaption { color: var(--text-2); }
 .footer-col a { font-size: 13.5px; }
 .footer-col h4 { font-size: 13.5px; }
@@ -3594,6 +3698,11 @@ html[data-scheme="light"] .hp {
 
 .hp .container { max-width: 1240px; }
 
+/* 首页内容容器（1240）比全站 container（1200）宽 40px：顶栏同步放宽对齐，
+   否则宽窗口下品牌块比正文缩进 ~20px。.hp 包不住顶栏（顶栏在 layout 层），
+   所以用 body:has(.hp) 从根上够到 .topbar-in。 */
+body:has(.hp) .topbar-in { max-width: 1240px; }
+
 /* 首页按钮对齐 Linear：小圆角、38-40px，不再用胶囊 */
 .hp .btn {
   height: 40px;
@@ -3612,13 +3721,14 @@ html[data-scheme="light"] .hp {
 
 .hp-h2 {
   margin-top: 14px;
-  font-size: clamp(34px, 4.4vw, 58px);
-  line-height: 1.04;
-  letter-spacing: -0.04em;
-  font-weight: 500;
-  -webkit-text-stroke: 0.2px currentColor;
+  font-size: clamp(30px, 3.2vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -0.022em;
+  font-weight: 510;
   text-wrap: balance;
 }
+/* 双色标题（linear.app 口径）：一句话首行亮白、后续行 muted 灰 */
+.hp-h2 .hp-h2-line.dim { color: var(--text-3); }
 .hp-h2-sm { font-size: clamp(28px, 3.2vw, 44px); }
 
 .hp-lead {
@@ -3660,34 +3770,38 @@ html[data-scheme="light"] .hp-hero-bg {
 .hp-hero-in { position: relative; }
 
 .hp-hero-title {
-  max-width: 18ch;
-  font-size: clamp(44px, 7.4vw, 96px);
-  line-height: 1.02;
-  letter-spacing: -0.045em;
-  font-weight: 500;
-  -webkit-text-stroke: 0.3px currentColor;
+  max-width: 20ch;
+  font-size: clamp(40px, 4.6vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.022em;
+  font-weight: 510;
   text-wrap: balance;
 }
 .hp-title-line { display: inline; }
 
-/* 定位句：紧接着大标题，回答「它是什么、和脚手架有什么不同」。 */
+/* 定位句：紧接着大标题，回答「它是什么、和脚手架有什么不同」。
+   宽度用 em 而不是 ch：中文里 1ch 只有半字宽，36ch 量出来仅 340px，一行只放得下
+   17 个字，句子被切得很碎；30em 约 30 字一行，与下方技术事实同宽，右边界齐。 */
 .hp-hero-lede {
   margin-top: clamp(20px, 2.4vw, 28px);
-  max-width: 34ch;
-  font-size: clamp(19px, 2vw, 26px);
-  line-height: 1.44;
-  letter-spacing: -0.018em;
+  max-width: 30em;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.55;
+  letter-spacing: -0.013em;
   color: var(--text);
-  text-wrap: pretty;
+  /* 中文断行按字数走，pretty 只避免孤字，仍会留「完全归你。」这种三字尾行；
+     balance 让两行长度接近，读起来是一个整句而不是被截断的碎片。 */
+  text-wrap: balance;
 }
 
 /* 技术事实降一级：站点设置里维护的副标题，字号更小、颜色更淡。 */
 .hp-hero-sub {
   margin-top: 16px;
-  max-width: 60ch;
+  max-width: 44em;
   font-size: 15px;
   line-height: 1.72;
   color: var(--text-2);
+  text-wrap: balance;
 }
 
 .hp-hero-actions {
@@ -3850,26 +3964,26 @@ html[data-scheme="light"] .hp .shot-light { display: block; }
   color: var(--text-3);
 }
 
-/* ---- 技术栈横带 ---- */
+/* ---- 规格条：左数字、右技术跑马灯 ---- */
 
 .hp-band {
   overflow: hidden;
-  padding: 24px 0 30px;
   border-block: 1px solid var(--border);
   background: var(--hp-band-bg);
 }
-.hp-band-label {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-3);
+/* 单行布局：数字与跑马灯同高居中，中间一条竖线分栏——不再用横线把带子切成上下两块。 */
+.hp-band-in {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 2.2vw, 26px);
+  min-height: 76px;
 }
+/* 跑马灯只淡出右端 + 左端一小段：左端紧挨分隔线，渐隐太宽会把第一个词吞成半个圆点，
+   完全不渐隐则滚动中会出现「半个词」被硬切。 */
 .hp-marquee {
-  margin-top: 18px;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 3.5%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent 0, #000 3.5%, #000 90%, transparent);
 }
 .hp-marquee-track {
   display: flex;
@@ -3958,15 +4072,15 @@ html[data-scheme="light"] .hp .shot-light { display: block; }
   filter: drop-shadow(0 8px 34px rgba(94, 109, 210, 0.16));
 }
 .hp-principle h3 {
-  font-size: 16.5px;
-  font-weight: 600;
+  font-size: 15.5px;
+  font-weight: 590;
   letter-spacing: -0.01em;
 }
 .hp-principle p {
   margin-top: 10px;
-  max-width: 32ch;
+  max-width: 34ch;
   font-size: 14px;
-  line-height: 1.72;
+  line-height: 1.65;
   color: var(--text-2);
 }
 
@@ -3990,6 +4104,12 @@ html[data-scheme="light"] .hp .shot-light { display: block; }
   align-items: flex-start;
   gap: 24px;
   padding-top: 42px;
+}
+/* 只放一条「全部动态」链接的分区头：贴右上角与 kicker 齐平。
+   否则 420px 的空栏 + 42px 上边距会把链接推到标题腰线上，看着像浮在半空。 */
+.hp-section-aside--action {
+  align-items: flex-end;
+  padding-top: 0;
 }
 .hp-show-shot {
   margin: clamp(34px, 4.5vw, 56px) 0 0;
@@ -4299,7 +4419,11 @@ html[data-scheme="light"] .hp-show-shot {
   align-items: start;
   padding: 24px 0;
   border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s ease;
 }
+/* 行悬停只提一档底色，靠标题下划线与箭头位移表示可点，不再额外加框 */
+.hp-post:hover { background: var(--wash); }
+.hp-post:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .hp-post-date {
   padding-top: 3px;
   font-family: var(--mono);
@@ -4307,12 +4431,14 @@ html[data-scheme="light"] .hp-show-shot {
   color: var(--text-3);
 }
 .hp-post h3 { font-size: 18px; font-weight: 500; line-height: 1.4; letter-spacing: -0.012em; }
+/* 摘要退到 muted 一档：标题 18px/500 + 正文同亮度会让两级糊在一起 */
 .hp-post p {
   margin-top: 6px;
   max-width: 66ch;
   font-size: 14px;
   line-height: 1.7;
-  color: var(--text-2);
+  color: var(--text-3);
+  text-wrap: pretty;
 }
 .hp-post-arrow { padding-top: 2px; color: var(--text-3); transition: transform 0.2s, color 0.2s; }
 .hp-post:hover h3 { text-decoration: underline; text-underline-offset: 4px; }
@@ -4394,6 +4520,8 @@ html[data-scheme="light"] .hp-cta-glow {
   .hp-section-head { grid-template-columns: 1fr; gap: 20px; }
   .hp-show-aside,
   .hp-section-aside { padding-top: 0; }
+  /* 单栏后链接落到标题下方，靠左对齐才和标题、正文同一条轴线 */
+  .hp-section-aside--action { align-items: flex-start; }
   .hp-market { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hp-intg-block,
   .hp-faq-block { grid-template-columns: 1fr; gap: 24px; }
@@ -4517,14 +4645,12 @@ html[data-scheme="light"] .hp-cta-glow {
 }
 
 /* ---- 本轮评审收口：技术横带、文档首页卡片、文档页容器宽度 ---- */
-/* 技术栈横带退成背景信息：14px 次级灰，补足条目让第二遍滚出视口 */
-.hp-band { padding: 18px 0 20px; }
-.hp-marquee { margin-top: 14px; }
+/* 跑马灯退成背景信息：14px 次级灰，不跟数字和正文抢视线 */
 .hp-marquee-list li { padding: 0 clamp(16px, 1.8vw, 26px); font-size: 14px; font-weight: 400; letter-spacing: -0.01em; color: var(--text-3); }
-.hp-marquee-list li + li::before { opacity: 0.5; }
+.hp-marquee-list li + li::before { opacity: 0.7; }
 
 /* 文档首页与文章页用同一个容器宽度，点进去不再左右晃 */
-.docs-shell-index { max-width: 1180px; }
+.docs-shell-index { max-width: 1280px; }
 
 /* 文档首页：分组小标题 + 三列紧凑卡片，替掉通栏大行 */
 .docs-cards { display: block; border-top: 0; margin-top: 28px; }
@@ -4533,7 +4659,7 @@ html[data-scheme="light"] .hp-cta-glow {
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
 }
 .docs-cards-group:first-child { margin-top: 0; }
-.docs-cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.docs-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .docs-card {
   display: flex; flex-direction: column; gap: 7px; min-height: 128px;
   padding: 16px; border: 1px solid var(--border); border-radius: 10px;
@@ -4549,20 +4675,51 @@ html[data-scheme="light"] .hp-cta-glow {
 @media (max-width: 1000px) { .docs-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .docs-cards-grid { grid-template-columns: 1fr; } }
 
-/* 数字条并入技术横带：一条带子里「硬数字 + 技术名」，不再上下叠两层边框。
-   数字行压扁成一行锚点，下面留 1px 分隔再走「技术栈」小标与跑马灯。 */
-.hp-band { padding: 18px 0 20px; }
+/* 规格条内部：数字压成一排小锚点，与右侧跑马灯竖线分栏。
+   原来 4 列各带一条竖线 + 下方一条横线，像一张表格；单行化后只留一处分隔。 */
 .hp-band .hp-facts {
-  margin: 0 0 14px;
-  padding: 0 0 12px;
-  border-top: 0;
-  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  gap: clamp(18px, 2.6vw, 34px);
+  border: 0;
 }
-.hp-band .hp-facts li { padding-block: 4px; }
-.hp-band .hp-facts b { font-size: clamp(22px, 2.2vw, 26px); }
-.hp-band-tech { display: flex; flex-direction: column; gap: 10px; }
-.hp-band .hp-band-label { margin: 0; }
-.hp-band .hp-marquee { margin-top: 0; }
+.hp-band .hp-facts li { padding: 0; border: 0; gap: 8px; }
+.hp-band .hp-facts b { font-size: 20px; letter-spacing: -0.03em; }
+.hp-band .hp-facts span { font-size: 12.5px; white-space: nowrap; }
+.hp-band-tech {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding-inline-start: clamp(16px, 2.2vw, 26px);
+}
+/* 分隔用一小截竖线而不是通栏分栏线：条带本身已有上下两条边框，再来一条满高竖线就成表格了。 */
+.hp-band-tech::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: 1px;
+  height: 26px;
+  background: var(--border-strong);
+  transform: translateY(-50%);
+}
+.hp-band-tech .hp-marquee { flex: 1 1 auto; min-width: 0; }
+/* 窄屏：数字与跑马灯上下堆叠，竖线换成横线 */
+@media (max-width: 900px) {
+  .hp-band-in { flex-direction: column; align-items: stretch; gap: 12px; padding-block: 16px; min-height: 0; }
+  .hp-band .hp-facts { flex-wrap: wrap; gap: 8px 20px; }
+  .hp-band-tech { align-self: auto; padding-inline-start: 0; border-top: 1px solid var(--border); padding-top: 12px; }
+  .hp-band-tech::before { display: none; }
+}
+/* 手机上四个数字两两成对：flex 换行会剩一个孤项挂在第二行，2×2 更整齐 */
+@media (max-width: 640px) {
+  .hp-band .hp-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+}
 
 /* ---- 第二轮视觉收口 ---- */
 

@@ -120,8 +120,10 @@ export function ImageUrlField({
           }}
         />
       </button>
-      {/* 操作按钮与图集/视频块共用 TileActions：悬停聚焦浮出、触屏常显，不再整块盖黑蒙版 */}
+      {/* 操作按钮与图集/视频块共用 TileActions：悬停聚焦浮出、触屏常显，不再整块盖黑蒙版；
+          96px 小图用 compact 档，按钮组不再占满上缘 */}
       <TileActions
+        compact
         actions={[
           { key: 'preview', label: t('common.preview'), icon: <ZoomIn className="size-4" aria-hidden="true" />, onSelect: () => setZoom(true), disabled },
           { key: 'clear', label: t('common.clear'), icon: <Trash2 className="size-4" aria-hidden="true" />, onSelect: () => onChange(''), disabled, destructive: true },

@@ -65,18 +65,28 @@ func productImportColumns() []importspec.Column {
 }
 
 // ImportSources 实现 importspec.Provider：导入中心启动时自动收集，无需第二处接线。
-// 单一源：本站模板（自家列名）。
+// 两个源：产品（本站模板，自家列名）与常见问题。
 func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 	svc := NewService(db)
-	return []importspec.Source{{
-		Name:     SourceProducts,
-		Title:    "产品导入",
-		TitleKey: "website.import_products_title",
-		Columns:  productImportColumns(),
-		Handler: func(ctx context.Context, _ int, row map[string]string) error {
-			return importProductRow(ctx, svc, row)
+	return []importspec.Source{
+		{
+			Name:     SourceProducts,
+			Title:    "产品导入",
+			TitleKey: "website.import_products_title",
+			Columns:  productImportColumns(),
+			Handler: func(ctx context.Context, _ int, row map[string]string) error {
+				return importProductRow(ctx, svc, row)
+			},
 		},
-	}}
+		{
+			Name:    SourceFaqs,
+			Title:   "常见问题导入",
+			Columns: faqImportColumns(),
+			Handler: func(ctx context.Context, _ int, row map[string]string) error {
+				return svc.importFaqRow(ctx, row)
+			},
+		},
+	}
 }
 
 // importProductRow 把导入中心解析好的一行映射成 ProductForm 落库。

@@ -494,7 +494,7 @@ p { margin: 0; }
 @media (max-width: 900px) { .tk-cta-actions { gap: 14px; } .tk-cta-item { border-inline-start: 0; padding-inline-start: 0; } }
 
 /* ---- 页脚 ---- */
-.tk-footer { background: #0a0b0d; color: #9ba0a7; font-size: 11.5px; }
+.tk-footer { background: #0a0b0d; border-top: 1px solid rgba(255, 255, 255, .07); color: #9ba0a7; font-size: 11.5px; }
 .tk-footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1.3fr; gap: 30px; padding-top: 46px; padding-bottom: 34px; }
 .tk-footer-brand .tk-brand-logo { height: 30px; filter: brightness(0) invert(1); }
 .tk-footer-brand p { margin-top: 14px; max-width: 30ch; line-height: 1.65; }
@@ -612,7 +612,7 @@ p { margin: 0; }
 .chat-launcher svg { width: 19px; height: 19px; }
 .chat-panel { width: 380px; max-width: calc(100vw - 32px); height: 560px; max-height: min(78dvh, 660px); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid var(--tk-line, #e3e3de); border-radius: 4px; box-shadow: 0 36px 80px -16px rgba(0, 0, 0, .5); animation: chat-rise .18s cubic-bezier(.16, 1, .3, 1); }
 @keyframes chat-rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
-.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 8px 9px 11px; background: #0d0e10; color: #fff; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 9px 8px 9px 11px; background: #0d0e10; color: #fff; }
 .chat-identity { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .chat-avatar { position: relative; width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; background: #d5232b; color: #fff; }
 .chat-avatar svg { width: 15px; height: 15px; }

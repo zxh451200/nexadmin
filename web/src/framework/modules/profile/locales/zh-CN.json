@@ -96,7 +96,7 @@
     },
     "bindings": {
       "phoneTitle": "手机号",
-      "phoneUnbound": "未绑定手机号，绑定后可使用手机号登录",
+      "phoneHint": "绑定后可使用手机号登录",
       "phoneBound": "已绑定 {{phone}}",
       "bind": "绑定",
       "change": "更换",

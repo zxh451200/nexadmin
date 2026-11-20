@@ -6,7 +6,7 @@
 
   var CSS = [
     '.chat-panel{position:relative}',
-    '.chat-product{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px;border:1px solid rgba(128,128,128,.28);border-radius:4px;background:Canvas;color:CanvasText;font-size:11px}',
+    '.chat-product{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:8px;border:1px solid var(--border-strong);border-radius:4px;background:var(--panel-2);color:var(--text);font-size:11px}',
     '.chat-product[hidden]{display:none}',
     '.chat-product-cover{flex:none;width:38px;height:38px;overflow:hidden;border-radius:3px;background:rgba(128,128,128,.12)}',
     '.chat-product-cover img{width:100%;height:100%;object-fit:cover}',
@@ -53,7 +53,7 @@
     '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-hint{margin-inline-start:0;flex:1 1 auto;min-width:0}',
     '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-send{margin-inline-start:0}',
     '.chat-clear:hover{background:rgba(235,87,87,.14);color:var(--red,#eb5757)}',
-    '.chat-emoji-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:Canvas;color:CanvasText;box-shadow:0 12px 28px rgba(0,0,0,.18)}',
+    '.chat-emoji-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:var(--panel-2);color:var(--text);box-shadow:0 12px 28px rgba(0,0,0,.18)}',
     '.chat-emoji-pop[hidden]{display:none}',
     '.chat-emoji-pop{inset-inline-start:8px;inset-block-end:96px;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:2px;box-sizing:border-box;width:min(304px,calc(100% - 16px));max-height:216px;overflow-y:auto;padding:8px}',
     // content-visibility：176 个 emoji 首开时光栅化全部字形，弱机/高负载下点开有可感知的停顿；
@@ -73,15 +73,15 @@
     '.chat-meta-sep{opacity:.6}',
     // 翻译设置弹层：对齐阿里聊天窗口的「翻译设置」——收到/发送两组开关各带语言选择。
     // 位置挂在头部下沿（--chat-head-h 由脚本实时量），配色沿用 Canvas/currentColor。
-    '.chat-settings-pop{position:absolute;z-index:22;inset-inline-end:10px;inset-block-start:calc(var(--chat-head-h,86px) + 4px);box-sizing:border-box;width:min(320px,calc(100% - 16px));padding:14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
+    '.chat-settings-pop{position:absolute;z-index:22;inset-inline-end:10px;inset-block-start:calc(var(--chat-head-h,86px) + 4px);box-sizing:border-box;width:min(320px,calc(100% - 16px));padding:14px;border:1px solid var(--border-strong);border-radius:8px;background:var(--panel-2);color:var(--text);box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-settings-pop[hidden]{display:none}',
     '.chat-settings-pop h3{margin:0 0 10px;font-size:13.5px;font-weight:600}',
     '.chat-settings-row{display:flex;align-items:center;justify-content:space-between;gap:8px}',
     '.chat-settings-row strong{font-size:12.5px;font-weight:600}',
     // 开关用原生 checkbox 拟态：键盘可达，无需脚本画状态；选中色随主题变量
     '.chat-switch{position:relative;width:36px;height:20px;flex:none;appearance:none;-webkit-appearance:none;margin:0;border:1px solid rgba(128,128,128,.4);border-radius:10px;background:rgba(128,128,128,.22);cursor:pointer;transition:background .15s ease,border-color .15s ease}',
-    '.chat-switch::after{content:"";position:absolute;top:2px;inset-inline-start:2px;width:14px;height:14px;border-radius:50%;background:Canvas;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:inset-inline-start .15s ease}',
-    '.chat-switch:checked{background:var(--pc-accent,CanvasText);border-color:transparent}',
+    '.chat-switch::after{content:"";position:absolute;top:2px;inset-inline-start:2px;width:14px;height:14px;border-radius:50%;background:var(--panel-2);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:inset-inline-start .15s ease}',
+    '.chat-switch:checked{background:var(--pc-accent,var(--text));border-color:transparent}',
     '.chat-switch:checked::after{inset-inline-start:18px}',
     '.chat-settings-fields{display:flex;align-items:center;gap:8px;margin:9px 0 2px}',
     '.chat-settings-fields span{flex:none;opacity:.72}',
@@ -93,7 +93,7 @@
     '.chat-settings-actions{display:flex;justify-content:flex-end;margin-top:2px}',
     '.chat-settings-actions button{height:32px;padding:0 14px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
     '.chat-settings-actions button:hover{border-color:currentColor}',
-    '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
+    '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,var(--text));color:var(--panel-2);font-weight:600}',
     '.chat-settings-actions .is-primary:hover{filter:brightness(1.08);border-color:transparent}',
     // 翻译快捷浮层（工具栏文A 按钮）：立即翻译主按钮 + 两个自动翻译开关行 + 设置入口。
     // 贴着工具栏弹出（与表情、地址卡同位置）：原来从头部下方展开，离触发按钮半屏远，
@@ -102,7 +102,7 @@
     '.chat-settings-pop:focus{outline:none}',
     '.chat-tr-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}',
     '.chat-tr-head h3{margin:0;font-size:12.5px}',
-    '.chat-tr-now{box-sizing:border-box;width:100%;height:32px;margin-bottom:4px;border:1px solid transparent;border-radius:4px;background:var(--pc-accent,CanvasText);color:Canvas;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}',
+    '.chat-tr-now{box-sizing:border-box;width:100%;height:32px;margin-bottom:4px;border:1px solid transparent;border-radius:4px;background:var(--pc-accent,var(--text));color:var(--panel-2);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}',
     '.chat-tr-now:hover{filter:brightness(1.08)}',
     '.chat-tr-now[disabled]{opacity:.5;cursor:default;filter:none}',
     '.chat-tr-row{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:12px;cursor:pointer}',
@@ -115,7 +115,7 @@
     '.chat-tr-msg{margin:6px 2px 2px;font-size:11.5px;line-height:1.5;color:inherit;opacity:.7}',
     '.chat-tr-msg.is-err{color:var(--red,#eb5757);opacity:1}',
     '.chat-compose textarea{resize:vertical;max-height:220px}',
-    '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(324px,calc(100% - 16px));padding:16px 16px 14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
+    '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(324px,calc(100% - 16px));padding:16px 16px 14px;border:1px solid var(--border-strong);border-radius:8px;background:var(--panel-2);color:var(--text);box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-card-pop[hidden]{display:none}',
     // 展开面板（760px）里的地址卡放大一档：380px 收起面板装不下大表单，
     // 打开卡片时 JS 会先把面板切到展开态，这里给足字号和控件尺寸的对齐增量。
@@ -159,7 +159,7 @@
     // 主按钮做反色实心：原来主次都只有一圈边框，只靠字重区分，一眼看不出该点哪个。
     // 注意不能写 background:currentColor 再改 color —— 同一规则里 color 先落值，
     // currentColor 会跟着变成 Canvas，按钮就白底白字消失了；用 CanvasText 显式取反色。
-    '.chat-card-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
+    '.chat-card-actions .is-primary{border-color:transparent;background:var(--pc-accent,var(--text));color:var(--panel-2);font-weight:600}',
     '.chat-card-actions .is-primary:hover{filter:brightness(1.08)}',
     // 地址卡片的国家/州省下拉：触发钮长得和输入框一致，展开层浮在表单上面；
     // 跟 .chat-card-pop 一样用 Canvas/currentColor，浅深主题都不用另配色。
@@ -172,7 +172,7 @@
     '.chat-card-trig-txt.is-ph{opacity:.5}',
     '.chat-card-trig-chev{flex:none;display:inline-flex;color:inherit;opacity:.55}',
     '.chat-card-trig-chev svg{width:14px;height:14px}',
-    '.chat-card-drop{position:absolute;z-index:26;top:100%;inset-inline:0;margin-top:4px;border:1px solid rgba(128,128,128,.34);border-radius:6px;background:Canvas;color:CanvasText;box-shadow:0 10px 26px rgba(0,0,0,.2);overflow:hidden}',
+    '.chat-card-drop{position:absolute;z-index:26;top:100%;inset-inline:0;margin-top:4px;border:1px solid rgba(128,128,128,.34);border-radius:6px;background:var(--panel-2);color:var(--text);box-shadow:0 10px 26px rgba(0,0,0,.2);overflow:hidden}',
     '.chat-card-drop[hidden]{display:none}',
     '.chat-card-search{box-sizing:border-box;width:100%;height:28px;padding:0 9px;border:0;border-block-end:1px solid rgba(128,128,128,.24);background:transparent;color:inherit;font:inherit;font-size:12px}',
     '.chat-card-search:focus{outline:none;background:rgba(128,128,128,.05)}',
@@ -197,6 +197,13 @@
     '.chat-phone-dial{flex:none;padding-inline-end:7px;margin-inline-end:7px;border-inline-end:1px solid rgba(128,128,128,.3);font-size:12px;opacity:.72}',
     '.chat-phone-dial[hidden]{display:none}',
     '.chat-bubble-card{white-space:pre-wrap;border-inline-start:0;padding-inline-start:0;font-size:11.5px;line-height:1.6}',
+    // 商品咨询卡片：标签/标题/参数行/链接分层，替代「一坨纯文本挤在气泡里」的旧观感
+    '.chat-msg-card-label{display:block;font-size:10px;letter-spacing:.05em;opacity:.72}',
+    '.chat-msg-card-title{display:block;font-size:13px;font-weight:600;line-height:1.5}',
+    '.chat-msg-card-line{display:block;font-size:11.5px;line-height:1.65;opacity:.85}',
+    '.chat-msg-card-link{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;text-decoration:underline;text-underline-offset:2px}',
+    // 纯文本气泡里的裸链接：与气泡文字同色加下划线，可点
+    '.chat-bubble a{color:inherit;text-decoration:underline;text-underline-offset:2px}',
     '.chat.is-expanded .chat-panel{width:min(760px,calc(100vw - 40px));max-width:calc(100vw - 40px);height:min(86dvh,840px);max-height:86dvh}',
     '.chat-panel{transition:width .2s ease,height .2s ease}',
     '@media(max-width:760px){.chat.is-expanded .chat-panel{width:calc(100vw - 16px);max-width:calc(100vw - 16px);height:min(88dvh,760px)}}',
@@ -423,6 +430,8 @@
     // 把气泡换成译文并记录原文：手动按钮负责「查看原文 ↔ 译文」来回切。
     function markTranslated(bubble, btn, source, translated, to) {
       bubble.textContent = translated;
+      // 译文整体覆盖会连带清掉 linkify 出来的链接，译文里也可能有 URL，补一轮
+      linkifyBubble(bubble);
       btn.setAttribute('data-src', source);
       btn.setAttribute('data-tr-to', to || curInTo());
       btn.textContent = t('chatTranslateOriginal', '查看原文');
@@ -480,12 +489,101 @@
       }
       next();
     }
+    // ---- 气泡内容增强：结构化消息卡片化 + 裸 URL linkify ----
+    // 商品咨询消息（[标签] + 参数行 + URL 行，可能带用户补充话术）整条换成卡片；
+    // 其余「[标签] + 多行」沿用左侧描边的卡片感；纯文本气泡里的 URL 转成可点链接。
+    // 只动文本节点、不碰已有链接/附件/来源，天然幂等（decorateMessages 会被 observer 反复调）。
+    var URL_RE = /https?:\/\/[^\s"<>]+/g;
+    var URL_HAS = /https?:\/\//;
+    var URL_TRAIL = /[)\]}.,;:、。！？!?'\"”』»]+$/;
+    function linkifyBubble(bubble) {
+      var nodes = [];
+      (function walk(n) {
+        Array.prototype.forEach.call(n.childNodes, function (c) {
+          if (c.nodeType === 3) {
+            if (URL_HAS.test(c.nodeValue)) nodes.push(c);
+          } else if (c.nodeType === 1 && !c.closest('a')) {
+            walk(c);
+          }
+        });
+      })(bubble);
+      Array.prototype.forEach.call(nodes, function (node) {
+        var text = node.nodeValue;
+        var frag = document.createDocumentFragment();
+        var last = 0;
+        URL_RE.lastIndex = 0;
+        var m;
+        while ((m = URL_RE.exec(text))) {
+          var url = m[0];
+          var trail = '';
+          var tm = url.match(URL_TRAIL);
+          if (tm) {
+            trail = tm[0];
+            url = url.slice(0, url.length - trail.length);
+          }
+          if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+          var a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noreferrer';
+          a.textContent = url;
+          a.title = url;
+          frag.appendChild(a);
+          if (trail) frag.appendChild(document.createTextNode(trail));
+          last = m.index + m[0].length;
+        }
+        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+        node.parentNode.replaceChild(frag, node);
+      });
+    }
+    // 商品咨询卡片：URL 行之外的行按「首行=标题、其余=参数/话术」分层；链接行截断显示、整条可点
+    function buildProductCard(bubble, label, lines, urlIdx) {
+      bubble.textContent = '';
+      bubble.setAttribute('data-card-done', '1');
+      var line = function (cls, text) {
+        var s = document.createElement('span');
+        s.className = cls;
+        s.textContent = text;
+        return s;
+      };
+      bubble.appendChild(line('chat-msg-card-label', label));
+      var body = [];
+      Array.prototype.forEach.call(lines, function (l, i) {
+        if (i !== urlIdx && l.trim() !== '') body.push(l.trim());
+      });
+      if (body.length) bubble.appendChild(line('chat-msg-card-title', body[0]));
+      for (var i = 1; i < body.length; i++) bubble.appendChild(line('chat-msg-card-line', body[i]));
+      var url = lines[urlIdx].trim();
+      var a = document.createElement('a');
+      a.className = 'chat-msg-card-link';
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      a.textContent = url;
+      a.title = url;
+      bubble.appendChild(a);
+    }
     function decorateMessages() {
       if (!log) return;
-      // 商品 / 名牌 / 地址这类结构化消息是多行文本，给气泡加一点卡片感
       Array.prototype.forEach.call(log.querySelectorAll('.chat-bubble'), function (b) {
+        if (b.hasAttribute('data-card-done')) return;
+        if (b.querySelector('.chat-image, .chat-file, .chat-sources, a')) return;
         var txt = String(b.textContent || '').trim();
-        if (/^\[[^\]]+\]/.test(txt) && txt.indexOf('\n') > 0) b.classList.add('chat-bubble-card');
+        if (!txt) return;
+        var m = txt.match(/^\[([^\]]+)\]\s*([\s\S]+)$/);
+        if (m && txt.indexOf('\n') > 0) {
+          var lines = m[2].split('\n');
+          var urlIdx = -1;
+          for (var i = 0; i < lines.length; i++) {
+            if (/^https?:\/\/\S+$/.test(lines[i].trim())) { urlIdx = i; break; }
+          }
+          if (urlIdx >= 0) {
+            buildProductCard(b, m[1], lines, urlIdx);
+            return;
+          }
+          b.classList.add('chat-bubble-card');
+        }
+        linkifyBubble(b);
       });
       var rows = log.querySelectorAll('.chat-msg[data-from="agent"]');
       Array.prototype.forEach.call(rows, function (row) {

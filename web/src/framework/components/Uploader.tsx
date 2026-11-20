@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { ImagePlus, Upload, VideoIcon } from 'lucide-react'
+import { Camera, ImagePlus, Images, Upload, UserRound, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,9 @@ import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { captureVideoPoster } from '@/framework/upload/videoPoster'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
 import type { UploadedFile, UploadKind, UploadVisibility } from '@/framework/upload/types'
+import { FilePickerDialog, PickFromLibraryButton, toUploadedFile } from './FilePickerDialog'
+import type { FileItem } from '@/framework/modules/file/api'
+
 
 export type { UploadedFile } from '@/framework/upload/types'
 
@@ -33,11 +36,20 @@ export interface UploaderProps {
   className?: string
   /** 开启后监听剪贴板粘贴（Ctrl+V 直接把截图/复制的文件加入上传）；默认关，避免多实例互相劫持 */
   enablePaste?: boolean
-  /** 渲染在上传按钮右侧的附加入口（如「从文件库选择」）；上限已满/译文态时随入口行一起置灰 */
+  /** 渲染在上传按钮右侧的附加入口；上限已满/译文态时随入口行一起置灰 */
   entryExtra?: React.ReactNode
   /** 入口行输入框不设宽度上限：默认 sm:max-w-sm 让宽屏下的地址框不至于长到离谱，
    *  但和上方同为 URL 字段的行并排时会短一截、右端还空一块，这种表单里传 true 让整行吃满 */
   entryFluid?: boolean
+  /** avatar：头像形态——圆形预览 + 上传/更换/移除按钮，无地址导入行与缩略图列表（裁剪管线同 default） */
+  variant?: 'default' | 'avatar'
+  /** avatar 形态的标题/说明；不传时用 uploader 通用文案 */
+  avatarLabel?: React.ReactNode
+  avatarHint?: React.ReactNode
+  /** 内建「从文件库选择」入口：image 形态默认开启（全站图片入口统一，头像/用户表单/商品图集不再各自接线），
+   *  file/video 形态默认关（附件库选择由调用方按需接 entryExtra）；自带选择流的入口（富文本 MediaDialog、
+   *  文件库自身的 UploadDialog）传 false 关掉，避免双按钮。 */
+  pickFromLibrary?: boolean
 }
 
 const NO_CROP_TYPES = ['image/gif', 'image/svg+xml']
@@ -49,7 +61,7 @@ const MIME_BY_EXT: Record<string, string> = {
   pdf: 'application/pdf', zip: 'application/zip',
 }
 
-export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste, entryExtra, entryFluid }: UploaderProps) {
+export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste, entryExtra, entryFluid, variant = 'default', avatarLabel, avatarHint, pickFromLibrary: pickFromLibraryOpt }: UploaderProps) {
   const { t } = useTranslation()
   const { data: cfg } = useUploadConfig()
   const limit = maxCount ?? (multiple ? 9 : 1)
@@ -64,6 +76,35 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   valueRef.current = value
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  // 内建「从文件库选择」：image 形态默认开启，自带选择流的调用方传 false 关掉
+  const withLibrary = pickFromLibraryOpt ?? kind === 'image'
+  const [pickOpen, setPickOpen] = useState(false)
+  // 库里的文件是终态（不经裁剪/截帧管线）：按 url 映射成通用值回填——单图替换、多图追加去重
+  const onLibraryPick = (urls: string[], items: FileItem[]) => {
+    const picked: UploadedFile[] = urls.map((u) => {
+      const it = items.find((f) => f.url === u)
+      return it
+        ? toUploadedFile(it)
+        : { id: u, url: u, name: decodeURIComponent(u.split('/').pop() ?? u), size: 0, type: 'image/*' }
+    })
+    if (multiple) {
+      const known = new Set(valueRef.current.map((f) => f.url))
+      onChangeRef.current([...valueRef.current, ...picked.filter((f) => !known.has(f.url))].slice(0, limit))
+    } else {
+      onChangeRef.current(picked.slice(-1))
+    }
+  }
+  const libraryDialog = withLibrary ? (
+    <FilePickerDialog
+      open={pickOpen}
+      onOpenChange={setPickOpen}
+      kind={kind}
+      multiple={multiple}
+      value={value.map((f) => f.url)}
+      onConfirm={onLibraryPick}
+      disabled={disabled}
+    />
+  ) : null
   /** 地址导入：粘贴外链 URL 回车，登记进媒体库后加入列表（外链文件不经裁剪/截帧管线） */
   const [urlText, setUrlText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -246,6 +287,122 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
     }
   }
 
+  // 头像形态：圆形预览（带相机角标、点击即选图）+ 右侧标题/说明/操作；
+  // 单图、无地址导入行与缩略图列表；裁剪与上传管线与 default 完全同一套（裁剪对话框、WebP 副本、precheck）。
+  if (variant === 'avatar') {
+    const cur = value[0] ?? null
+    const uploading = pending[0] ?? null
+    const previewUrl = uploading?.previewUrl ?? cur?.url ?? ''
+    const actionLabel = cur ? t('common.replace') : t('common.upload')
+    const pick = () => {
+      if (disabled || uploading) return
+      if (cur) {
+        replaceId.current = cur.id
+        replaceRef.current?.click()
+      } else {
+        addRef.current?.click()
+      }
+    }
+    return (
+      <div
+        className={cn(
+          'w-full rounded-xl border border-border/70 bg-muted/30 p-4',
+          className,
+          dragOver && 'outline-2 outline-dashed outline-primary outline-offset-2',
+        )}
+        onDragOver={(e) => {
+          if (disabled) return
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false)
+        }}
+        onDrop={onDropFiles}
+      >
+        <div className="flex flex-col gap-4 text-center sm:flex-row sm:items-center sm:text-left">
+          <button
+            type="button"
+            className="group relative mx-auto size-[72px] shrink-0 rounded-full ring-1 ring-border ring-offset-2 ring-offset-background sm:mx-0"
+            onClick={pick}
+            aria-label={actionLabel}
+          >
+            <span className="relative block size-full overflow-hidden rounded-full bg-background">
+              {previewUrl ? (
+                <img src={previewUrl} alt="" className="size-full object-cover" />
+              ) : (
+                <span className="grid size-full place-items-center">
+                  <UserRound className="size-7 text-muted-foreground/70" aria-hidden="true" />
+                </span>
+              )}
+              {uploading ? (
+                <span className="absolute inset-0 grid place-items-center bg-foreground/60 text-xs font-medium text-background num">
+                  {Math.round((uploading.progress ?? 0) * 100)}%
+                </span>
+              ) : null}
+            </span>
+            {uploading ? null : (
+              <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
+                <Camera className="size-3.5" aria-hidden="true" />
+              </span>
+            )}
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">{avatarLabel ?? t('uploader.avatarTitle')}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{avatarHint ?? t('uploader.avatarHint')}</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
+              <Button type="button" variant="outline" size="sm" className="h-8" disabled={disabled || !!uploading} onClick={pick}>
+                <AddIcon className="size-4" aria-hidden="true" />
+                {actionLabel}
+              </Button>
+              {withLibrary ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2.5"
+                  disabled={disabled || !!uploading}
+                  onClick={() => setPickOpen(true)}
+                >
+                  <Images className="size-4" aria-hidden="true" />
+                  {t('uploader.pickFromLibrary')}
+                </Button>
+              ) : null}
+              {cur && !uploading ? (
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2.5 text-destructive hover:text-destructive" onClick={() => onChange([])}>
+                  {t('common.remove')}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <input ref={addRef} type="file" hidden accept={accepts} onChange={(e) => onPick(e)} />
+        <input
+          ref={replaceRef}
+          type="file"
+          hidden
+          accept={accepts}
+          onChange={(e) => {
+            const rid = replaceId.current
+            replaceId.current = undefined
+            onPick(e, rid)
+          }}
+        />
+        {libraryDialog}
+        <ImageCropDialog
+          open={!!curCrop}
+          file={curCrop}
+          crop={crop ?? 'free'}
+          onCancel={() => setCropQueue((q) => q.slice(1))}
+          onConfirm={(f) => {
+            setCropQueue((q) => q.slice(1))
+            start(f, cropReplaceId.current)
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn('w-full', className, dragOver && 'rounded-md outline-2 outline-dashed outline-primary outline-offset-4')}
@@ -289,6 +446,9 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
           <AddIcon className="size-4" aria-hidden="true" />
           {t('common.upload')}
         </Button>
+        {withLibrary ? (
+          <PickFromLibraryButton onClick={() => setPickOpen(true)} disabled={disabled || !canAdd} />
+        ) : null}
         {entryExtra}
       </div>
 
@@ -338,6 +498,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
         }}
       />
 
+      {libraryDialog}
       <ImageCropDialog
         open={!!curCrop}
         file={curCrop}

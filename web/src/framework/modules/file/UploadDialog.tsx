@@ -126,7 +126,7 @@ export function UploadDialog({ open, onOpenChange, defaultGroupId }: Props) {
             </Select>
           </div>
         </div>
-        <Uploader key={kind} kind={kind} multiple maxCount={20} visibility={visibility} value={files} onChange={setFiles} enablePaste />
+        <Uploader key={kind} kind={kind} pickFromLibrary={false} multiple maxCount={20} visibility={visibility} value={files} onChange={setFiles} enablePaste />
       </div>
     </ResponsiveDialog>
   )

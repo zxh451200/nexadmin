@@ -174,6 +174,9 @@ func productJSONLD(v *siteView, p *Product) template.JS {
 // xmlEscape 是 RSS 文本的最小转义：正文里的 & < > ' " 都会破坏 XML 结构。
 var rssEsc = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;")
 
+// rssPlain 把摘要里的 markdown 反引号去掉：摘要是纯文本，读 feed 时看到 `code` 的反引号很毛糙。
+func rssPlain(s string) string { return strings.ReplaceAll(s, "`", "") }
+
 // GET /rss.xml —— 新闻订阅源（官网默认语言最近 20 篇）；蜘蛛与订阅器借此发现内容更新。
 func (h *siteHandler) rss(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -193,22 +196,35 @@ func (h *siteHandler) rss(c *gin.Context) {
 	if siteName == "" {
 		siteName = "NexAdmin"
 	}
+	// lastBuildDate 反映内容实际变更：优先取最新文章的发布时间，其次站点设置更新时间。
+	// 不能每次请求取 time.Now()——内容没动时间戳却变，订阅器会误判 feed 有更新。
+	build := set.UpdatedAt
+	for _, p := range posts {
+		if p.PublishedAt != nil && p.PublishedAt.After(build) {
+			build = *p.PublishedAt
+		}
+	}
+	if build.IsZero() {
+		build = time.Now()
+	}
+	stamp := build.Format(time.RFC1123Z)
+	selfLink := base + "/rss.xml"
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
-	fmt.Fprintf(&b, `<rss version="2.0"><channel><title>%s</title><link>%s/</link><description>%s</description><language>%s</language><lastBuildDate>%s</lastBuildDate><generator>NexAdmin</generator>`+"\n",
-		rssEsc.Replace(siteName), base, rssEsc.Replace(set.SiteDesc), lang.Code, time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(&b, `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>%s</title><link>%s/</link><description>%s</description><language>%s</language><atom:link href="%s" rel="self" type="application/rss+xml"/><pubDate>%s</pubDate><lastBuildDate>%s</lastBuildDate><generator>NexAdmin</generator>`+"\n",
+		rssEsc.Replace(siteName), base, rssEsc.Replace(set.SiteDesc), lang.Code, selfLink, stamp, stamp)
 	for _, p := range posts {
 		desc := p.Summary
 		if desc == "" {
 			desc = summaryFromHTML(p.Content, 300)
 		}
 		link := base + lang.Path("/news/"+p.Slug)
-		pub := time.Now()
+		pub := p.UpdatedAt
 		if p.PublishedAt != nil {
 			pub = *p.PublishedAt
 		}
 		fmt.Fprintf(&b, "<item><title>%s</title><link>%s</link><guid isPermaLink=\"true\">%s</guid><pubDate>%s</pubDate><description>%s</description></item>\n",
-			rssEsc.Replace(p.Title), link, link, pub.Format(time.RFC1123Z), rssEsc.Replace(desc))
+			rssEsc.Replace(p.Title), link, link, pub.Format(time.RFC1123Z), rssEsc.Replace(rssPlain(desc)))
 	}
 	b.WriteString(`</channel></rss>`)
 	c.Header("Cache-Control", "public, max-age=3600")

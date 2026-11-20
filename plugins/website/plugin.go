@@ -105,6 +105,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/faqs", core.Perm("website:faq"), core.Desc("常见问题列表"), h.listFaqs)
 	g.POST("/faqs/export-async", core.Perm("website:faq"), core.Desc("提交常见问题异步导出任务"), h.FaqExportAsync)
 	g.POST("/faqs", core.Perm("website:faq"), core.Desc("新增常见问题"), h.createFaq)
+	g.PUT("/faqs/reorder", core.Perm("website:faq"), core.Desc("常见问题拖拽排序"), h.reorderFaqs)
 	g.DELETE("/faqs", core.Perm("website:faq"), core.Desc("批量删除常见问题"), h.deleteFaqs)
 	g.PUT("/faqs/:id", core.Perm("website:faq"), core.Desc("更新常见问题"), h.updateFaq)
 	g.DELETE("/faqs/:id", core.Perm("website:faq"), core.Desc("删除常见问题"), h.deleteFaq)

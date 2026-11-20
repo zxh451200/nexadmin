@@ -61,8 +61,9 @@ export function VideoUrlField({
           className="size-24 rounded-md border border-border bg-muted/40 object-cover"
         />
       </button>
-      {/* 与封面图、图集同款浮层（TileActions）：预览 + 清除都落在图块右上角 */}
+      {/* 与封面图、图集同款浮层（TileActions）：预览 + 清除都落在图块右上角；96px 小图用 compact 档 */}
       <TileActions
+        compact
         actions={[
           { key: 'preview', label: t('common.preview'), icon: <Play className="size-4" aria-hidden="true" />, onSelect: () => setZoom(true), disabled },
           { key: 'clear', label: t('common.clear'), icon: <Trash2 className="size-4" aria-hidden="true" />, onSelect: () => onChange(''), disabled, destructive: true },

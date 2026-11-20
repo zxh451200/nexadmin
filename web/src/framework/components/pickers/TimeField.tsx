@@ -85,7 +85,8 @@ export function TimeField({ value, onChange, disabled, className }: TimeFieldPro
         <PopoverTrigger asChild>
           <TimeTrigger label={t('picker.hour')} text={hh} open={hourOpen} disabled={disabled} />
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-1">
+        {/* portal=false：本组件总在日期弹层内嵌套使用，portal 到 body 会被外层判 outside 而整体关闭 */}
+        <PopoverContent portal={false} align="start" className="w-auto p-1">
           <TimeGrid
             values={HOURS}
             current={hh}
@@ -104,7 +105,7 @@ export function TimeField({ value, onChange, disabled, className }: TimeFieldPro
         <PopoverTrigger asChild>
           <TimeTrigger label={t('picker.minute')} text={mm} open={minuteOpen} disabled={disabled} />
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-1">
+        <PopoverContent portal={false} align="start" className="w-auto p-1">
           <TimeGrid
             values={MINUTES}
             current={mm}

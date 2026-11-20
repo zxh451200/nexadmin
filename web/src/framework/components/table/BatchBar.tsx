@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { usePageActive } from '@/framework/hooks/use-page-active'
 import { Button } from '@/framework/ui/button'
 
 /**
@@ -27,6 +28,7 @@ export function BatchBar({
   mode?: 'viewport' | 'sticky' | 'absolute'
 }) {
   const { t } = useTranslation()
+  const pageActive = usePageActive()
   const bar = (
     <div
       className={cn(
@@ -51,5 +53,10 @@ export function BatchBar({
       </div>
     </div>
   )
+  // keep-alive 的非激活页签整树 display:none，但 viewport 模式 portal 到 body，hidden 罩不住它——
+  // 切到别的标签页批量栏还悬在新页面上（系统设置页底部挂着文件管理的批量栏，实见过）。
+  // 非激活时直接不渲染；勾选状态在宿主表格里，切回来原样恢复。
+  // sticky/absolute 渲染在隐藏树内，display:none 本就罩得住，不用管。
+  if (mode === 'viewport' && !pageActive) return null
   return mode === 'viewport' ? createPortal(bar, document.body) : bar
 }

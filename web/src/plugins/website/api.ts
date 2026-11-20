@@ -682,6 +682,18 @@ export function useDeleteFaq() {
   })
 }
 
+/** FAQ 导入源标识（通用导入中心，与 PRODUCT_IMPORT_SOURCE 同一注册机制）。 */
+export const FAQ_IMPORT_SOURCE = 'website_faqs'
+
+/** 拖拽排序：ids 按目标顺序排列，服务端写回 sort（=序号×10）。失败抛错，表格自行回滚。 */
+export function useReorderFaqs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.put<null>(`${BASE}/faqs/reorder`, { ids }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'faqs'] }),
+  })
+}
+
 export function useFeatures() {
   return useQuery({
     queryKey: [...KEY, 'features'],

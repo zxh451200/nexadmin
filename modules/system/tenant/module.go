@@ -63,10 +63,41 @@ func menuSeedIDs(count int) IDList {
 	return out
 }
 
-// Seed 幂等种入出厂套餐：按名称判断，已存在一律不动。演示租户由 SeedDemo 负责。
+// Seed 初始化向导时种入出厂套餐（setup.Seeder）；每次启动的补缺由 SeedOnStartup 负责。
 func (module) Seed(db *gorm.DB) error {
+	return seedPackages(db)
+}
+
+// SeedOnStartup 每次启动补缺失的出厂套餐，并把早期种子的双语名就地改名
+// （setup.StartupSeeder）：套餐名是数据不是 UI 文案，早期带英文后缀（基础版 Basic…）
+// 在中文产品里两套语言混在一行既难看也难检索。改名按旧名匹配，存量库不产生重复。
+func (module) SeedOnStartup(db *gorm.DB) error {
+	return seedPackages(db)
+}
+
+func seedPackages(db *gorm.DB) error {
 	now := time.Now().UTC()
 	day := 24 * time.Hour
+
+	legacyNames := map[string]string{
+		"体验版 Trial":        "体验版",
+		"基础版 Basic":        "基础版",
+		"标准版 Standard":     "标准版",
+		"专业版 Professional": "专业版",
+		"企业版 Enterprise":   "企业版",
+		"旗舰版 Ultimate":     "旗舰版",
+		"教育版 Education":    "教育版",
+		"非营利 NGO":         "非营利版",
+		"合作伙伴 Partner":     "合作伙伴",
+		"定制版 Custom":       "定制版",
+		"旧版 Legacy 2024":   "旧版2024",
+		"内测版 Beta":         "内测版",
+	}
+	for old, new := range legacyNames {
+		if err := db.Model(&Package{}).Where("name = ?", old).Update("name", new).Error; err != nil {
+			return err
+		}
+	}
 
 	pkgs := []struct {
 		n            int
@@ -76,18 +107,18 @@ func (module) Seed(db *gorm.DB) error {
 		status       string
 		remark       string
 	}{
-		{1, "体验版 Trial", 2, 5, 512, "1", "14 天试用，功能受限"},
-		{2, "基础版 Basic", 3, 20, 2048, "1", "小团队入门"},
-		{3, "标准版 Standard", 4, 50, 10240, "1", ""},
-		{4, "专业版 Professional", 5, 200, 51200, "1", "含全部系统管理功能"},
-		{5, "企业版 Enterprise", 6, 1000, 204800, "1", "含全部功能与优先支持"},
-		{6, "旗舰版 Ultimate", 6, 0, 0, "1", "用户数与存储不限"},
-		{7, "教育版 Education", 4, 500, 20480, "1", "面向学校与培训机构"},
-		{8, "非营利 NGO", 3, 30, 5120, "1", ""},
-		{9, "合作伙伴 Partner", 5, 100, 30720, "1", "渠道合作伙伴专用"},
-		{10, "定制版 Custom", 6, 300, 102400, "1", "按合同单独配置"},
-		{11, "旧版 Legacy 2024", 3, 10, 1024, "0", "已下架，仅存量租户使用"},
-		{12, "内测版 Beta", 4, 15, 2048, "0", "内部测试"},
+		{1, "体验版", 2, 5, 512, "1", "14 天试用，功能受限"},
+		{2, "基础版", 3, 20, 2048, "1", "小团队入门"},
+		{3, "标准版", 4, 50, 10240, "1", ""},
+		{4, "专业版", 5, 200, 51200, "1", "含全部系统管理功能"},
+		{5, "企业版", 6, 1000, 204800, "1", "含全部功能与优先支持"},
+		{6, "旗舰版", 6, 0, 0, "1", "用户数与存储不限"},
+		{7, "教育版", 4, 500, 20480, "1", "面向学校与培训机构"},
+		{8, "非营利版", 3, 30, 5120, "1", ""},
+		{9, "合作伙伴", 5, 100, 30720, "1", "渠道合作伙伴专用"},
+		{10, "定制版", 6, 300, 102400, "1", "按合同单独配置"},
+		{11, "旧版2024", 3, 10, 1024, "0", "已下架，仅存量租户使用"},
+		{12, "内测版", 4, 15, 2048, "0", "内部测试"},
 	}
 	for _, s := range pkgs {
 		var cnt int64

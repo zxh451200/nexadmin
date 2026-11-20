@@ -96,7 +96,9 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
       {fields.length === 0 ? <p className="text-sm text-muted-foreground">{t('settings.notify.noRobots')}</p> : null}
       {fields.map((f, i) => (
         <div key={f.id} className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
-          <FormGrid>
+          {/* 固定两列：4 个字段两行排完。FormGrid 的 auto 启发式（TWO_COLS_MIN=6）会把 4 字段判成单列，
+              卡片被拉成通栏长条，开关行和按钮行又各占一行右对齐，整卡看着散。 */}
+          <FormGrid cols={2}>
             <TextField control={form.control} name={`robots.${i}.name`} label={t('settings.notify.robotName')} />
             <SelectField
               control={form.control}
@@ -113,23 +115,26 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
               description={t('settings.notify.robotSecretHint')}
             />
           </FormGrid>
-          <SwitchField control={form.control} name={`robots.${i}.markdown`} label={t('settings.notify.markdown')} bare />
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => remove(i)}>
-              <Trash2 aria-hidden="true" />
-              {t('settings.notify.removeRobot')}
-            </Button>
-            <Can perm="settings:update">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={pending}
-                onClick={() => void run(`robot:${form.getValues(`robots.${i}.name`) as string}`)}
-              >
-                <Send aria-hidden="true" />
-                {t('settings.notify.sendTest')}
+          {/* 开关与操作同一行：开关靠左、按钮靠右，不再两行右对齐互相错位 */}
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <SwitchField control={form.control} name={`robots.${i}.markdown`} label={t('settings.notify.markdown')} bare />
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" onClick={() => remove(i)}>
+                <Trash2 aria-hidden="true" />
+                {t('settings.notify.removeRobot')}
               </Button>
-            </Can>
+              <Can perm="settings:update">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => void run(`robot:${form.getValues(`robots.${i}.name`) as string}`)}
+                >
+                  <Send aria-hidden="true" />
+                  {t('settings.notify.sendTest')}
+                </Button>
+              </Can>
+            </div>
           </div>
         </div>
       ))}

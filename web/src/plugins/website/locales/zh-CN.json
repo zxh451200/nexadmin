@@ -26,6 +26,7 @@
         "features": "功能开关"
       },
       "emailInvalid": "邮箱格式不正确",
+      "establishedYearInvalid": "成立年份需在 1900 至明年之间",
       "consentUrlInvalid": "开启留言同意后，隐私政策地址必填：站内路径（如 /p/privacy）或完整 https:// 地址",
       "headInvalidScript": "<script> 标签没有闭合：<script> 与 </script> 必须成对出现，否则整站页面会被写挂",
       "headInvalidStyle": "<style> 标签没有闭合：<style> 与 </style> 必须成对出现，否则整站页面会被写挂",
@@ -48,10 +49,11 @@
       "demoImportWarn": "将写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称、首页文案、导航与首页特性卡片等品牌门面内容；可重复执行。",
       "supplierProfile": "供应商实力档案",
       "supplierProfileHint": "这五行出现在商品详情左栏的供应商卡里，留空的项目自动隐藏。",
-      "estYearOff": "不展示",
       "offices": "办公地点",
       "officesHint": "展示在联系页的地点卡与地图；地图厂商按访客语言判定（zh 系→天地图，其他→谷歌），Key 在「系统设置 → 地图服务」。",
-      "officeAdd": "添加地点"
+      "officeAdd": "添加地点",
+      "officeDrag": "拖动调整此地点的顺序",
+      "officesEmpty": "还没有办公地点，点「添加地点」创建第一个。"
     },
     "social": {
       "github": "GitHub",
@@ -203,6 +205,7 @@
       "categoryRequired": "请填写分类名称",
       "categoryCreate": "新建分类",
       "categoryAdd": "添加分类",
+      "categoryCollapse": "收起",
       "categoryTitleRequiredHint": "分类标题必填",
       "categoryEdit": "编辑分类",
       "categoryDeleteConfirm": "确认删除分类「{{name}}」？{{count}} 篇新闻将不再属于该栏目。",
@@ -558,7 +561,7 @@
       "friendLinks": "页脚「友情链接」列；最多 {{max}} 个，留空则不显示该列",
       "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。",
       "navDesc": "填了说明的子项在二级菜单里显示成「标题 + 说明」卡片；不填就排到右侧的纯链接列。",
-      "establishedYear": "商详供应商卡展示；0 或留空则不显示这一行",
+      "establishedYear": "商详供应商卡展示；留空则不显示这一行",
       "certifications": "多个用逗号分隔，如 CE, UL 1973, UN38.3；详情页会渲染成认证徽章，识别的认证自动配图标。"
     },
     "placeholder": {
@@ -598,8 +601,7 @@
       "machineHint": "机器翻译，还没人工校对过",
       "switchHint": "切换语言后整张表单换成该语言的内容",
       "focusLang": "编辑 {{lang}} 译文",
-      "filterLabel": "缺译",
-      "filterNoTranslation": "{{lang}}：无译文"
+      "filterLabel": "缺译"
     },
     "languages": {
       "manageShort": "语言清单在「系统设置 → 语言管理」维护",
@@ -643,7 +645,7 @@
     },
     "faq": {
       "title": "常见问题",
-      "description": "首页「常见问题」板块的问答条目；按排序展示，停用的条目不出现在官网上。",
+      "description": "首页「常见问题」板块的问答条目；默认视图下拖动行即可调整顺序，停用的条目不出现在官网上。",
       "add": "新增常见问题",
       "addTitle": "新增常见问题",
       "editTitle": "编辑常见问题",
@@ -655,6 +657,20 @@
       "searchPlaceholder": "搜索问题或答案",
       "deleteConfirm": "确定删除「{{question}}」？删除后首页不再展示该条。",
       "deleteBatchConfirm": "确定删除选中的 {{count}} 条常见问题？",
+      "importEntry": "导入",
+      "import": {
+        "title": "导入常见问题",
+        "description": "下载模板按列填写后上传：问题完全相同（忽略首尾空格）的条目会被更新，其余新增；导出的表格可直接改完再导回",
+        "file": "导入文件",
+        "template": "下载模板",
+        "templateFilename": "常见问题导入模板",
+        "fileHint": "支持 .xlsx 与 .csv；逐行独立入库，失败行不影响其它行，结果与失败原因在下方列出",
+        "start": "开始导入",
+        "running": "正在导入…",
+        "failed": "导入任务失败",
+        "result": "导入完成：成功 {{ok}} 行，失败 {{failed}} 行",
+        "errorRow": "第 {{row}} 行：{{message}}"
+      },
       "fields": {
         "question": "问题",
         "answer": "答案",
@@ -666,6 +682,10 @@
         "on": "展示中",
         "off": "已停用"
       }
+    },
+    "purchase": {
+      "enabled": "开启产品在线购买",
+      "enabledHint": "有定价的产品详情页出「立即购买」，匿名访客下单走支付中台收款；关闭后入口立即消失，已有订单不受影响。"
     }
   }
 }

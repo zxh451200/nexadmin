@@ -26,6 +26,7 @@
         "features": "Feature switches"
       },
       "emailInvalid": "Invalid email address.",
+      "establishedYearInvalid": "Established year must be between 1900 and next year",
       "consentUrlInvalid": "With message consent on, the privacy policy URL is required: an in-site path (e.g. /p/privacy) or a full https:// URL",
       "headInvalidScript": "Unclosed <script> tag: <script> and </script> must appear in pairs, otherwise pages break site-wide.",
       "headInvalidStyle": "Unclosed <style> tag: <style> and </style> must appear in pairs, otherwise pages break site-wide.",
@@ -48,10 +49,11 @@
       "demoImportWarn": "Writes the brand's sample products and news (insert-only), and replaces brand identity content entirely: site name, home copy, navigation and feature cards; safe to repeat.",
       "supplierProfile": "Supplier profile",
       "supplierProfileHint": "These five rows appear on the supplier card of a product page; empty rows are hidden.",
-      "estYearOff": "Hidden",
       "offices": "Office locations",
       "officesHint": "Shown as location cards and maps on the contact page. Map vendor follows the visitor language (zh → Tianditu, others → Google); keys live in System Settings → Map services.",
-      "officeAdd": "Add location"
+      "officeAdd": "Add location",
+      "officeDrag": "Drag to reorder this office",
+      "officesEmpty": "No offices yet — use \"Add location\" to create the first one."
     },
     "social": {
       "github": "GitHub",
@@ -203,6 +205,7 @@
       "categoryRequired": "Category name is required",
       "categoryCreate": "New category",
       "categoryAdd": "Add category",
+      "categoryCollapse": "Collapse",
       "categoryTitleRequiredHint": "Category title is required",
       "categoryEdit": "Edit category",
       "categoryDeleteConfirm": "Delete category \"{{name}}\"? {{count}} posts will no longer belong to it.",
@@ -558,7 +561,7 @@
       "friendLinks": "The “Links” column in the footer; up to {{max}}, hidden when empty",
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor.",
       "navDesc": "Entries with a description show up as title + description cards in the dropdown; the rest fall into a plain link column on the right.",
-      "establishedYear": "Shown on the supplier card; 0 or empty hides this row",
+      "establishedYear": "Shown on the supplier card; leave empty to hide this row",
       "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon."
     },
     "placeholder": {
@@ -598,8 +601,7 @@
       "machineHint": "Machine translated, not reviewed by a human yet",
       "switchHint": "Switching language rebinds the whole form to that language",
       "focusLang": "Edit {{lang}} translation",
-      "filterLabel": "Untranslated",
-      "filterNoTranslation": "{{lang}}: none"
+      "filterLabel": "Untranslated"
     },
     "languages": {
       "manageShort": "The language list is maintained in System settings → Languages.",
@@ -643,7 +645,7 @@
     },
     "faq": {
       "title": "FAQ",
-      "description": "Q&A entries for the homepage FAQ section; entries are shown in sort order, disabled ones are hidden.",
+      "description": "Q&A entries for the homepage FAQ section; drag rows to reorder in the default view, disabled ones are hidden.",
       "add": "Add FAQ",
       "addTitle": "Add FAQ",
       "editTitle": "Edit FAQ",
@@ -655,6 +657,20 @@
       "searchPlaceholder": "Search question or answer",
       "deleteConfirm": "Delete \"{{question}}\"? It will disappear from the homepage.",
       "deleteBatchConfirm": "Delete the {{count}} selected FAQs?",
+      "importEntry": "Import",
+      "import": {
+        "title": "Import FAQs",
+        "description": "Download the template, fill in the rows and upload: an entry whose question matches exactly (trimmed) is updated, others are created; exported spreadsheets can be edited and imported back directly",
+        "file": "Import file",
+        "template": "Download template",
+        "templateFilename": "faq-import-template",
+        "fileHint": "Supports .xlsx and .csv; rows are imported independently — failed rows do not affect others, results and failure reasons are listed below",
+        "start": "Start import",
+        "running": "Importing…",
+        "failed": "The import job failed",
+        "result": "Import finished: {{ok}} succeeded, {{failed}} failed",
+        "errorRow": "Row {{row}}: {{message}}"
+      },
       "fields": {
         "question": "Question",
         "answer": "Answer",
@@ -666,6 +682,10 @@
         "on": "Shown",
         "off": "Hidden"
       }
+    },
+    "purchase": {
+      "enabled": "Enable product checkout",
+      "enabledHint": "Products with a price get a \"Buy now\" entry on their detail page; anonymous visitors pay through the pay hub. Turning it off hides the entry at once — existing orders are unaffected."
     }
   }
 }

@@ -50,10 +50,12 @@
   </section>
 
   <section class="hp-band" aria-label="{{.T "home.tech.title"}}">
-    <div class="container">
-      {{/* 数字与 tech 名字合成一条带子：原来首屏底部一条、横带一条，两层边框叠着像两块广告位。
-           数字来自仓库本身：30 = modules 下 module.go 的数量；4 = /setup 步数；
-           3 = 三份数据库迁移；1 = 内嵌前端后的单一二进制。 */}}
+    {{/* 一条规格条：左边四个硬数字（来自仓库本身：30 = modules 下 module.go 的数量；
+         4 = /setup 步数；3 = 三份数据库迁移；1 = 内嵌前端后的单一二进制），
+         右边竖线隔开的技术跑马灯。原来是「数字一行 + 一条横线 + 标签一行 + 跑马灯」，
+         标签那句「同一套代码，三种数据库」与左边的「3 种数据库方言」重复，中间那层
+         横线又把一条带子切成两块广告位，所以合成单行。 */}}
+    <div class="container hp-band-in">
       <ul class="hp-facts" data-reveal>
         <li><b>30</b><span>{{.T "home.facts.m1"}}</span></li>
         <li><b>4</b><span>{{.T "home.facts.m2"}}</span></li>
@@ -61,7 +63,6 @@
         <li><b>1</b><span>{{.T "home.facts.m4"}}</span></li>
       </ul>
       <div class="hp-band-tech">
-        <p class="hp-band-label">{{.T "home.tech.title"}}</p>
         <div class="hp-marquee">
           <div class="hp-marquee-track">
             <ul class="hp-marquee-list">
@@ -328,7 +329,7 @@
           <p class="hp-kicker">{{.T "home.news.kicker"}}</p>
           <h2 class="hp-h2 hp-h2-sm">{{.T "home.news.title"}}</h2>
         </div>
-        <div class="hp-section-aside">
+        <div class="hp-section-aside hp-section-aside--action">
           <a class="hp-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}<span aria-hidden="true">→</span></a>
         </div>
       </div>

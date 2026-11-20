@@ -1,6 +1,8 @@
 {
   "uploader": {
     "pickFromLibrary": "Pick from library",
+    "avatarTitle": "Avatar",
+    "avatarHint": "Click the avatar to upload, or drop an image here",
     "kind_image": "an image",
     "kind_video": "a video",
     "kind_file": "a file",

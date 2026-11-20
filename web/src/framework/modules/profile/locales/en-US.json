@@ -96,7 +96,7 @@
     },
     "bindings": {
       "phoneTitle": "Phone number",
-      "phoneUnbound": "No phone linked. Link one to sign in by phone",
+      "phoneHint": "Link a phone to sign in by SMS code",
       "phoneBound": "Linked {{phone}}",
       "bind": "Link",
       "change": "Change",

@@ -728,7 +728,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   // 这是树形表拖动「发涩/乱跳」的主因。布局保持稳定，只有被拖行压暗。
 
   const renderToggle = (node: T, big?: boolean) => {
-    const size = big ? 'h-9 w-9' : 'h-7 w-7'
+    const size = big ? 'h-9 w-9' : 'h-6 w-6'
     if (!node.children?.length) return <span className={cn('inline-block shrink-0', size)} aria-hidden="true" />
     const open = forceExpandAll || expanded.has(node.id)
     return (
@@ -849,7 +849,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                     {onReorder ? (
                       // 把手静默（见 drag-handle-quiet），hover 浮现；占的 24px 折进首列左内边距的观感里
                       <span className="inline-flex" onKeyDown={(e) => onRowKeyDown(e, node.id)}>
-                        <SortableHandle className="drag-handle-quiet h-8 w-6 md:h-8 md:w-6" />
+                        <SortableHandle className="drag-handle-quiet h-8 w-5 md:h-8 md:w-5" />
                       </span>
                     ) : null}
                     {renderToggle(node)}
