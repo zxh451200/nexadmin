@@ -34,15 +34,22 @@
       <p class="section-sub">{{.T "docs.desc"}}</p>
     </header>
 
+    {{/* 按 DocCards 的分组切成小节，每节一个三列网格；Group 相同时不重复开节。 */}}
+    {{$lastGroup := ""}}
     <div class="docs-cards">
       {{range .DocCards}}
+      {{if ne .Group $lastGroup}}
+      {{if $lastGroup}}</div>{{end}}
+      <h2 class="docs-cards-group">{{.Group}}</h2>
+      <div class="docs-cards-grid">
+      {{$lastGroup = .Group}}
+      {{end}}
       <a class="docs-card" href="{{.URL}}" data-reveal>
-        <span class="docs-card-group">{{.Group}}</span>
-        <h2 lang="{{.Language}}">{{.Title}}</h2>
+        <h3 lang="{{.Language}}">{{.Title}}</h3>
         <p lang="{{.Language}}">{{.Summary}}</p>
-        <span class="docs-card-arrow" aria-hidden="true">→</span>
       </a>
       {{end}}
+      {{if $lastGroup}}</div>{{end}}
     </div>
   </section>
 </div>

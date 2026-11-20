@@ -186,13 +186,13 @@
     {{end}}
 
     {{shareBar $}}
+    <p class="pd-back"><a href="{{.URL "/products"}}">{{.T "products.back"}}</a></p>
     {{if or .ProductPrev .ProductNext}}
     <nav class="dt-nav" aria-label="{{.T "detail.navAria"}}">
-      {{if .ProductPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/products"}}/{{.ProductPrev.Slug}}"><small>{{.T "detail.prev"}}</small><span class="dt-t">{{.ProductPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
-      {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}}</small><span class="dt-t">{{.ProductNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .ProductPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/products"}}/{{.ProductPrev.Slug}}"><small>{{.T "detail.prev"}}</small><span class="dt-t">{{.ProductPrev.Title}}</span></a>{{end}}
+      {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}}</small><span class="dt-t">{{.ProductNext.Title}}</span></a>{{end}}
     </nav>
     {{end}}
-    <p class="pd-back"><a href="{{.URL "/products"}}">{{.T "products.back"}}</a></p>
   </div>
 {{inquiryDialog $}}
 </article>

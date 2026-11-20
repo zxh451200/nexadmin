@@ -1929,14 +1929,15 @@
     '.dt-share-btn.is-copied .dt-ico-copy,.dt-share-btn.is-failed .dt-ico-copy{display:none}',
     '.dt-share-btn.is-copied .dt-ico-check{display:inline-flex}',
     '.dt-share-btn.is-failed .dt-ico-fail{display:inline-flex}',
-    // 上一篇/下一篇导航：浅底色块替代细边框（盒子感太重像输入框），圆角对齐整站 8px；
+    // 上一篇/下一篇导航：细边框 + 透明底（对齐 linear 文档底部的卡片口径，灰底块太像按钮）；
     // 箭头挂在标题行（模板 .dt-t），hover 往对应方向滑 3px，比小字上的箭头更有点击引导；
-    // 标题允许两行内换行（原来 nowrap 直接截断，中文长标题截半不可读）。
-    '.dt-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:24px 0 8px}',
-    '.dt-nav-item{display:flex;flex-direction:column;gap:7px;min-width:0;padding:16px 18px;border:0;border-radius:8px;background:rgba(128,128,128,.08);color:inherit;text-decoration:none;transition:background .15s}',
-    'a.dt-nav-item:hover{background:rgba(128,128,128,.16)}',
-    '.dt-nav-item small{font-size:11px;letter-spacing:.06em;opacity:.7}',
-    '.dt-nav-item span{font-size:14px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+    // 标题允许两行内换行（原来 nowrap 直接截断，中文长标题截半不可读）；
+    // auto-fit 让只有一侧有文章时那一张占满整行，不留半个空卡片。
+    '.dt-nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:14px;margin:24px 0 8px}',
+    '.dt-nav-item{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:transparent;color:inherit;text-decoration:none;transition:background .15s,border-color .15s}',
+    'a.dt-nav-item:hover{background:var(--wash);border-color:var(--border-strong)}',
+    '.dt-nav-item small{font-size:12px;letter-spacing:.04em;color:var(--text-3)}',
+    '.dt-nav-item span{font-size:14px;font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
     '.dt-nav-item .dt-t::before,.dt-nav-item .dt-t::after{display:inline-block;transition:transform .15s}',
     '.dt-prev .dt-t::before{content:"←";margin-inline-end:7px}',
     '.dt-next .dt-t::after{content:"→";margin-inline-start:7px}',

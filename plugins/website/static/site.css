@@ -4516,3 +4516,36 @@ html[data-scheme="light"] .hp-cta-glow {
   .hp-principle h3, .hp-intg-intro h3, .hp-cap h3, .hp-plugin-title h3 { font-size: 18px; }
 }
 
+/* ---- 本轮评审收口：技术横带、文档首页卡片、文档页容器宽度 ---- */
+/* 技术栈横带退成背景信息：14px 次级灰，补足条目让第二遍滚出视口 */
+.hp-band { padding: 18px 0 20px; }
+.hp-marquee { margin-top: 14px; }
+.hp-marquee-list li { padding: 0 clamp(16px, 1.8vw, 26px); font-size: 14px; font-weight: 400; letter-spacing: -0.01em; color: var(--text-3); }
+.hp-marquee-list li + li::before { opacity: 0.5; }
+
+/* 文档首页与文章页用同一个容器宽度，点进去不再左右晃 */
+.docs-shell-index { max-width: 1180px; }
+
+/* 文档首页：分组小标题 + 三列紧凑卡片，替掉通栏大行 */
+.docs-cards { display: block; border-top: 0; margin-top: 28px; }
+.docs-cards-group {
+  margin: 26px 0 12px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.docs-cards-group:first-child { margin-top: 0; }
+.docs-cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.docs-card {
+  display: flex; flex-direction: column; gap: 7px; min-height: 128px;
+  padding: 16px; border: 1px solid var(--border); border-radius: 10px;
+  background: transparent; transition: border-color 0.15s, background 0.15s;
+}
+.docs-card:hover { border-color: var(--border-strong); background: var(--banner-bg); }
+.docs-card-group, .docs-card-arrow { display: none; }
+.docs-card h2, .docs-card h3 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+.docs-card p {
+  font-size: 13px; line-height: 1.55; color: var(--text-3);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+@media (max-width: 1000px) { .docs-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .docs-cards-grid { grid-template-columns: 1fr; } }
+
