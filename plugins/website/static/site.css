@@ -1838,7 +1838,7 @@ html[data-scheme="light"] .shot-light { display: block; }
   display: grid;
   grid-template-columns: 260px repeat(4, minmax(0, 1fr));
   gap: 48px;
-  padding: 80px 0 64px;
+  padding: 64px 0 64px;
 }
 .footer-desc { margin-top: 16px; max-width: 280px; font-size: 13px; color: var(--text-3); line-height: 1.7; }
 .footer-col { display: flex; flex-direction: column; gap: 12px; }
@@ -3270,7 +3270,9 @@ html:not([data-scheme="light"]) {
 
 /* 2. 版心与节奏：收窄内容宽度、压缩段落间的大空洞，阅读密度更接近成品站。 */
 body { line-height: 1.7; }
-.container { max-width: 1200px; padding: 0 28px; }
+/* 只改横向：用 padding 简写会把 .footer-grid / .footer-bottom 已声明的纵向内边距清零，
+   页脚顶线就会压在第一栏标题上（Linear 那条线到内容约 57px）。 */
+.container { max-width: 1200px; padding-inline: 28px; }
 .section { padding: 88px 0; }
 .home-head { gap: 40px; margin-bottom: 38px; }
 .home-head .section-side { gap: 18px; }
