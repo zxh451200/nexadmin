@@ -4490,3 +4490,29 @@ html[data-scheme="light"] .hp-cta-glow {
 .pd-page .pd-sticky-cta { border-color: transparent; border-radius: 999px; background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-weight: 500; }
 .pd-page .pd-sticky { border-top-color: var(--border); background: var(--bg); }
 
+/* ---- 字号层级按 linear.app 实测收档（2026-11-20） ----
+   对照口径：正文 13/14/15、卡片标题 18–20、分区标题 48、首屏 64；
+   次级文字统一 --text-3（#8a8f98），不拿 --text-2 当中性灰用。
+   这里放在文件末尾统一覆盖，避免前面多个校准层各自为政。 */
+.topnav a:not(.active):not([aria-current="page"]) { color: var(--text-3); line-height: 1.5; }
+.hp-hero-lede { font-size: 15px; line-height: 1.6; letter-spacing: -0.011em; color: var(--text-3); }
+.hp-hero-sub { font-size: 13px; line-height: 1.6; color: var(--text-3); }
+.hp-hero-new a { font-size: 13px; color: var(--text-3); }
+.hp-lead { font-size: 15px; line-height: 1.6; color: var(--text-3); }
+.hp-h2 { font-size: clamp(30px, 3.35vw, 48px); line-height: 1; }
+.hp-statement-text { font-size: 48px; font-weight: 510; line-height: 1.12; color: var(--text-3); }
+.hp-statement-lead { color: var(--text); }
+.hp-principle h3, .hp-intg-intro h3 { font-size: 20px; line-height: 1.33; letter-spacing: -0.012em; }
+.hp-cap h3, .hp-plugin-title h3 { font-size: 18px; line-height: 1.4; letter-spacing: -0.012em; }
+.hp-principle p, .hp-cap p, .hp-plugin-desc { font-size: 14px; line-height: 1.5; color: var(--text-3); }
+.footer-desc, .footer-col a, .footer-bottom, .footer-note, .footer-qr figcaption { color: var(--text-3); }
+.footer-col h4 { font-size: 13px; font-weight: 510; line-height: 1.5; letter-spacing: -0.01em; }
+.footer-col a { font-size: 13px; line-height: 1.5; letter-spacing: -0.01em; }
+.footer-bottom { font-size: 12px; }
+@media (max-width: 760px) {
+  .hp-hero-lede { font-size: 15px; }
+  .hp-h2 { font-size: clamp(28px, 8vw, 40px); }
+  .hp-statement-text { font-size: 34px; }
+  .hp-principle h3, .hp-intg-intro h3, .hp-cap h3, .hp-plugin-title h3 { font-size: 18px; }
+}
+
