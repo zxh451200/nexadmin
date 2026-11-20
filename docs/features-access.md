@@ -7,7 +7,18 @@ summary: 开放平台接入、角色与数据范围、租户额度、演示站�
 模块 `openapi`，菜单“开发与安全 → 开放平台”，权限 `openapi:list`（读）/ `openapi:edit`（写）。
 
 - 个人访问令牌（PAT）：登录用户在个人中心自助创建，明文形如 `nxp_<32 位随机>` 只显示一次，库里只存 sha256；用 `Authorization: Bearer nxp_...` 调用，等同令牌所有者；令牌不能调用令牌管理接口本身；创建按用户限流（`ratelimit.pat_create`）。
-- 应用签名调用：开放应用（服务账号）绑定角色集合，可配 IP 白名单，调用时带请求头 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`。签名 = `hex(HMAC-SHA256(appSecret, METHOD\npath\n规范化query\nsha256hex(body)\ntimestamp\nnonce))`，其中 `path` 是请求完整的 URL 路径（含 `/api/v1`，取 `EscapedPath`），`timestamp` 为 Unix 秒，时间窗 ±5 分钟，`nonce` 一次性（重放会被拒绝并提示 `nonce already used`，重放检测依赖缓存），参与签名的请求体上限 10MB；query 按 key 排序、同 key 的 value 也排序，key / value 都做 `url.QueryEscape` 后用 `&` 连接。应用密钥可重置，库里存 `core/secret` 加密后的密文。校验失败按 IP 限流（`ratelimit.openapi_sign`）。
+- **应用签名调用**：开放应用（服务账号）绑定角色集合，可配 IP 白名单；请求头带 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`。
+
+  ```text
+  hex(HMAC-SHA256(appSecret,
+      METHOD\npath\nnormalizedQuery\nsha256hex(body)\ntimestamp\nnonce))
+  ```
+
+  - `path` 是完整 URL 路径（含 `/api/v1`，取 `EscapedPath`）；`timestamp` 是 Unix 秒，±5 分钟窗口。
+  - `nonce` 一次性，重放回 `nonce already used`（依赖缓存）；被签名的 body 上限 10MB。
+  - query 的键排序、同键的值也排序，键和值都 `url.QueryEscape` 后用 `&` 连接。
+
+  应用密钥可重置，库里存 `core/secret` 加密后的密文；校验失败按 IP 限流（`ratelimit.openapi_sign`）。
 - 事件目录：`GET /openapi/events`。当前共 11 个事件：`user.created` `user.updated` `user.deleted`、`dept.created` `dept.updated` `dept.deleted`、`role.created` `role.updated` `role.deleted`、`notice.published`、`job.finished`（`core/job` 任务落终态时发布，导出完成或失败等）。事件载荷只放 id、必要字段和租户 id，不带密码哈希、密钥。进程内事件总线队列容量 1024，队列满则丢弃并告警，不阻塞业务请求。
 - Webhook：配置 URL（做 SSRF 防护）和订阅事件，投递带请求头 `X-Nex-Event`、`X-Nex-Delivery`、`X-Nex-Timestamp`、`X-Nex-Signature`（`hex(HMAC-SHA256(secret, timestamp + "." + body))`），单次超时 5 秒，最多尝试 5 次（失败后依次等待 1 分钟、5 分钟、30 分钟、2 小时），投递记录保留 30 天，可手动重试和测试；Webhook 密钥形如 `whsec_...` 可重置，库里加密存放。
 - 接口文档：`GET /openapi.json`（OpenAPI 3.0.3，原始 JSON，不套统一响应体）和 `GET /openapi/routes`（运行时路由清单），权限 `openapi:list`；停用的模块不出现在文档里。
@@ -83,4 +94,11 @@ summary: 开放平台接入、角色与数据范围、租户额度、演示站�
 - 按租户限流：`ratelimit.tenant_api`（默认 `limit: 0` 即关闭）按租户给 `/api/v1` 全部后台接口计数，避免单个租户的异常流量拖垮其它租户；解析不到租户的请求不计入。
 
 ## 公开演示站模式
-配置 `demo.enabled: true`（默认关，键见《配置参考》第 9 节）后进入演示站写保护：`/api/v1` 的非只读请求（非 GET/HEAD/OPTIONS）一律 403，提示“演示模式，不允许修改数据”；只放行内建白名单的登录 / 刷新令牌 / 登出 / WebSocket 入场票，其余写接口用 `demo.allow` 或插件 `Deps.DemoAllow` 显式放行（支持尾部 `*` 前缀）。改密码等自我修改接口不放行，演示账号的口令因此改不掉。官网等根路径公开页（含留言表单）不经过该闸门。前端依据 `GET /system/status` 的 `demo` 字段，在登录页与顶栏显示「演示模式」徽标；配置了 `demo.account` / `demo.password` 时，凭据仅随该接口在演示模式开启时下发，登录页展示并支持一键填充。演示账号与定时重置的部署步骤见《部署与运维指南》第 16 节。
+配置 `demo.enabled: true`（默认关，键见《配置参考》第 9 节）后进入演示站写保护：
+
+- `/api/v1` 的非只读请求（不是 GET / HEAD / OPTIONS）一律 403，提示「演示模式：不允许修改数据」。
+- 内置白名单放行登录、刷新令牌、登出和 WebSocket 入场票据；其他写接口要通过 `demo.allow` 或插件的 `Deps.DemoAllow` 加白名单（结尾 `*` 表示前缀）。
+- 改密码这类自助接口**刻意不放行**，公开演示账号的密码因此改不了。
+- 站点根路径的公开页面（包括官网留言表单）不走这道闸。
+- 前端按 `GET /system/status` 的 `demo` 字段在登录页和顶栏显示「演示模式」标记；配了 `demo.account` / `demo.password` 时，凭证只从这个接口下发、且只在演示模式下，登录页可一键填入。
+- 部署步骤（演示账号、定时重置）见《部署与运维指南》。

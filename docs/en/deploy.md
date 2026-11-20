@@ -13,8 +13,15 @@ Convention: unless stated otherwise, commands run from the project root (the dir
 
 - Single binary: `scripts/build.sh` uses `-tags embedweb` to embed the frontend build `web/dist` into `nexadmin-server`; one port serves `/api/v1`, `/healthz`, `/metrics` and the frontend pages (frontend routes fall back to `index.html`; hashed `/assets/` files are cached immutable; `sw.js`, `manifest.webmanifest` and `offline.html` are not cached).
 - Building without `embedweb` (`go run ./cmd/server`, `go build ./cmd/server`): no frontend hosting; unmatched paths return a JSON 404. This is dev mode, with vite running separately.
-- Dev mode: `go run ./cmd/server` starts the backend (`app.env=dev` logs to the console, CORS allows any origin); `cd web && npm run dev` starts the frontend on port 5173 with `/api` proxied to `http://127.0.0.1:8080`; the admin SPA lives under the fixed `/admin` prefix (open `http://localhost:5173/admin/` in dev, while `/` is server-rendered by the public site). `web/.env.development` sets `VITE_MOCK=true`; frontend code loads mock data only when `VITE_MOCK === 'true'` (determined centrally in `web/src/framework/env.ts`); an unset variable means off, so dev mode relies on `.env.development` explicitly setting `true` and production builds rely on `.env.production`'s `false` (a missing entry never turns mocks on). To hit the real backend, override per Vite convention with an environment variable: `VITE_MOCK=false npm run dev`; validate real-API integration in the target environment.
-- Files needed at runtime: `nexadmin-server`, `config/default.yaml`, `migrations/` (`framework/` and `business/`). `config/config.yaml`, `data/` and `logs/` are created by the wizard or at runtime. Do not omit `migrations/framework`, required after initialization. Installed plugins also need their manifests and migration directories deployed: with `plugins/<id>/plugin.yaml` missing the whole plugin is not mounted, nothing fails at startup, and its root routes (the site's `/` and `/docs`) simply return 404. Pro plugins additionally need `data/licenses/<id>.lic`; an empty `domains` list means no restriction, otherwise the request Host is checked and the plugin still counts as unlicensed (`pendingHost`) until the first request carrying a matching Host - so a domain-bound license has to be exercised under the visitors' real domain. See §13 for missing-file errors.
+- Dev mode runs two processes:
+
+  - Backend `go run ./cmd/server` on port 8080; `app.env=dev` logs to the console and CORS allows any origin.
+  - Frontend `cd web && npm run dev` on port 5173 with `/api` proxied to `http://127.0.0.1:8080`. The admin SPA lives under `/admin` (open `http://localhost:5173/admin/`); `/` is the server-rendered public site.
+  - Mock switch: `web/.env.development` sets `VITE_MOCK=true`; the frontend loads mocks only when the value is `'true'` (checked centrally in `web/src/framework/env.ts`). An unset variable means off; production `.env.production` sets `false`.
+  - To hit the real backend use `VITE_MOCK=false npm run dev`, then validate real-API integration in the target environment.
+- Files needed at runtime: `nexadmin-server`, `config/default.yaml` and `migrations/` (`framework/` and `business/`). `config/config.yaml`, `data/` and `logs/` are created by the wizard or at runtime.
+- Installed plugins also need their manifests and migrations. Without `plugins/<id>/plugin.yaml` the plugin is **not mounted at all and startup stays silent**; its root routes (the site's `/` and `/docs`) simply 404. Pro plugins additionally need `data/licenses/<id>.lic`.
+- An empty `domains` licence means no restriction; otherwise the request Host is checked and the plugin remains unlicensed (`pendingHost`) until the first request carrying a Host — so a domain-bound licence has to be exercised under the visitors' real domain. See §13 for missing-file errors.
 - Foreground: `./nexadmin-server` (Ctrl+C or SIGTERM for graceful exit, waiting up to 10 seconds). Background: `start | stop | restart | status` (§4). For production, prefer systemd or container orchestration.
 
 ## 2. Build & packaging
@@ -64,9 +71,25 @@ docker compose -f deploy/docker-compose.example.yml up -d --build   # valkey sta
 docker compose -f deploy/docker-compose.example.yml run --rm app init --config /app/config/init.yaml
 ```
 
-File content: services `app` (`context: ..`, `dockerfile: deploy/Dockerfile`, port `8080:8080`), `postgres` (`postgres:16` with a `pg_isready` health check, `app` depends on it being healthy), `valkey` (`valkey/valkey:8`, always started with AOF on, password `VALKEY_PASSWORD`, default `change-me`; production requires redis). The `app` environment: `NEXADMIN_APP_ENV=production`, `NEXADMIN_DATABASE_TYPE=postgres`, `..._HOST=postgres`, `..._PORT=5432`, `..._USER=nexadmin`, `..._PASSWORD=${POSTGRES_PASSWORD}`, `..._NAME=nexadmin`, plus `NEXADMIN_BACKUP_DIR=/app/data/backup` (already the image default, spelled out for visibility); the file also has a commented-out `NEXADMIN_SERVER_TRUSTED_PROXIES` example which must be configured when a reverse proxy sits in front (§11.1). The three cache entries are part of the `app` environment: `NEXADMIN_CACHE_DRIVER=redis`, `NEXADMIN_CACHE_ADDR=valkey:6379`, `NEXADMIN_CACHE_PASSWORD` (the config key `cache.password` paired with valkey's `--requirepass`); `app` waits for valkey to be healthy. Four named volumes `nexadmin_config`, `nexadmin_data`, `nexadmin_backup`, `nexadmin_logs` map to `/app/config`, `/app/data`, `/app/data/backup` (backups get their own volume, mounted as a subdirectory inside the data volume for easy copying off), `/app/logs`.
+The sample defines three services:
 
-`init --config /app/config/init.yaml` requires that file to already exist in the `nexadmin_config` volume (format in §3.2). The sample `postgres` / `valkey` passwords and image versions must be replaced and pinned in production.
+| Service | Image | Role |
+| --- | --- | --- |
+| `app` | this repo's `deploy/Dockerfile` | single-process backend on `8080:8080`; waits for postgres / valkey to be healthy |
+| `postgres` | `postgres:16` | primary database, with a `pg_isready` health check |
+| `valkey` | `valkey/valkey:8` | cache, always on with AOF; password `VALKEY_PASSWORD`, default `change-me` |
+
+Production requires redis. Replace and pin the sample passwords and image versions.
+
+Read the `app` environment in three groups:
+
+- **Database**: `NEXADMIN_DATABASE_TYPE=postgres`, `..._HOST=postgres`, `..._PORT=5432`, `..._USER=nexadmin`, `..._PASSWORD=${POSTGRES_PASSWORD}`, `..._NAME=nexadmin`.
+- **Cache**: `NEXADMIN_CACHE_DRIVER=redis`, `NEXADMIN_CACHE_ADDR=valkey:6379`, `NEXADMIN_CACHE_PASSWORD` (config key `cache.password`, matching valkey's `--requirepass`).
+- **Other**: `NEXADMIN_APP_ENV=production`, `NEXADMIN_BACKUP_DIR=/app/data/backup` (already the image default, spelled out for visibility); with a reverse proxy in front, also uncomment `NEXADMIN_SERVER_TRUSTED_PROXIES` (§11.1).
+
+Four named volumes: `nexadmin_config` → `/app/config`, `nexadmin_data` → `/app/data`, `nexadmin_backup` → `/app/data/backup` (a separate volume mounted as a subdirectory of data so it can be copied off), `nexadmin_logs` → `/app/logs`.
+
+`init --config /app/config/init.yaml` requires that file to already exist in the `nexadmin_config` volume (format in §3.2).
 
 Before deployment, inspect the expanded configuration with `docker compose -f deploy/docker-compose.example.yml config`, then validate image builds, volume permissions, initialization and restart. Container acceptance is still required.
 
@@ -327,7 +350,17 @@ The full reinit flow and real `mysqldump` / `pg_dump` export/import still requir
 - Non-empty `token`: every source must carry `Authorization: Bearer <token>`, compared constant-time; missing or wrong returns 401 with `WWW-Authenticate`.
 - `enabled=false`: the route is not registered.
 
-Metrics (names from code): `nexadmin_http_requests_total{method,route,status}`, `nexadmin_http_request_duration_seconds` (histogram), `nexadmin_http_requests_in_flight`, `nexadmin_cache_requests_total`, `nexadmin_cache_errors_total`, `go_goroutines`, `go_memstats_alloc_bytes`, `go_memstats_heap_inuse_bytes`, `go_memstats_sys_bytes`, `go_gc_cycles_total`, `go_gc_pause_seconds_total`; after initialization also `nexadmin_db_connections_{open,in_use,idle,max_open}`, `nexadmin_db_wait_total`, `nexadmin_db_wait_seconds_total`, `nexadmin_migrations_pending`, `nexadmin_migrations_check_ok`, `nexadmin_job_queue_length`, `nexadmin_plugin_licensed`, `nexadmin_ai_quota_fail_open_total` (cumulative AI-quota fail-open events when policy or counter lookups fail; non-zero growth means the cache or policy source may be down; the latter depend on their modules, post-init output not verified live).
+Metric names come from the code; grouped by source:
+
+| Source | Metrics |
+| --- | --- |
+| HTTP | `nexadmin_http_requests_total{method,route,status}`, `nexadmin_http_request_duration_seconds` (histogram), `nexadmin_http_requests_in_flight` |
+| Cache | `nexadmin_cache_requests_total`, `nexadmin_cache_errors_total` |
+| Go runtime | `go_goroutines`, `go_memstats_alloc_bytes`, `go_memstats_heap_inuse_bytes`, `go_memstats_sys_bytes`, `go_gc_cycles_total`, `go_gc_pause_seconds_total` |
+| Database (after init) | `nexadmin_db_connections_{open,in_use,idle,max_open}`, `nexadmin_db_wait_total`, `nexadmin_db_wait_seconds_total`, `nexadmin_migrations_pending`, `nexadmin_migrations_check_ok` |
+| Business (module enabled) | `nexadmin_job_queue_length`, `nexadmin_plugin_licensed`, `nexadmin_ai_quota_fail_open_total` |
+
+`nexadmin_ai_quota_fail_open_total` counts AI requests let through when the quota policy or counter fails; growth means the cache or policy source may be down. The last two groups depend on their modules and post-init output has not been verified live.
 
 ### 9.3 Health details
 
@@ -357,7 +390,8 @@ Each item below comes from code or code comments:
 - Already atomicized (only one winner under concurrency; noted in code comments):
   - One-time credential "fetch and void": SSO code exchange, SMS captcha and forgot-password captcha successful validation, third-party `state`, bind tokens (`bindToken`, consumed after password verification and before writing the binding). The login graphic captcha (`core/auth/captcha.go`, valid for exactly one attempt regardless of correctness) uses the same pattern. All go through `cache.GetDel`: redis via a Lua script performing GET+DEL server-side in one step, memory under the same lock. Custom external caches lacking the optional `cache.AtomicGetDel` interface fall back to Get then Del (non-atomic) with a warning.
   - Quota "count then insert": user (create, import, third-party auto-create) and role creation first `SELECT ... FOR UPDATE` the tenant row within the same transaction, then count — concurrent creations for one tenant serialize and cannot exceed `maxUsers` / `maxRoles`. Quota 0 (unlimited), the default tenant and platform-level operations skip the lock and the extra query.
-  - Failure counters: SMS captcha wrong entries (`modules/internal/smscode`), forgot-password wrong entries (`modules/system/user`), bind-token attempts (`modules/internal/oauthflow`), login-failure counts (`core/auth/captcha.go`, by username and IP dimensions) and SMS daily / hourly-per-IP caps all use atomic `cache.Incr` (helper `core/cache/incr.go`, TTL set on first creation, redis via Lua). Captcha-style counters increment before comparing, so concurrent guessing gets at most the first 5 comparisons, and hitting the cap `Del`s the code; counter keys carry a captcha salt — resending restarts from 0. Semantics unchanged (5 attempts void, 60s cooldown, daily caps). The only difference: the login-failure 15-minute window is now fixed from the first failure instead of sliding with each failure. Caches without `cache.Counter` fall back to in-process locked Get+Set (with a warning) — imprecise counting across instances.
+  - Failure counters: wrong SMS / forgot-password captcha entries, bind-token attempts, login failures (per username and IP) and SMS daily / hourly-per-IP caps all use atomic `cache.Incr` (`core/cache/incr.go`, TTL on first creation, Lua on redis). Captcha-style counters increment before comparing, so concurrent guessing gets at most the first 5 comparisons; keys carry a salt, so resending restarts at 0. Semantics are unchanged (5 attempts void, 60s cooldown, daily caps); the only difference is the login-failure 15-minute window now starts at the first failure instead of sliding.
+  - Caches without `cache.Counter` fall back to in-process locked Get+Set (with a warning); counting is then imprecise across instances.
   - Storage quota is atomically pre-allocated at tus session creation by declared length (`modules/file/usage.go`), checked as actual usage plus in-flight reservations, released on completion / cancellation, with leases cleaning expired reservations. Gated uploads require the cache to support `cache.Lease` and are rejected otherwise; multi-instance must share Redis/Valkey — memory suits single instance only. Real shared-cache concurrency acceptance is still pending.
 - Remaining concurrency windows and limits (noted in code comments):
   - Online sessions now use "one key per session + a sorted-set index" — no more read-modify-write of the whole index, so concurrent logins lose no sessions and force-logout only affects the target. Residual windows: the same session registered by two instances simultaneously — last writer wins (losing only display fields: last-active time / token jti, corrected at next registration); while cleaning expired index entries, a concurrent re-registration may have an entry mistakenly deleted, briefly missing from the list until that session's next registration; caches without sorted-set support fall back to in-process storage, invisible across instances (built-in memory / redis both support it).

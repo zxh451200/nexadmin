@@ -398,7 +398,8 @@ func docLinkDestination(file, destination string) string {
 	}
 	for _, group := range docGroups {
 		for _, item := range group.Items {
-			if target == item.File || dir != "." && base == item.Slug+".md" {
+			// 链接既可以写中文源文件名，也可以写 slug 文件名（en/ 译文里的自然写法）。
+			if target == item.File || base == item.Slug+".md" {
 				u.Path, u.RawPath = item.Slug, ""
 				return u.String()
 			}

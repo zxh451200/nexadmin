@@ -7,7 +7,18 @@ summary: Open platform access, roles and data scopes, tenant quotas, and demo-mo
 Module `openapi`, menu "System → Open Platform", permissions `openapi:list` (read) / `openapi:edit` (write).
 
 - Personal access tokens (PAT): self-created in Profile by logged-in users; plaintext looks like `nxp_<32 random chars>` and is shown once, only the sha256 is stored; call with `Authorization: Bearer nxp_...` acting as the token owner; tokens cannot call the token management endpoints themselves; creation is rate-limited per user (`ratelimit.pat_create`).
-- App-signed calls: open-platform apps (service accounts) bind role sets, optionally with IP whitelists; requests carry `X-App-Key`, `X-Timestamp`, `X-Nonce`, `X-Signature`. Signature = `hex(HMAC-SHA256(appSecret, METHOD\npath\nnormalizedQuery\nsha256hex(body)\ntimestamp\nnonce))` where `path` is the full URL path (including `/api/v1`, from `EscapedPath`), `timestamp` is Unix seconds with a ±5-minute window, `nonce` is one-time (replays rejected with `nonce already used`; replay detection depends on cache), the signed body is capped at 10MB; query keys are sorted, values of the same key sorted too, and both keys and values are `url.QueryEscape`d before joining with `&`. App secrets are resettable; the database stores `core/secret`-encrypted ciphertext. Validation failures are IP rate-limited (`ratelimit.openapi_sign`).
+- **App-signed calls**: open-platform apps (service accounts) bind role sets and optionally an IP whitelist. Requests carry `X-App-Key`, `X-Timestamp`, `X-Nonce` and `X-Signature`.
+
+  ```text
+  hex(HMAC-SHA256(appSecret,
+      METHOD\npath\nnormalizedQuery\nsha256hex(body)\ntimestamp\nnonce))
+  ```
+
+  - `path` is the full URL path (including `/api/v1`, from `EscapedPath`); `timestamp` is Unix seconds within ±5 minutes.
+  - `nonce` is one-time (`nonce already used` on replay, via cache); the signed body is capped at 10MB.
+  - Query keys are sorted, values of the same key sorted too, and both are `url.QueryEscape`d before joining with `&`.
+
+  App secrets are resettable and stored as `core/secret` ciphertext; validation failures are IP rate-limited (`ratelimit.openapi_sign`).
 - Event catalog: `GET /openapi/events`. Currently 11 events: `user.created` `user.updated` `user.deleted`, `dept.created` `dept.updated` `dept.deleted`, `role.created` `role.updated` `role.deleted`, `notice.published`, `job.finished` (published when a `core/job` task reaches a terminal state, e.g. an export finishing or failing). Payloads contain only ids, necessary fields and tenant id — no password hashes or secrets. The in-process event bus has a 1024-slot queue; when full, events are dropped with a warning, never blocking business requests.
 - Webhooks: configure a URL (SSRF-protected) and subscribed events; deliveries carry `X-Nex-Event`, `X-Nex-Delivery`, `X-Nex-Timestamp`, `X-Nex-Signature` (`hex(HMAC-SHA256(secret, timestamp + "." + body))`), a 5-second per-attempt timeout, up to 5 attempts (waiting 1 min, 5 min, 30 min, 2 h between), delivery records kept 30 days, with manual retry and test; webhook secrets look like `whsec_...` and are resettable, stored encrypted.
 - API docs: `GET /openapi.json` (OpenAPI 3.0.3, raw JSON, no unified response wrapper) and `GET /openapi/routes` (runtime route list), permission `openapi:list`; disabled modules are absent from docs.
@@ -83,4 +94,11 @@ Packages can also limit the menu scope: a user's effective permissions are inter
 - Per-tenant rate limiting: `ratelimit.tenant_api` (default `limit: 0`, i.e. off) counts every `/api/v1` request per tenant so one tenant's traffic spike cannot starve the others; requests without a resolved tenant are not counted.
 
 ## Public demo mode
-With `demo.enabled: true` (off by default; keys in the configuration reference) the framework enters demo-site write protection: every non-read request to `/api/v1` (anything but GET/HEAD/OPTIONS) is rejected with 403 and the message "Demo mode: modifying data is disabled". Only the built-in whitelist passes — sign in, refresh token, sign out and the WebSocket entry ticket; any other write endpoint must be allow-listed via `demo.allow` or a plugin's `Deps.DemoAllow` (trailing `*` acts as a prefix). Self-service endpoints such as password change are deliberately not allow-listed, so the public demo account's password cannot be changed. Public pages at the site root (including the website contact form) do not pass through this gate. The frontend shows a "Demo mode" badge on the sign-in page and in the top bar based on the `demo` field of `GET /system/status`; when `demo.account` / `demo.password` are set, the credentials are served through that endpoint only while demo mode is on, and the sign-in page displays them with a one-click fill button. Deployment steps (demo account, scheduled reset) live in the deployment guide.
+Setting `demo.enabled: true` (off by default; keys in the Configuration Reference §9) turns on demo-site write protection:
+
+- Every non-read request to `/api/v1` (anything but GET/HEAD/OPTIONS) returns 403 with "Demo mode: modifying data is disabled".
+- Built-in allow-list: sign in, refresh token, sign out and the WebSocket entry ticket. Other write endpoints must be added through `demo.allow` or a plugin's `Deps.DemoAllow` (a trailing `*` is a prefix).
+- Self-service endpoints such as password change are deliberately **not** allowed, so the public demo account's password cannot be changed.
+- Public pages at the site root, including the website contact form, do not pass through this gate.
+- The frontend shows a "Demo mode" badge on the sign-in page and in the top bar from `demo` in `GET /system/status`. When `demo.account` / `demo.password` are set, the credentials are served only by that endpoint and only in demo mode, with a one-click fill on the sign-in page.
+- Deployment steps (demo account, scheduled reset) are in the Deployment Guide.

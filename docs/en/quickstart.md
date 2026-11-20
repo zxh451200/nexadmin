@@ -16,9 +16,19 @@ go run ./cmd/nexadmin new myapp --out ../myapp --module example.com/myapp
 cd ../myapp
 ```
 
-Replace the name, output directory and Go module path. The destination must be absent or empty and outside the template directory. By default, this neither initializes Git nor commits and includes **no plugins other than `totp`** (two-factor, part of the security baseline); pass `--without-totp` if you do not need MFA. To pick plugins per business, use `--plugins cron,codegen` — each named plugin is copied together with its `web/src/plugins/<id>` tree and re-added to `plugins/plugins.go`, and an id the template does not have fails the command instead of being skipped silently. Presets work too: `basic` (every free plugin, usable without a license) or `standard` (basic plus the report / audit / security pro plugins, compiled in so a license activates them without another rebuild). Use `--with-plugins` only when you really want to carry every plugin the template ships with.
+Replace the name, output directory and Go module path. The destination must be absent or empty and outside the template directory. By default this neither initializes Git nor commits, and includes **no plugins other than `totp`** (two-factor, part of the security baseline); pass `--without-totp` if you do not need MFA.
 
-Read the generated `AGENTS.md` and `.nexadmin.manifest.json`. Put backend business code in `internal/`, pages in `web/src/pages/`, migrations in `migrations/business/`, and configuration overrides in `config/config.yaml`. See the [Customization Guide](dev-guide.md) for upgrade boundaries.
+Three ways to pick plugins:
+
+| Flag | What is carried over |
+| --- | --- |
+| default | `totp` only |
+| `--plugins cron,codegen` | named plugins with their `web/src/plugins/<id>` trees, re-added to `plugins/plugins.go`; an id the template lacks fails the command |
+| `--plugins basic` | every free plugin, usable without a licence |
+| `--plugins standard` | basic plus the report / audit / security pro plugins, compiled in so a licence activates them |
+| `--with-plugins` | every plugin in the template — only for a straight copy |
+
+Read the generated `AGENTS.md` and `.nexadmin.manifest.json`. Put backend business code in `internal/`, pages in `web/src/pages/`, migrations in `migrations/business/`, and config overrides in `config/config.yaml`. See the [Customization Guide](dev-guide.md) for upgrade boundaries.
 
 ## 2. Build a server that serves the setup wizard
 
