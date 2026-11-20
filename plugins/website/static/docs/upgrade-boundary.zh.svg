@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" width="760" height="360" role="img" aria-label="升级边界：框架区随升级覆盖，用户区升级不动">
+  <defs>
+    <marker id="ub-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5e6ad2"/>
+    </marker>
+  </defs>
+
+  <text x="16" y="30" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1.4" fill="#737a86">框架区 · 升级时覆盖</text>
+  <rect x="16" y="44" width="520" height="110" rx="10" fill="#737a86" fill-opacity="0.05" stroke="#737a86" stroke-opacity="0.4" stroke-dasharray="4 4"/>
+  <text x="40" y="90" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#828896">core/  ·  modules/  ·  web/src/framework/</text>
+  <text x="40" y="122" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#828896">migrations/framework/</text>
+
+  <line x1="736" y1="99" x2="548" y2="99" stroke="#5e6ad2" stroke-opacity="0.85" stroke-width="1.5" marker-end="url(#ub-arrow)"/>
+  <text x="736" y="78" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#5e6ad2">nexadmin upgrade</text>
+
+  <text x="16" y="196" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1.4" fill="#737a86">用户区 · 升级不碰</text>
+  <rect x="16" y="210" width="520" height="110" rx="10" fill="#5e6ad2" fill-opacity="0.06" stroke="#5e6ad2" stroke-opacity="0.4"/>
+  <rect x="16" y="210" width="3" height="110" rx="1.5" fill="#5e6ad2" fill-opacity="0.85"/>
+  <text x="44" y="256" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#828896">internal/  ·  web/src/pages/</text>
+  <text x="44" y="288" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#828896">migrations/business/  ·  config/config.yaml</text>
+
+  <text x="16" y="348" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" fill="#737a86">升级只写上面一层；业务代码放在下面一层，随升级保留。</text>
+</svg>

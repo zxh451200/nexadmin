@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300" role="img" aria-label="插件从源码到生效：免费插件装完即用，专业插件需导入授权，涉及根路由的要重启">
+  <defs>
+    <marker id="pl-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#737a86"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="28" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="1.4" fill="#737a86">插件从源码到生效 · 免费与专业分岔</text>
+  <text x="880" y="28" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="1" fill="#737a86">装一次，之后只重建</text>
+
+  <rect x="20" y="58" width="170" height="86" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="38" y="82" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1.2" fill="#5e6ad2">01</text>
+  <text x="38" y="114" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="21" font-weight="600" fill="#828896">装源码</text>
+  <text x="38" y="138" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#737a86">plugin install</text>
+
+  <rect x="224" y="58" width="170" height="86" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="242" y="82" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1.2" fill="#5e6ad2">02</text>
+  <text x="242" y="114" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="21" font-weight="600" fill="#828896">重新构建</text>
+  <text x="242" y="138" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#737a86">build.sh</text>
+
+  <rect x="428" y="58" width="140" height="86" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="446" y="82" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1.2" fill="#5e6ad2">03</text>
+  <text x="446" y="114" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="21" font-weight="600" fill="#828896">启动</text>
+  <text x="446" y="138" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#737a86">server start</text>
+
+  <line x1="190" y1="101" x2="216" y2="101" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#pl-arrow)"/>
+  <line x1="394" y1="101" x2="420" y2="101" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#pl-arrow)"/>
+  <line x1="568" y1="101" x2="592" y2="101" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4"/>
+  <line x1="596" y1="70" x2="596" y2="196" stroke="#737a86" stroke-opacity="0.55" stroke-width="1.4"/>
+  <line x1="596" y1="70" x2="612" y2="70" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#pl-arrow)"/>
+  <line x1="596" y1="196" x2="612" y2="196" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#pl-arrow)"/>
+
+  <rect x="620" y="38" width="260" height="64" rx="10" fill="#5e6ad2" fill-opacity="0.10" stroke="#5e6ad2" stroke-opacity="0.55"/>
+  <text x="638" y="66" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="600" fill="#828896">免费插件 · 装完即用</text>
+  <text x="638" y="86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#737a86">无 .lic，状态直接 active</text>
+
+  <rect x="620" y="164" width="118" height="64" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="636" y="192" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="600" fill="#828896">导入授权</text>
+  <text x="636" y="212" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#737a86">粘贴 .lic</text>
+
+  <rect x="760" y="164" width="120" height="64" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="776" y="192" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="600" fill="#828896">按需重启</text>
+  <text x="776" y="212" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#737a86">needRestart</text>
+
+  <line x1="738" y1="196" x2="752" y2="196" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#pl-arrow)"/>
+
+  <text x="620" y="152" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1" fill="#737a86">专业插件</text>
+
+  <line x1="20" y1="252" x2="880" y2="252" stroke="#737a86" stroke-opacity="0.22"/>
+  <text x="20" y="280" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="16" fill="#737a86">授权只激活已编译进二进制的插件：域名、有效期、requires_nexadmin 版本三项同时满足才生效。</text>
+</svg>

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 262" width="960" height="262" role="img" aria-label="首次跑通四步：派生、构建、初始化、登录">
+  <defs>
+    <marker id="q1-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#737a86"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="30" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="1.6" fill="#737a86">首次跑通 · 4 STEPS</text>
+  <text x="936" y="30" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="1.2" fill="#737a86">约 10 分钟</text>
+
+  <rect x="24" y="52" width="192" height="116" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="44" y="84" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" letter-spacing="1.2" fill="#5e6ad2">01</text>
+  <text x="44" y="118" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="600" fill="#828896">派生工程</text>
+  <text x="44" y="148" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#737a86">nexadmin new</text>
+
+  <rect x="266" y="52" width="192" height="116" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="286" y="84" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" letter-spacing="1.2" fill="#5e6ad2">02</text>
+  <text x="286" y="118" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="600" fill="#828896">构建二进制</text>
+  <text x="286" y="148" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#737a86">scripts/build.sh</text>
+
+  <rect x="508" y="52" width="192" height="116" rx="10" fill="#737a86" fill-opacity="0.06" stroke="#737a86" stroke-opacity="0.45"/>
+  <text x="528" y="84" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" letter-spacing="1.2" fill="#5e6ad2">03</text>
+  <text x="528" y="118" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="600" fill="#828896">初始化</text>
+  <text x="528" y="148" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#737a86">/setup 四步</text>
+
+  <rect x="750" y="52" width="192" height="116" rx="10" fill="#5e6ad2" fill-opacity="0.10" stroke="#5e6ad2" stroke-opacity="0.55"/>
+  <text x="770" y="84" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" letter-spacing="1.2" fill="#5e6ad2">04</text>
+  <text x="770" y="118" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="600" fill="#828896">登录后台</text>
+  <text x="770" y="148" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" fill="#737a86">/admin</text>
+
+  <line x1="224" y1="110" x2="258" y2="110" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#q1-arrow)"/>
+  <line x1="466" y1="110" x2="500" y2="110" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#q1-arrow)"/>
+  <line x1="708" y1="110" x2="742" y2="110" stroke="#737a86" stroke-opacity="0.7" stroke-width="1.4" marker-end="url(#q1-arrow)"/>
+
+  <line x1="24" y1="202" x2="936" y2="202" stroke="#737a86" stroke-opacity="0.22"/>
+  <text x="24" y="238" font-family="ui-sans-serif, system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" fill="#737a86">前三步只做一次；之后每次改动走第 2 步重新构建，第 4 步验证真实接口。</text>
+</svg>
