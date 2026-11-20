@@ -37,12 +37,13 @@
     {{if .Plugins}}
     <div class="plugin-grid">
       {{range .Plugins}}
-      <article class="plugin-card" data-reveal>
+      {{/* 整张卡片就是一个链接：标题和「详情」只做视觉呈现，不再嵌 <a>，避免嵌套链接与两个命中区。 */}}
+      <a class="plugin-card" href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}" data-reveal>
         {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{end}}
         <header class="plugin-card-head">
           <span class="plugin-icon" aria-hidden="true">{{.Initial}}</span>
           <div class="plugin-title">
-            <h2><a href="{{$.URL .DetailURL}}">{{.Name}}</a></h2>
+            <h2>{{.Name}}</h2>
             <span class="plugin-id">{{.ID}} · v{{.Version}}</span>
           </div>
           <span class="pill {{if .Pro}}pro{{end}}">{{if .Pro}}{{$.T "market.pro"}}{{else}}{{$.T "market.free"}}{{end}}</span>
@@ -55,9 +56,9 @@
         <footer class="plugin-card-foot">
           <span class="plugin-cat">{{.CategoryLabel}}</span>
           <span class="plugin-price">{{if .Price}}{{.Price}}{{else}}—{{end}}</span>
-          <a class="plugin-link" href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}">{{$.T "market.detail"}}</a>
+          <span class="plugin-link">{{$.T "market.detail"}}</span>
         </footer>
-      </article>
+      </a>
       {{end}}
     </div>
     {{else}}

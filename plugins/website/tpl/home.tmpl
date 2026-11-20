@@ -147,7 +147,7 @@
       <div class="hp-show-head">
         <div class="hp-show-title" data-reveal>
           <p class="hp-kicker">{{.T "home.platform.kicker"}}</p>
-          <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+          <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}<span class="hp-h2-line{{if $i}} dim{{end}}">{{$line}}</span>{{end}}</h2>
         </div>
         <div class="hp-show-aside" data-reveal>
           <p class="hp-lead">{{.T "home.editorial.platform.sub"}}</p>
@@ -174,7 +174,7 @@
       <div class="hp-show-head">
         <div class="hp-show-title" data-reveal>
           <p class="hp-kicker">{{.T "home.extension.kicker"}}</p>
-          <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+          <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}<span class="hp-h2-line{{if $i}} dim{{end}}">{{$line}}</span>{{end}}</h2>
         </div>
         <div class="hp-show-aside" data-reveal>
           <p class="hp-lead">{{.T "home.editorial.extension.sub"}}</p>
@@ -202,7 +202,7 @@
       <div class="hp-section-head" data-reveal>
         <div>
           <p class="hp-kicker">{{.T "home.cap.fig"}}</p>
-          <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.cap.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+          <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.cap.title")}}{{if $i}}<br>{{end}}<span class="hp-h2-line{{if $i}} dim{{end}}">{{$line}}</span>{{end}}</h2>
         </div>
         <div class="hp-section-aside">
           <p class="hp-lead">{{.T "home.cap.sub"}}</p>
@@ -246,7 +246,7 @@
       <div class="hp-section-head" data-reveal>
         <div>
           <p class="hp-kicker">{{.T "market.fig"}}</p>
-          <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.market.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+          <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.market.title")}}{{if $i}}<br>{{end}}<span class="hp-h2-line{{if $i}} dim{{end}}">{{$line}}</span>{{end}}</h2>
         </div>
         <div class="hp-section-aside">
           <p class="hp-lead">{{.T "home.market.sub"}}</p>
@@ -255,11 +255,12 @@
       </div>
       <div class="hp-market">
         {{range .FeaturedPlugins}}
-        <article class="hp-plugin" data-reveal>
+        {{/* 与插件市场同口径：整张卡片可点，标题和「详情」不再各自套 <a>。 */}}
+        <a class="hp-plugin" href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}" data-reveal>
           <header class="hp-plugin-head">
             <span class="hp-plugin-icon" aria-hidden="true">{{.Initial}}</span>
             <div class="hp-plugin-title">
-              <h3><a href="{{$.URL .DetailURL}}">{{.Name}}</a></h3>
+              <h3>{{.Name}}</h3>
               <span class="hp-plugin-id">{{.ID}} · v{{.Version}}</span>
             </div>
             <span class="pill {{if .Pro}}pro{{end}}">{{if .Pro}}{{$.T "market.pro"}}{{else}}{{$.T "market.free"}}{{end}}</span>
@@ -267,9 +268,9 @@
           <p class="hp-plugin-desc">{{.Description}}</p>
           <footer class="hp-plugin-foot">
             <span>{{.CategoryLabel}}</span>
-            <a href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}">{{$.T "market.detail"}}<span aria-hidden="true">→</span></a>
+            <span>{{$.T "market.detail"}}<span aria-hidden="true">→</span></span>
           </footer>
-        </article>
+        </a>
         {{end}}
       </div>
     </div>
@@ -280,7 +281,7 @@
     <div class="container hp-qs">
       <div class="hp-qs-copy" data-reveal>
         <p class="hp-kicker">{{.T "home.qs.kicker"}}</p>
-        <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.qs.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+        <h2 class="hp-h2">{{range $i, $line := titleLines (.T "home.qs.title")}}{{if $i}}<br>{{end}}<span class="hp-h2-line{{if $i}} dim{{end}}">{{$line}}</span>{{end}}</h2>
         <p class="hp-lead">{{.T "home.qs.sub"}}</p>
         <ol class="hp-steps">
           <li><b>{{.T "home.qs.build"}}</b>{{.T "home.qs.buildText"}}</li>
