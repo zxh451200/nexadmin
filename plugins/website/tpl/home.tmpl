@@ -46,34 +46,36 @@
         <p class="hp-hero-caption"><span class="hp-dot" aria-hidden="true"></span>{{.T "home.heroShotNote"}}</p>
       </div>
 
-      <ul class="hp-facts" data-reveal>
-        {{/* 数字来自仓库本身：30 = modules 下 module.go 的文件数；4 = /setup 向导步数；
-             3 = mysql/mariadb/postgres 三份迁移；1 = 前端内嵌后的单一二进制。
-             新增内置模块时记得同步这里和 home.facts.m* 文案。 */}}
-        <li><b>30</b><span>{{.T "home.facts.m1"}}</span></li>
-        <li><b>4</b><span>{{.T "home.facts.m2"}}</span></li>
-        <li><b>3</b><span>{{.T "home.facts.m3"}}</span></li>
-        <li><b>1</b><span>{{.T "home.facts.m4"}}</span></li>
-      </ul>
     </div>
   </section>
 
   <section class="hp-band" aria-label="{{.T "home.tech.title"}}">
     <div class="container">
-      <p class="hp-band-label">{{.T "home.tech.title"}}</p>
-    </div>
-    <div class="hp-marquee">
-      <div class="hp-marquee-track">
-        <ul class="hp-marquee-list">
-          <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
-          <li>Tailwind CSS</li><li>Vite</li><li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li>
-          <li>Redis / Valkey</li><li>OAuth2</li><li>OIDC</li><li>SAML</li><li>Webhook</li><li>OpenAPI</li>
-        </ul>
-        <ul class="hp-marquee-list" aria-hidden="true">
-          <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
-          <li>Tailwind CSS</li><li>Vite</li><li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li>
-          <li>Redis / Valkey</li><li>OAuth2</li><li>OIDC</li><li>SAML</li><li>Webhook</li><li>OpenAPI</li>
-        </ul>
+      {{/* 数字与 tech 名字合成一条带子：原来首屏底部一条、横带一条，两层边框叠着像两块广告位。
+           数字来自仓库本身：30 = modules 下 module.go 的数量；4 = /setup 步数；
+           3 = 三份数据库迁移；1 = 内嵌前端后的单一二进制。 */}}
+      <ul class="hp-facts" data-reveal>
+        <li><b>30</b><span>{{.T "home.facts.m1"}}</span></li>
+        <li><b>4</b><span>{{.T "home.facts.m2"}}</span></li>
+        <li><b>3</b><span>{{.T "home.facts.m3"}}</span></li>
+        <li><b>1</b><span>{{.T "home.facts.m4"}}</span></li>
+      </ul>
+      <div class="hp-band-tech">
+        <p class="hp-band-label">{{.T "home.tech.title"}}</p>
+        <div class="hp-marquee">
+          <div class="hp-marquee-track">
+            <ul class="hp-marquee-list">
+              <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
+              <li>Tailwind CSS</li><li>Vite</li><li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li>
+              <li>Redis / Valkey</li><li>OAuth2</li><li>OIDC</li><li>SAML</li><li>Webhook</li><li>OpenAPI</li>
+            </ul>
+            <ul class="hp-marquee-list" aria-hidden="true">
+              <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
+              <li>Tailwind CSS</li><li>Vite</li><li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li>
+              <li>Redis / Valkey</li><li>OAuth2</li><li>OIDC</li><li>SAML</li><li>Webhook</li><li>OpenAPI</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -136,12 +138,6 @@
       </div>
     </div>
 
-    <div class="container">
-      <figure class="hp-quote-in" data-reveal>
-        <blockquote>{{.T "home.quote.body"}}</blockquote>
-        <figcaption>{{.T "home.quote.by"}}</figcaption>
-      </figure>
-    </div>
   </section>
 
   <section class="hp-show" id="platform">
@@ -270,7 +266,7 @@
           <p class="hp-plugin-desc">{{.Description}}</p>
           <footer class="hp-plugin-foot">
             <span>{{.CategoryLabel}}</span>
-            <span>{{$.T "market.detail"}}<span aria-hidden="true">→</span></span>
+            <span class="hp-plugin-more" aria-hidden="true">→</span>
           </footer>
         </a>
         {{end}}

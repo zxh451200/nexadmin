@@ -56,7 +56,7 @@
         <footer class="plugin-card-foot">
           <span class="plugin-cat">{{.CategoryLabel}}</span>
           <span class="plugin-price">{{if .Price}}{{.Price}}{{else}}—{{end}}</span>
-          <span class="plugin-link">{{$.T "market.detail"}}</span>
+          <span class="plugin-link" aria-hidden="true">→</span>
         </footer>
       </a>
       {{end}}

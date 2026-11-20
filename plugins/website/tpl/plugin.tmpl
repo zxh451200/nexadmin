@@ -78,7 +78,12 @@
 
         <section class="plugin-block">
           <h2>{{.T "plugin.contentsTitle"}}</h2>
-          <p>{{.T "plugin.contents1"}}<code>plugin.yaml</code>{{.T "plugin.contents2"}}<code>backend/</code>{{.T "plugin.contents3"}}<code>web/</code>{{.T "plugin.contents4"}}<code>plugin remove --purge</code>{{.T "plugin.contents5"}}</p>
+          <ul class="plugin-list">
+            <li><code>plugin.yaml</code><span>{{.T "plugin.contentsManifest"}}</span></li>
+            <li><code>backend/</code><span>{{.T "plugin.contentsBackend"}}</span></li>
+            <li><code>web/</code><span>{{.T "plugin.contentsWeb"}}</span></li>
+          </ul>
+          <p class="plugin-note">{{.T "plugin.contentsUninstall"}}<code>plugin remove --purge</code>{{.T "plugin.contentsPurge"}}</p>
         </section>
 
         <section class="plugin-block" id="rating">
@@ -103,7 +108,8 @@
         {{if .Plugin.Pro}}
         <section class="plugin-block plugin-license">
           <h2>{{.T "plugin.licenseTitle"}}</h2>
-          <p>{{.T "plugin.licenseBody"}}</p>
+          <p>{{.T "plugin.licenseGate"}}</p>
+          <p class="plugin-note">{{.T "plugin.licenseOffline"}}</p>
           {{if .ContactEmail}}<a class="btn btn-ghost btn-sm" href="mailto:{{.ContactEmail}}?subject={{urlquery (.TF "plugin.licenseSubject" .Plugin.Name)}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.T "plugin.getLicense"}}</a>{{end}}
         </section>
         {{end}}

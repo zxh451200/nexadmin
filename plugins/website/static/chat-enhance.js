@@ -196,7 +196,7 @@
     '.chat-card-fields .chat-phone-wrap input:focus{outline:none;border:0;box-shadow:none;background:transparent}',
     '.chat-phone-dial{flex:none;padding-inline-end:7px;margin-inline-end:7px;border-inline-end:1px solid rgba(128,128,128,.3);font-size:12px;opacity:.72}',
     '.chat-phone-dial[hidden]{display:none}',
-    '.chat-bubble-card{white-space:pre-wrap;border-inline-start:2px solid currentColor;font-size:11.5px;line-height:1.6}',
+    '.chat-bubble-card{white-space:pre-wrap;border-inline-start:0;padding-inline-start:0;font-size:11.5px;line-height:1.6}',
     '.chat.is-expanded .chat-panel{width:min(760px,calc(100vw - 40px));max-width:calc(100vw - 40px);height:min(86dvh,840px);max-height:86dvh}',
     '.chat-panel{transition:width .2s ease,height .2s ease}',
     '@media(max-width:760px){.chat.is-expanded .chat-panel{width:calc(100vw - 16px);max-width:calc(100vw - 16px);height:min(88dvh,760px)}}',

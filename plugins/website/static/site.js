@@ -1421,7 +1421,7 @@
     '.inq{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px}',
     '.inq[hidden]{display:none}',
     '.inq-mask{position:absolute;inset:0;background:rgba(0,0,0,.45)}',
-    '.inq-card{position:relative;display:flex;flex-direction:column;width:min(560px,100%);max-height:min(90dvh,820px);overflow:hidden;box-sizing:border-box;padding:22px 24px 20px;border-radius:6px;background:Canvas;color:CanvasText;box-shadow:0 24px 70px rgba(0,0,0,.3)}',
+    '.inq-card{position:relative;display:flex;flex-direction:column;width:min(560px,100%);max-height:min(90dvh,820px);overflow:hidden;box-sizing:border-box;padding:22px 24px 20px;border-radius:6px;background:var(--panel-2,Canvas);color:var(--text,CanvasText);box-shadow:0 24px 70px rgba(0,0,0,.3)}',
         // 表单主体滚动、发送按钮常驻底部：加了附件与共享名片后内容接近一屏，按钮不能跟着滚走。
         '.inq-form{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}',
         '.inq-body{overflow:auto;min-height:0;flex:1 1 auto;padding-inline-end:2px;margin-inline-end:-2px}',
@@ -1441,7 +1441,7 @@
     '.inq-to-mail{font-size:11.5px;opacity:.72;overflow-wrap:anywhere}',
     '.inq-qty{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;font-size:12px}',
     '.inq-qty-label{opacity:.65}',
-    '.inq-stepper{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid rgba(128,128,128,.32);border-radius:999px;background:Canvas}',
+    '.inq-stepper{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid rgba(128,128,128,.32);border-radius:999px;background:var(--input-bg,Canvas)}',
     '.inq-stepper:focus-within{border-color:var(--pc-accent,currentColor)}',
     '.inq-step{display:flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:14px;line-height:1;cursor:pointer}',
     '.inq-step:hover:not(:disabled){background:rgba(128,128,128,.16)}',
@@ -1474,7 +1474,7 @@
     '.inq-suggest{padding:12px;margin:0 0 14px;border-radius:4px;background:rgba(128,128,128,.07)}',
     '.inq-suggest-title{margin:0 0 10px;font-size:11.5px;opacity:.75}',
     '.inq-chips{display:flex;flex-wrap:wrap;gap:8px}',
-    '.inq-chip{padding:6px 10px;border:1px solid rgba(128,128,128,.3);border-radius:3px;background:Canvas;color:inherit;font:inherit;font-size:11.5px;line-height:1.4;cursor:pointer;text-align:start}',
+    '.inq-chip{padding:6px 10px;border:1px solid rgba(128,128,128,.3);border-radius:3px;background:var(--input-bg,Canvas);color:inherit;font:inherit;font-size:11.5px;line-height:1.4;cursor:pointer;text-align:start}',
     '.inq-chip:hover{border-color:currentColor}',
     '.inq-row{display:flex;gap:10px}',
     '.inq-row>.inq-field{flex:1;min-width:0}',
@@ -1885,14 +1885,15 @@
   }
 
   // ---- 详情页分享条 / 相邻导航：四套主题共用，样式随脚本注入（不必每套 CSS 抄一遍） ----
-  // 颜色全部用 currentColor 与 Canvas/CanvasText 系统色，深色默认主题与浅色品牌主题都自适应。
+  // 颜色用 currentColor 与站点 token（var(--text) 等，带 Canvas 兜底）：
+  // 系统色 Canvas 只在 color-scheme:normal 下解析成白色，深色主题里会变成白底白字。
 
   // 悬停提示气泡 + 键盘焦点圈：页脚社交图标、详情页分享按钮共用这一份（模板写 data-tip 即可）。
   // 以前图标靠浏览器原生 title（延迟约 1s、跟系统样式），分享条是自绘气泡，
   // 同一页两种提示观感，现在统一走 CSS，模板里不再写 title。
   var TIP_CSS = [
     '[data-tip]{position:relative}',
-    '[data-tip]::after{content:attr(data-tip);position:absolute;inset-block-end:calc(100% + 8px);inset-inline-start:50%;transform:translateX(-50%);padding:4px 8px;border-radius:3px;background:Canvas;color:CanvasText;box-shadow:0 4px 14px rgba(0,0,0,.16);font-size:11px;line-height:1.4;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:3}',
+    '[data-tip]::after{content:attr(data-tip);position:absolute;inset-block-end:calc(100% + 8px);inset-inline-start:50%;transform:translateX(-50%);padding:4px 8px;border-radius:3px;background:var(--text,CanvasText);color:var(--bg,Canvas);box-shadow:0 4px 14px rgba(0,0,0,.16);font-size:11px;line-height:1.4;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:3}',
     '[data-tip]:hover::after,[data-tip]:focus-visible::after{opacity:1}',
     '[data-tip]:focus-visible{outline:2px solid currentColor;outline-offset:2px}',
     // Viewer.js 的临时图片宿主：不能 display:none（浏览器会跳过图片加载），
@@ -1946,13 +1947,13 @@
     '.dt-next{text-align:end;align-items:flex-end}',
     '.dt-empty{background:none}',
     '.dt-share-panel{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.45)}',
-    '.dt-share-card{width:min(420px,100%);box-sizing:border-box;padding:22px;border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 24px 60px rgba(0,0,0,.28)}',
+    '.dt-share-card{width:min(420px,100%);box-sizing:border-box;padding:22px;border-radius:8px;background:var(--panel-2,Canvas);color:var(--text,CanvasText);box-shadow:0 24px 60px rgba(0,0,0,.28)}',
     '.dt-share-card h3{margin:0 0 10px;font-size:17px}',
     '.dt-share-card p{margin:0 0 14px;font-size:13px;line-height:1.7;opacity:.82}',
     '.dt-share-url{display:block;width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:14px;border:1px solid rgba(128,128,128,.45);border-radius:4px;background:transparent;color:inherit;font-size:12px}',
     '.dt-share-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}',
     '.dt-share-actions button{padding:8px 14px;border:1px solid rgba(128,128,128,.45);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
-    '.dt-share-actions button.dt-primary{background:CanvasText;color:Canvas;border-color:CanvasText}',
+    '.dt-share-actions button.dt-primary{background:var(--text,CanvasText);color:var(--bg,Canvas);border-color:var(--text,CanvasText)}',
     '@media (max-width:560px){.dt-nav{grid-template-columns:1fr}.dt-next{text-align:start;align-items:flex-start}}'
   ].join('');
 
