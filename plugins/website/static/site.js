@@ -1378,18 +1378,31 @@
     });
   }
 
-  // ---- 插件评分：fetch 提交并就地更新星星与文案；脚本不可用时表单整页 POST，服务端 303 回评分区 ----
+  // ---- 插件评分：fetch 提交并就地更新星星/文案/顶部汇总；脚本不可用时表单整页 POST，服务端 303 回评分区 ----
   function initRatingForm() {
     var form = document.querySelector('[data-rating-form]');
     if (!form || !window.fetch || !window.FormData) return;
     var note = document.querySelector('[data-rating-note]');
+    var topRating = document.querySelector('[data-plugin-rating]');
     var stars = form.querySelectorAll('.rating-star');
+    var buttons = form.querySelectorAll('button[name="score"]');
+    var clear = form.querySelector('[data-rating-clear]');
+
+    function scoreButton(el) {
+      return el && el.closest ? el.closest('button[name="score"]') : null;
+    }
+    // submitter 在老浏览器里没有；记一下最近点过的按钮，键盘/鼠标都能兜住。
+    var clicked = null;
+    form.addEventListener('click', function (e) { clicked = scoreButton(e.target); }, true);
+
     form.addEventListener('submit', function (e) {
-      var btn = e.target && e.target.closest ? e.target.closest('button[name="score"]') : null;
-      if (!btn || !form.contains(btn)) return;
+      // submit 事件的 target 永远是 form，被点的按钮在 submitter（或焦点/最近点击）上。
+      var btn = scoreButton(e.submitter) || clicked || scoreButton(document.activeElement);
+      clicked = null;
+      // 有脚本时一律就地提交，绝不让浏览器整页 POST 后再 303 跳 #rating（那会先回顶再滚下来）。
       e.preventDefault();
-      if (btn.disabled) return;
-      stars.forEach(function (s) { s.disabled = true; });
+      if (!btn || !form.contains(btn) || btn.disabled) return;
+      buttons.forEach(function (b) { b.disabled = true; });
       var score = parseInt(btn.value, 10);
       var fd = new FormData(form);
       fd.set('score', btn.value);
@@ -1402,20 +1415,35 @@
         .then(function (res) { return res.json(); })
         .then(function (body) {
           if (!body || !body.ok) throw new Error('rate failed');
+          var current = parseInt(body.score, 10);
+          if (isNaN(current)) current = 0; // 0 = 已取消
           if (note) note.textContent = body.note || '';
           stars.forEach(function (s) {
-            var on = parseInt(s.value, 10) <= score;
+            var on = current > 0 && parseInt(s.value, 10) <= current;
             s.classList.toggle('on', on);
             s.setAttribute('aria-pressed', on ? 'true' : 'false');
           });
+          if (clear) clear.hidden = current === 0;
+          if (topRating) {
+            var count = parseInt(body.count, 10) || 0;
+            if (count > 0) {
+              topRating.classList.remove('muted');
+              topRating.textContent = '★ ' + (body.avg || '') + ' ';
+              var small = document.createElement('small');
+              small.textContent = '(' + count + ')';
+              topRating.appendChild(small);
+            } else {
+              topRating.classList.add('muted');
+              topRating.textContent = topRating.getAttribute('data-rating-none') || '';
+            }
+          }
         })
         .catch(function () {
-          // 失败就退回整页提交：用户点击的分数仍保留在按钮上。
-          stars.forEach(function (s) { s.disabled = false; });
-          window.location.href = form.action.replace(/\/rate\/?$/, '') + '#rating';
+          // 失败也留在当前位置就地提示，别整页跳转回 #rating（同样会先回顶再滚下来）。
+          if (note) note.textContent = note.getAttribute('data-rating-failed') || '评分保存失败';
         })
         .then(function () {
-          stars.forEach(function (s) { s.disabled = false; });
+          buttons.forEach(function (b) { b.disabled = false; });
         });
     });
   }

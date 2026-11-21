@@ -351,7 +351,7 @@ Conventions:
 - Batch machine translation goes through a plugin-owned route, `POST /plugins/website/i18n/translate/<entity>` (each entity keeps its own edit permission instead of teaching `modules/ai` about plugin codes), reuses the `core/ai` gateway, and only fills fields that are still blank.
 - Market catalog entries use `i18n` maps to localize name/description (see the YAML comments above); category names, placeholder prices like `TBD/Free`, and date formats come from the language dictionary.
 - Upgraded legacy databases: `ensureSeedI18n` only backfills rows whose `i18n_json` is empty and whose source text still matches the factory copy; existing translations are never overwritten.
-- Stats: public downloads are counted per download; ratings are anonymous 1–5 stars, one row per IP per plugin, re-ratable. Admin one-click installs do not count as public downloads.
+- Stats: public downloads are counted per download; ratings are anonymous 1–5 stars, one row per IP per plugin, re-ratable or clearable (`score=0`). Admin one-click installs do not count as public downloads.
 - Private/self-hosted GitHub: `NEXADMIN_MARKET_GITHUB_API` overrides the API root (GitHub Enterprise).
 - Integrity verification: by default "verify whenever a checksum is available, warn and continue when none is"; `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` turns "no checksum available" into a refusal (see "Download integrity verification" above).
 

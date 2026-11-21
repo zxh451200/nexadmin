@@ -348,7 +348,7 @@ cd web && npx tsc --noEmit && npx eslint src
 - 批量机翻走插件自有路由 `POST /plugins/website/i18n/translate/<entity>`（按实体各挂自己的编辑权限，不把插件权限写进 `modules/ai`），复用 `core/ai` 网关，只填仍为空的字段。
 - 市场目录条目用 `i18n` 映射本地化名称/简介（见上文 YAML 注释）；分类名、`待定/免费` 等占位价、日期格式由语言字典处理。
 - 升级上来的老库由 `ensureSeedI18n` 只补 `i18n_json` 为空且原文仍是出厂文案的行，不覆盖已有译文。
-- 统计：公开下载按次计数；评分为匿名 1-5 星，同一 IP 对同一插件只保留一条、可改分。后台一键安装不计入公开下载量。
+- 统计：公开下载按次计数；评分为匿名 1-5 星，同一 IP 对同一插件只保留一条、可改分或取消（`score=0`）。后台一键安装不计入公开下载量。
 - 私有/自建 GitHub：`NEXADMIN_MARKET_GITHUB_API` 覆盖 API 根地址（GitHub Enterprise）。
 - 完整性校验：默认「有校验值就强制校验、取不到则告警放行」；`NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` 改为拒绝任何取不到校验值的安装（见上文「下载完整性校验」）。
 

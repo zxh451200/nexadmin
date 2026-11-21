@@ -2014,8 +2014,9 @@ func (s *Service) IncrementDownload(ctx context.Context, pluginID string) error 
 }
 
 // Rate 记录一次匿名评分：同一 IP 对同一插件只有一行，重复评分会替换旧分。
+// score=0 表示取消评分：删掉该行并回退汇总；本来就没评分时是幂等空操作。
 func (s *Service) Rate(ctx context.Context, pluginID, ip string, score int) error {
-	if score < 1 || score > 5 {
+	if score < 0 || score > 5 {
 		// 与 handler 的预校验同一口径走 i18n 键：这里兜的是绕过 handler 的直接调用
 		return response.BadRequest("website.rating_invalid")
 	}
@@ -2025,6 +2026,9 @@ func (s *Service) Rate(ctx context.Context, pluginID, ip string, score int) erro
 		err := tx.Where("plugin_id = ? AND voter = ?", pluginID, voter).First(&old).Error
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
+			if score == 0 {
+				return nil
+			}
 			row := MarketRating{PluginID: pluginID, Voter: voter, Score: score}
 			if err := tx.Create(&row).Error; err != nil {
 				return err
@@ -2032,6 +2036,11 @@ func (s *Service) Rate(ctx context.Context, pluginID, ip string, score int) erro
 			return bumpMarketStat(tx, pluginID, 0, int64(score), 1)
 		case err != nil:
 			return err
+		case score == 0:
+			if err := tx.Delete(&old).Error; err != nil {
+				return err
+			}
+			return bumpMarketStat(tx, pluginID, 0, int64(-old.Score), -1)
 		case old.Score == score:
 			return nil
 		default:

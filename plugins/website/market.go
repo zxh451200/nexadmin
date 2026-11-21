@@ -745,7 +745,7 @@ func (h *siteHandler) marketPublicKey(c *gin.Context) {
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(market.EncodePublicKey(pub)+"\n"))
 }
 
-// POST /plugins/:id/rate —— 匿名评分（1-5），同一 IP 对同一插件只保留一条。
+// POST /plugins/:id/rate —— 匿名评分（1-5），同一 IP 对同一插件只保留一条；score=0 取消评分。
 func (h *siteHandler) marketRate(c *gin.Context) {
 	ok, err := h.marketEnabled(c.Request.Context())
 	if err != nil {
@@ -767,7 +767,7 @@ func (h *siteHandler) marketRate(c *gin.Context) {
 		lang = preferredLang(c)
 	}
 	score, err := strconv.Atoi(c.PostForm("score"))
-	if err != nil || score < 1 || score > 5 {
+	if err != nil || score < 0 || score > 5 {
 		c.String(http.StatusBadRequest, tr(lang.Code, "plugin.rateInvalid"))
 		return
 	}
@@ -795,8 +795,12 @@ func (h *siteHandler) marketRate(c *gin.Context) {
 			note = trn(lang.Code, "plugin.ratingSummary", st.RatingCount, avg, st.RatingCount)
 		}
 		// 与模板同一处留白：两句文案之间必须有一个空格，否则英文会连成一串。
-		note += " " + trn(lang.Code, "plugin.ratingMine", score, score)
-		c.JSON(http.StatusOK, gin.H{"ok": true, "score": score, "note": note})
+		if score > 0 {
+			note += " " + trn(lang.Code, "plugin.ratingMine", score, score)
+		} else {
+			note += " " + tr(lang.Code, "plugin.ratingCleared")
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "score": score, "avg": avg, "count": st.RatingCount, "note": note})
 		return
 	}
 	c.Redirect(http.StatusSeeOther, lang.Path("/plugins/"+e.ID)+"#rating")
