@@ -8,7 +8,7 @@ import type { EntitySchema, LocaleOption } from '@/framework/components/i18n'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 /** 后端 entityViews 的键；新增内容类型时同步。 */
-export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post' | 'product'
+export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post' | 'product' | 'faq' | 'category' | 'product-category'
 
 /** 页脚社交图标可选平台；键集合与后端 socialPlatforms 一致。 */
 export type SocialPlatform =
@@ -261,6 +261,8 @@ export interface PostCategory {
   sort: number
   /** 栏目下的新闻数：界面按它排栏目，删栏目前先让人看见影响面 */
   postCount: number
+  /** 非默认语言的栏目名译文；空 = 各语言回退原文 */
+  i18nJson: string
 }
 
 /** 新闻标签：编辑器里打字即长的自由主题词，名字是身份（展示字段是 name，不是 title）。 */
@@ -276,6 +278,7 @@ export interface CategoryForm {
   title: string
   slug: string
   sort: number
+  i18nJson: string
 }
 
 export interface TagForm {
@@ -415,6 +418,8 @@ export interface ProductCategoryNode {
   sort: number
   /** 类目（不含子类目）下的商品数：删类目前先让人看见影响面 */
   productCount: number
+  /** 非默认语言的类目名译文；空 = 各语言回退原文 */
+  i18nJson: string
 }
 
 export interface ProductCategoryForm {
@@ -422,6 +427,7 @@ export interface ProductCategoryForm {
   title: string
   slug: string
   sort: number
+  i18nJson: string
 }
 
 /** 拖拽排序：一次提交整棵树的完整顺序（与导航同款）。 */
@@ -631,6 +637,8 @@ export interface FaqItem {
   answer: string
   sort: number
   enabled: boolean
+  /** 非默认语言的问题/答案译文；空 = 回退原文（非默认语言不展示） */
+  i18nJson: string
 }
 
 export interface FaqQuery extends PageQuery {
@@ -668,7 +676,7 @@ export function useDeleteFaqs() {
 export function useSaveFaq() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...data }: { id?: string; question: string; answer: string; sort: number; enabled: boolean }) =>
+    mutationFn: ({ id, ...data }: { id?: string; question: string; answer: string; sort: number; enabled: boolean; i18nJson?: string }) =>
       id ? api.put<FaqItem>(`${BASE}/faqs/${id}`, data) : api.post<FaqItem>(`${BASE}/faqs`, data),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'faqs'] }),
   })
@@ -1340,5 +1348,49 @@ export function useDeleteSiteOrders() {
   return useMutation({
     mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/site-orders`, { ids: ids.join(',') }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'site-orders'] }),
+  })
+}
+
+// ---- 访问统计（第一方轻量：官网公开页浏览行的聚合） ----
+
+/** 统计窗口天数（后端白名单：7/14/30） */
+export type AnalyticsDays = 7 | 14 | 30
+
+export interface AnalyticsPoint {
+  day: string
+  views: number
+  sessions: number
+  inquiries: number
+}
+
+export interface AnalyticsPathRow {
+  path: string
+  views: number
+}
+
+export interface AnalyticsRefRow {
+  kind: 'direct' | 'search' | 'social' | 'external' | 'internal'
+  host: string
+  sessions: number
+}
+
+export interface AnalyticsData {
+  days: AnalyticsDays
+  views: number
+  sessions: number
+  inquiries: number
+  /** 近 5 分钟去重会话（近似实时在线） */
+  realtime: number
+  trend: AnalyticsPoint[]
+  topPaths: AnalyticsPathRow[]
+  referrers: AnalyticsRefRow[]
+}
+
+/** 访问统计总览；60s 轮询让「实时访客」名实相符（其余指标顺带刷新） */
+export function useAnalytics(days: AnalyticsDays) {
+  return useQuery({
+    queryKey: [...KEY, 'analytics', days],
+    queryFn: () => api.get<AnalyticsData>(`${BASE}/analytics?days=${days}`),
+    refetchInterval: 60_000,
   })
 }

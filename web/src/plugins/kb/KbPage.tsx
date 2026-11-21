@@ -127,11 +127,10 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
           accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           files={files}
           onChange={setFiles}
+          /* 从文件库选取：已传过的文档直接引用（fileId），不再重复占一份存储。
+             内嵌在拖拽框底行——它是「拖拽/点选」之外的另一条入口，与主入口同框可视。 */
+          extra={<PickFromLibraryButton onClick={() => setPickOpen(true)} />}
         />
-        {/* 从文件库选取：已传过的文档直接引用（fileId），不再重复占一份存储。
-            左对齐紧跟拖拽区——它是「拖拽/点选」之外的另一条入口，不是页面主操作，
-            不再单独占一行飘在右侧，中间夹一大块空白。 */}
-        <PickFromLibraryButton onClick={() => setPickOpen(true)} />
         <p className="text-xs text-muted-foreground">{t('plugin_kb.uploadHint')}</p>
         {libPicked.length > 0 ? (
           <ul className="divide-y divide-border rounded-lg border border-border text-sm">

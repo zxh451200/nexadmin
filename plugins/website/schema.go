@@ -80,6 +80,25 @@ var entityViews = map[string]entityDef{
 			{"description", "plugin_website.fields.featureDesc", widgetTextarea, 3},
 		},
 	},
+	"faq": {
+		fields: faqI18nFields,
+		views: []fieldView{
+			{"question", "plugin_website.faq.fields.question", widgetText, 0},
+			{"answer", "plugin_website.faq.fields.answer", widgetTextarea, 5},
+		},
+	},
+	"category": {
+		fields: categoryI18nFields,
+		views: []fieldView{
+			{"title", "plugin_website.post.categoryTitle", widgetText, 0},
+		},
+	},
+	"product-category": {
+		fields: productCategoryI18nFields,
+		views: []fieldView{
+			{"title", "plugin_website.productCategory.name", widgetText, 0},
+		},
+	},
 	"page": {
 		fields: pageI18nFields,
 		views: []fieldView{

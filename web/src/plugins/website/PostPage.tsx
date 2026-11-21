@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Copy, Download, ExternalLink, Eye, History, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Copy, Download, ExternalLink, Eye, Globe, History, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -168,7 +168,7 @@ function PostFormBody({
       return
     }
     try {
-      const row = await saveCategory.mutateAsync({ data: { title, slug: slugValue, sort: 0 } })
+      const row = await saveCategory.mutateAsync({ data: { title, slug: slugValue, sort: 0, i18nJson: '' } })
       // 建完就挂上：栏目是共用字段，译文态下这条入口已经置灰，不会走到这里
       setCatIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
       setNewCatTitle('')
@@ -552,6 +552,81 @@ function PostFormDialog({
   )
 }
 
+/** 栏目名译文：原文与 slug 是组织维度，只在这里改各语言的展示名。 */
+function CategoryI18nBody({ row, onOpenChange }: { row: PostCategory; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const save = useSaveCategory()
+  const lf = useLocaleForm()
+
+  const submit = async () => {
+    try {
+      await save.mutateAsync({
+        id: row.id,
+        data: { title: row.title, slug: row.slug, sort: row.sort, i18nJson: lf.serialize().i18nJson },
+      })
+      toast.success(t('common.operateSuccess'))
+      onOpenChange(false)
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_website.post.categoryI18nTitle', { name: row.title })}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>{t('common.save')}</Button>
+        </>
+      }
+    >
+      <div className="flex items-center justify-between gap-2 pb-1">
+        <LocaleSwitcher />
+        <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
+      </div>
+      <div className="flex flex-col gap-3">
+        <LocalizedField fieldKey="title" required />
+        <SharedFieldShell labelKey="plugin_website.post.categoryTitle">
+          <Input value={row.title} readOnly disabled className="font-mono" />
+        </SharedFieldShell>
+        <p className="text-xs text-muted-foreground">{t('plugin_website.post.categoryI18nHint')}</p>
+        <LocaleFormActions />
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+function CategoryI18nDialog({ row, onOpenChange }: { row: PostCategory; onOpenChange: (v: boolean) => void }) {
+  const { data: languages = [] } = useLanguages()
+  const { data: schema, isError, refetch } = useI18nSchema('category')
+  const defaultLocale = languages.find((l) => l.default)?.code ?? ''
+  const translate = useCallback<TranslateBatch>(
+    (texts, to, format) => translateContent('category', texts, defaultLocale, to, format),
+    [defaultLocale],
+  )
+
+  if (!schema || !defaultLocale) {
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
+  }
+
+  return (
+    <LocaleFormProvider
+      schema={schema}
+      locales={languages}
+      defaultLocale={defaultLocale}
+      base={{ title: row.title }}
+      i18nJson={row.i18nJson}
+      translate={translate}
+    >
+      <CategoryI18nBody row={row} onOpenChange={onOpenChange} />
+    </LocaleFormProvider>
+  )
+}
+
 /** 分类与标签管理：紧凑的内联编辑弹窗，不值得单独开一个菜单页。 */
 function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
@@ -564,6 +639,7 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
   const removeTag = useDeleteTag()
   const [newTitle, setNewTitle] = useState('')
   const [newSlug, setNewSlug] = useState('')
+  const [i18nOf, setI18nOf] = useState<PostCategory | null>(null)
 
   const create = async () => {
     if (!newTitle.trim()) {
@@ -571,7 +647,7 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
       return
     }
     try {
-      await saveCategory.mutateAsync({ data: { title: newTitle.trim(), slug: newSlug.trim(), sort: 0 } })
+      await saveCategory.mutateAsync({ data: { title: newTitle.trim(), slug: newSlug.trim(), sort: 0, i18nJson: '' } })
       setNewTitle('')
       setNewSlug('')
       toast.success(t('common.operateSuccess'))
@@ -587,7 +663,8 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
     }
     if (title === row.title && slug === row.slug) return
     try {
-      await saveCategory.mutateAsync({ id: row.id, data: { title: title.trim(), slug: slug.trim(), sort: row.sort } })
+      // 行内只改原文与 slug：译文必须原样回传，否则保存一次名称就把别的语言清空了。
+      await saveCategory.mutateAsync({ id: row.id, data: { title: title.trim(), slug: slug.trim(), sort: row.sort, i18nJson: row.i18nJson } })
       toast.success(t('common.operateSuccess'))
     } catch {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
@@ -643,6 +720,7 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
   }
 
   return (
+    <>
     <ResponsiveDialog
       open
       onOpenChange={onOpenChange}
@@ -653,7 +731,13 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium">{t('plugin_website.post.categories')}</p>
         {categories.map((c) => (
-          <CategoryRow key={c.id} row={c} onSave={update} onDelete={() => void onDeleteCategory(c)} />
+          <CategoryRow
+            key={c.id}
+            row={c}
+            onSave={update}
+            onI18n={() => setI18nOf(c)}
+            onDelete={() => void onDeleteCategory(c)}
+          />
         ))}
         {!categories.length ? <p className="text-sm text-muted-foreground">{t('plugin_website.post.categoriesEmpty')}</p> : null}
         <div className="mt-2 flex flex-col gap-1 border-t border-border pt-3">
@@ -694,15 +778,25 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
         </div>
       </div>
     </ResponsiveDialog>
+    {i18nOf ? (
+      <CategoryI18nDialog
+        row={i18nOf}
+        onOpenChange={(v) => {
+          if (!v) setI18nOf(null)
+        }}
+      />
+    ) : null}
+    </>
   )
 }
 
 /** 一行分类：标题/slug 就地编辑，失焦或点保存提交；slug 改动要走保存按钮（slug 是路由标识，不能失焦误存）。 */
 function CategoryRow({
-  row, onSave, onDelete,
+  row, onSave, onI18n, onDelete,
 }: {
   row: PostCategory
   onSave: (row: PostCategory, title: string, slug: string) => Promise<void>
+  onI18n: () => void
   onDelete: () => void
 }) {
   const { t } = useTranslation()
@@ -729,6 +823,9 @@ function CategoryRow({
       <span className="num ms-auto shrink-0 text-xs text-muted-foreground">
         {t('plugin_website.post.postsCount', { count: row.postCount })}
       </span>
+      <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.categoryI18n')} onClick={onI18n}>
+        <Globe aria-hidden="true" />
+      </Button>
       <Button
         variant="ghost"
         size="icon"

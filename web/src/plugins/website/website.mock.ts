@@ -87,7 +87,7 @@ let posts: SitePost[] = [
     seoDesc: 'NexAdmin：以源码交付的后台管理框架，Gin + GORM + React，生产环境单二进制部署。',
     seoTitle: '', seoKeywords: '后台框架,源码交付',
     // 新闻行内嵌的栏目/标签副本 postCount 恒为 0：后端 Preload 出来的也是 0，计数只在各自清单接口里回填
-    categories: [{ id: id(701), title: '产品动态', slug: 'product', sort: 0, postCount: 0 }],
+    categories: [{ id: id(701), title: '产品动态', slug: 'product', sort: 0, i18nJson: '', postCount: 0 }],
     tags: [{ id: id(901), name: '源码交付', slug: '源码交付', postCount: 0 }],
     content: '<p>十分钟上手：构建、启动、打开 <code>/setup</code> 向导四步完成初始化。</p>',
     publishedAt: ago(60 * 24 * 3),
@@ -107,7 +107,7 @@ let posts: SitePost[] = [
     coverUrl: '', summary: '匿名公开官网（服务端渲染、SEO 友好）+ 后台内容管理。',
     seoDesc: '官网插件：服务端渲染、SEO 友好的企业官网，后台可管设置、导航、页面与新闻。',
     seoTitle: '', seoKeywords: '',
-    categories: [{ id: id(702), title: '插件发布', slug: 'plugins', sort: 0, postCount: 0 }, { id: id(701), title: '产品动态', slug: 'product', sort: 0, postCount: 0 }],
+    categories: [{ id: id(702), title: '插件发布', slug: 'plugins', sort: 0, i18nJson: '', postCount: 0 }, { id: id(701), title: '产品动态', slug: 'product', sort: 0, i18nJson: '', postCount: 0 }],
     tags: [{ id: id(901), name: '源码交付', slug: '源码交付', postCount: 0 }, { id: id(902), name: 'release', slug: 'release', postCount: 0 }],
     content: '<p>你正在浏览的页面，就是它的默认模板。</p>',
     publishedAt: ago(60 * 24), i18nJson: '', publishedJson: '', noindex: false,
@@ -167,8 +167,8 @@ function archivePostVersion(prev: SitePost, newContent: string) {
 // 新闻分类（栏目）：mock 里只有两条种子；新建走 POST /categories（见下方路由）。
 // 行上的 postCount 恒为 0，GET /categories 查询时按新闻真实算，与后端 gorm:"-" 同一口径。
 let categories: PostCategory[] = [
-  { id: id(701), title: '产品动态', slug: 'product', sort: 0, postCount: 0 },
-  { id: id(702), title: '插件发布', slug: 'plugins', sort: 1, postCount: 0 },
+  { id: id(701), title: '产品动态', slug: 'product', sort: 0, i18nJson: '', postCount: 0 },
+  { id: id(702), title: '插件发布', slug: 'plugins', sort: 1, i18nJson: '', postCount: 0 },
 ]
 // 新闻标签：名字是身份，slug 只是 URL 标识；同样由 GET 回填 postCount。
 let tags: PostTag[] = [
@@ -382,9 +382,9 @@ const maxBatchItems = 50
 // ---- 产品中心 ----
 // 行内嵌的类目副本 productCount 恒为 0（对齐新闻 mock 的注释口径），计数只在清单接口回填。
 let productCategories: ProductCategoryNode[] = [
-  { id: id(801), parentId: '0', title: '工业设备', slug: 'industrial', sort: 10, productCount: 0 },
-  { id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, productCount: 0 },
-  { id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, productCount: 0 },
+  { id: id(801), parentId: '0', title: '工业设备', slug: 'industrial', sort: 10, i18nJson: '', productCount: 0 },
+  { id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, i18nJson: '', productCount: 0 },
+  { id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, i18nJson: '', productCount: 0 },
 ]
 
 let products: SiteProduct[] = [
@@ -397,7 +397,7 @@ let products: SiteProduct[] = [
     priceMin: 120, priceMax: 260, currency: 'USD', priceUnit: 'piece', moq: 10, leadTimeDays: 15, port: 'Shanghai', paymentTerms: 'T/T, L/C', freightAmount: 0,
     specsJson: JSON.stringify([{ label: 'Brand Name', value: 'NexFlow' }, { label: 'Place of Origin', value: 'China' }]),
       status: 'online',
-      categories: [{ id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, productCount: 0 }],
+      categories: [{ id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, i18nJson: '', productCount: 0 }],
     i18nJson: JSON.stringify({
       'en-US': {
         title: 'Industrial Centrifugal Water Pump (Stainless Steel)',
@@ -416,7 +416,7 @@ let products: SiteProduct[] = [
     noindex: false, coverUrl: '', imagesJson: '', videoUrl: '',
     priceMin: 0, priceMax: 0, currency: 'USD', priceUnit: 'piece', moq: 5, leadTimeDays: 20, port: 'Shenzhen', paymentTerms: '', freightAmount: 0,
     specsJson: '', status: 'draft',
-    categories: [{ id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, productCount: 0 }],
+    categories: [{ id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, i18nJson: '', productCount: 0 }],
     i18nJson: '', publishedJson: '', views: 0, author: '', updatedAt: ago(60 * 3),
   },
 ]
@@ -730,7 +730,7 @@ defineMock([
       const title = String(body.title ?? '').trim()
       const slug = String(body.slug ?? '').trim()
       checkCategory(title, slug)
-      const row: PostCategory = { id: id(nextCategoryId++), title, slug, sort: Number(body.sort ?? 0), postCount: 0 }
+      const row: PostCategory = { id: id(nextCategoryId++), title, slug, sort: Number(body.sort ?? 0), i18nJson: String(body.i18nJson ?? ''), postCount: 0 }
       categories = [...categories, row]
       return row
     },
@@ -1172,7 +1172,7 @@ defineMock([
     handler: ({ body }) => {
       const row: ProductCategoryNode = {
         id: id(nextProductCategoryId++), parentId: String(body.parentId ?? '0'),
-        title: body.title, slug: body.slug, sort: body.sort ?? 0, productCount: 0,
+        title: body.title, slug: body.slug, sort: body.sort ?? 0, i18nJson: String(body.i18nJson ?? ''), productCount: 0,
       }
       productCategories = [...productCategories, row]
       return row

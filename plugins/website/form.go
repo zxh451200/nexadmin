@@ -194,6 +194,8 @@ type CategoryForm struct {
 	Title string `json:"title"`
 	Slug  string `json:"slug"`
 	Sort  int    `json:"sort"`
+	// I18nJSON 只存非默认语言的栏目名；slug 才是跨语言稳定标识。
+	I18nJSON string `json:"i18nJson"`
 }
 
 // TagForm 是标签管理表单：Slug 留空由 Name 派生（改名不换 URL 标识，避免把已分享的链接打断）。
@@ -263,6 +265,8 @@ type ProductCategoryForm struct {
 	Title    string      `json:"title"`
 	Slug     string      `json:"slug"`
 	Sort     int         `json:"sort"`
+	// I18nJSON 只存非默认语言的类目名；层级与 slug 不随语言变化。
+	I18nJSON string `json:"i18nJson"`
 }
 
 // ProductCategoryOrderItem 是一条类目拖拽排序指令：把 ID 挂到 ParentID 下并写入 Sort。

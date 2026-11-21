@@ -1,12 +1,21 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import {
+  LocaleFormActions,
+  LocaleFormProvider,
+  LocalizedField,
+  LocaleSwitcher,
+  SharedFieldShell,
+  useLocaleForm,
+  useSharedField,
+  type TranslateBatch,
+} from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
-import { RequiredMark } from '@/framework/components/RequiredMark'
 import { slugify } from './format'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { TreeTable } from '@/framework/components/TreeTable'
@@ -14,8 +23,13 @@ import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { EditorSchemaGate } from './EditorSchemaGate'
+import TranslationStatus from './TranslationStatus'
 import {
+  translateContent,
   useDeleteProductCategory,
+  useI18nSchema,
+  useLanguages,
   useNavMaxDepth,
   useProductCategories,
   useReorderProductCategories,
@@ -105,10 +119,10 @@ function catHeight(node: CatNode): number {
 }
 
 /**
- * 类目表单：标题/slug/上级/排序都是全局一份（类目是组织维度，不做多语言，
- * 与新闻分类同一口径），所以是普通表单，不走 LocaleFormProvider。
+ * 类目表单：标题按语言编辑；slug/上级/排序是组织维度，全语言共用一份。
+ * 类目译文只改展示名，链接与层级不受影响。
  */
-function CategoryFormDialog({
+function CategoryFormBody({
   onOpenChange, editing, tree, defaultParentId,
 }: {
   onOpenChange: (v: boolean) => void
@@ -119,13 +133,15 @@ function CategoryFormDialog({
   const { t } = useTranslation()
   const save = useSaveProductCategory()
   const maxDepth = useNavMaxDepth()
-  const [title, setTitle] = useState(editing?.title ?? '')
+  const lf = useLocaleForm()
+  const { disabled: sharedDisabled } = useSharedField()
   const [slug, setSlug] = useState(editing?.slug ?? '')
   const [parentId, setParentId] = useState(defaultParentId)
   const [sort, setSort] = useState(editing ? String(editing.sort) : '0')
   // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
   const [showErrors, setShowErrors] = useState(false)
-  const titleMissing = !title.trim()
+  const baseTitle = (lf.baseValues().title ?? '').trim()
+  const titleMissing = !baseTitle
   const slugBad = slug.trim() !== '' && !slugReg.test(slug.trim())
 
   /** 上级候选：自己与自己的后代不能当上级（会成环），层级到顶的也不能再挂子级。 */
@@ -153,7 +169,7 @@ function CategoryFormDialog({
   }, [tree, editing, maxDepth])
 
   const submit = async () => {
-    if (!title.trim()) {
+    if (!baseTitle) {
       setShowErrors(true)
       toast.error(t('plugin_website.productCategory.required'))
       return
@@ -169,7 +185,13 @@ function CategoryFormDialog({
     try {
       await save.mutateAsync({
         id: editing?.id,
-        data: { parentId, title: title.trim(), slug: finalSlug || slugify(title), sort: Number(sort) || 0 },
+        data: {
+          parentId,
+          title: baseTitle,
+          slug: finalSlug || slugify(baseTitle),
+          sort: Number(sort) || 0,
+          i18nJson: lf.serialize().i18nJson,
+        },
       })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
@@ -183,6 +205,7 @@ function CategoryFormDialog({
       open
       onOpenChange={onOpenChange}
       title={editing ? t('plugin_website.productCategory.edit') : t('plugin_website.productCategory.create')}
+      side="right"
       className="space-y-3"
       footer={
         <>
@@ -193,62 +216,81 @@ function CategoryFormDialog({
         </>
       }
     >
-      <SharedRow label={t('plugin_website.productCategory.name')} required>
-        <Input
-          value={title}
-          maxLength={100}
-          aria-invalid={showErrors && titleMissing}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Water Pumps"
-        />
+      <div className="flex items-center justify-between gap-2 pb-1">
+        <LocaleSwitcher />
+        <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
+      </div>
+      <div className="flex flex-col gap-3">
+        <LocalizedField fieldKey="title" required />
         {showErrors && titleMissing ? <span className="text-xs text-destructive">{t('plugin_website.productCategory.required')}</span> : null}
-      </SharedRow>
-      <SharedRow label={t('plugin_website.fields.slug')}>
-        <Input
-          value={slug}
-          maxLength={64}
-          aria-invalid={showErrors && slugBad}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder={t('plugin_website.fields.slugAuto')}
-          className="font-mono"
-        />
-        {showErrors && slugBad ? <span className="text-xs text-destructive">{t('plugin_website.productCategory.slugInvalid')}</span> : null}
-        <span className="text-xs text-muted-foreground">/products?category={slug || '…'}</span>
-      </SharedRow>
-      <SharedRow label={t('plugin_website.productCategory.parent')}>
-        <Select value={parentId} onValueChange={setParentId}>
-          <SelectTrigger className="w-full" aria-label={t('plugin_website.productCategory.parent')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="max-h-72">
-            <SelectItem value="0">{t('plugin_website.productCategory.parentRoot')}</SelectItem>
-            {parentOptions.map((opt) => (
-              <SelectItem key={opt.id} value={opt.id}>
-                <span style={{ paddingInlineStart: `${(opt.depth - 1) * 16}px` }}>{opt.label}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </SharedRow>
-      <SharedRow label={t('plugin_website.fields.sort')}>
-        <Input type="number" value={sort} onChange={(e) => setSort(e.target.value)} placeholder="0" />
-      </SharedRow>
+        <SharedFieldShell labelKey="plugin_website.fields.slug">
+          <Input
+            value={slug}
+            maxLength={64}
+            disabled={sharedDisabled}
+            aria-invalid={showErrors && slugBad}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder={t('plugin_website.fields.slugAuto')}
+            className="font-mono"
+          />
+          {showErrors && slugBad ? <span className="text-xs text-destructive">{t('plugin_website.productCategory.slugInvalid')}</span> : null}
+          <span className="text-xs text-muted-foreground">/products?category={slug || '…'}</span>
+        </SharedFieldShell>
+        <SharedFieldShell labelKey="plugin_website.productCategory.parent">
+          <Select value={parentId} onValueChange={setParentId} disabled={sharedDisabled}>
+            <SelectTrigger className="w-full" aria-label={t('plugin_website.productCategory.parent')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              <SelectItem value="0">{t('plugin_website.productCategory.parentRoot')}</SelectItem>
+              {parentOptions.map((opt) => (
+                <SelectItem key={opt.id} value={opt.id}>
+                  <span style={{ paddingInlineStart: `${(opt.depth - 1) * 16}px` }}>{opt.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SharedFieldShell>
+        <SharedFieldShell labelKey="plugin_website.fields.sort">
+          <Input type="number" value={sort} disabled={sharedDisabled} onChange={(e) => setSort(e.target.value)} placeholder="0" />
+        </SharedFieldShell>
+        <LocaleFormActions />
+      </div>
     </ResponsiveDialog>
   )
 }
 
-/** 弹窗里的一行字段：标签 + 控件 + 提示。 */
-function SharedRow({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function CategoryFormDialog({
+  onOpenChange, editing, tree, defaultParentId,
+}: {
+  onOpenChange: (v: boolean) => void
+  editing: ProductCategoryNode | null
+  tree: CatNode[]
+  defaultParentId: string
+}) {
+  const { data: languages = [] } = useLanguages()
+  const { data: schema, isError, refetch } = useI18nSchema('product-category')
+  const defaultLocale = languages.find((l) => l.default)?.code ?? ''
+  const translate = useCallback<TranslateBatch>(
+    (texts, to, format) => translateContent('product-category', texts, defaultLocale, to, format),
+    [defaultLocale],
+  )
+
+  if (!schema || !defaultLocale) {
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
+  }
+
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      <span className="inline-flex min-h-7 items-center gap-1.5">
-        <span className="inline-flex items-baseline gap-1">
-          {label}
-          {required ? <RequiredMark /> : null}
-        </span>
-      </span>
-      {children}
-    </div>
+    <LocaleFormProvider
+      schema={schema}
+      locales={languages}
+      defaultLocale={defaultLocale}
+      base={{ title: editing?.title ?? '' }}
+      i18nJson={editing?.i18nJson}
+      translate={translate}
+    >
+      <CategoryFormBody onOpenChange={onOpenChange} editing={editing} tree={tree} defaultParentId={defaultParentId} />
+    </LocaleFormProvider>
   )
 }
 
@@ -256,6 +298,8 @@ export default function ProductCategoryPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { has } = usePermission()
+  // 预取翻译表单的字段元数据，点新增/编辑时不再闪空表单。
+  useI18nSchema('product-category')
   const { data: categories = [], isLoading } = useProductCategories()
   const remove = useDeleteProductCategory()
   const reorder = useReorderProductCategories()
@@ -331,6 +375,11 @@ export default function ProductCategoryPage() {
           {r.title}
         </span>
       ),
+    },
+    {
+      key: 'i18n',
+      title: t('plugin_website.i18n.status'),
+      render: (r) => <TranslationStatus value={r.i18nJson} fields={['title']} />,
     },
     {
       key: 'slug',

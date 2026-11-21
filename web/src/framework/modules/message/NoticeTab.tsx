@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, Paperclip, Trash2 } from 'lucide-react'
+import { Check, Download, Paperclip, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
@@ -192,6 +192,7 @@ export function NoticeTab() {
               })}
             />
             <Button variant="outline" onClick={onReadAll} disabled={readAll.isPending || !data?.total}>
+              <Check aria-hidden="true" />
               {t('message.readAll')}
             </Button>
             <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>

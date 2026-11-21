@@ -23,8 +23,8 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/response"
-	"nexadmin/plugins/maps"
 	"nexadmin/pkg/idgen"
+	"nexadmin/plugins/maps"
 )
 
 // 公开官网页（匿名 SSR）。路由注册在根引擎的 RootGroup 上（见 plugin.go），
@@ -87,14 +87,11 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 	// render 阶段按访客 cookie（nex-site-currency）升级。表为空时 fx 不启用，
 	// 模板 FxCur/FxMoney 原样返回，价格行为与旧版一致。
 	rates, _ := parseCurrencyRates(set.CurrencyRatesJSON)
-	// FAQ 目前只有原文一份（表里没有 i18n 字段）：非默认语言不渲染该板块，
-	// 免得英文首页混进中文问答；等 FAQ 支持译文再按语言取。
-	var faqs []Faq
-	if languageOr(lang).Code == defaultLang.Code {
-		faqs = h.svc.PublicFaqs(ctx)
-	}
+	// FAQ 按语言取译文：非默认语言只展示有译文的条目，没翻译就不摆中文问答。
+	langCode := languageOr(lang).Code
+	faqs := h.svc.PublicFaqs(ctx, langCode)
 	v := &siteView{
-		fx: &fx{rates: rates, display: set.DefaultCurrency},
+		fx:       &fx{rates: rates, display: set.DefaultCurrency},
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
 		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
@@ -113,7 +110,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		PurchaseEnabled: set.PurchaseEnabled,
 		Offices:         parseOffices(set.OfficesJSON),
 		Faqs:            faqs,
-		Consent: set.ContactConsent, ConsentURL: set.ContactConsentURL,
+		Consent:         set.ContactConsent, ConsentURL: set.ContactConsentURL,
 		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),
 		Lang: languageOr(lang), Languages: Languages(),
@@ -242,6 +239,9 @@ func (h *siteHandler) home(c *gin.Context) {
 			v.Products = products
 		}
 		if cats, cerr := h.svc.ListProductCategories(c.Request.Context()); cerr == nil {
+			for i := range cats {
+				cats[i].localize(lang.Code)
+			}
 			v.ProductCategories = ProductCategoryLinks(cats, "")
 		}
 		// 首页新闻区只展示 3 条（模板自己截），案例区还要从最新新闻里按栏目筛案例，
@@ -295,6 +295,7 @@ func (h *siteHandler) newsList(c *gin.Context) {
 			h.notFound(c, nil)
 			return
 		}
+		row.localize(lang.Code)
 		term = termFilter{Kind: "category", Slug: row.Slug}
 		v.NewsKind, v.NewsTermName = "category", row.Title
 		v.NewsTermQuery = url.Values{"category": {row.Slug}}.Encode()
@@ -319,6 +320,9 @@ func (h *siteHandler) newsList(c *gin.Context) {
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
+	}
+	for i := range cats {
+		cats[i].localize(lang.Code)
 	}
 	active := ""
 	if term.Kind == "category" {
@@ -456,6 +460,7 @@ func (h *siteHandler) productsList(c *gin.Context) {
 			h.notFound(c, nil)
 			return
 		}
+		row.localize(lang.Code)
 		term = termFilter{Kind: "category", Slug: row.Slug}
 		v.ProductTermName = row.Title
 		v.ProductTermSlug = row.Slug
@@ -483,6 +488,9 @@ func (h *siteHandler) productsList(c *gin.Context) {
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
+	}
+	for i := range cats {
+		cats[i].localize(lang.Code)
 	}
 	active := ""
 	if term.Kind == "category" {

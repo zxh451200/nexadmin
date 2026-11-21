@@ -118,3 +118,14 @@ menus:
     icon: ExternalLink
     sort: 1
     external: true
+  # 访问统计：公开页浏览/访客/询盘漏斗的第一方统计（采集挂在官网公开路由组）。
+  # 独立权限码 website:analytics：菜单键就是权限码，不能与站点设置共用一个。
+  - parent: /website
+    type: menu
+    title: plugin_website.menu.analytics
+    path: /website/analytics
+    component: plugins/website/AnalyticsPage
+    perm: website:analytics
+    icon: ChartLine
+    sort: 10
+    keep_alive: true

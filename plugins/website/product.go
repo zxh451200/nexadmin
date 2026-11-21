@@ -664,7 +664,11 @@ func (s *Service) SaveProductCategory(ctx context.Context, id idgen.ID, f Produc
 	if id != 0 && level+navSubtreeHeight(parents, uint64(id))-1 > navMaxDepth {
 		return nil, navBadRequest("website.nav_depth_exceeded", navMaxDepth)
 	}
-	row.ParentID, row.Title, row.Sort = f.ParentID, f.Title, f.Sort
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, productCategoryI18nFields)
+	if err != nil {
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
+	}
+	row.ParentID, row.Title, row.Sort, row.I18nJSON = f.ParentID, f.Title, f.Sort, i18n
 	if slugOut != "" {
 		row.Slug = slugOut
 	}

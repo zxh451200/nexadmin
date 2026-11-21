@@ -108,11 +108,6 @@
   [data-content-wide='true'] .page-enter {
     max-width: none;
   }
-  /* 宽表模式下文件宫格列数随宽度自适应：固定列数在铺满后会把卡片拉成巨图，
-     auto-fill 才是文件管理器的铺法（舒适模式不变，仍按断点定列数）。 */
-  [data-content-wide='true'] .file-grid {
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  }
 }
 
 @utility pt-safe {

@@ -17,6 +17,8 @@ import (
 
 type handler struct {
 	svc *Service
+	// tz 是站点时区（Register 时从 config 解析）：访问统计的 day 归日与窗口计算用它。
+	tz *time.Location
 	// gw 是 AI 翻译网关，可为 nil（AI 未配置）；只有机翻接口用到它。
 	gw *ai.Gateway
 	// previewKey 是草稿预览令牌的签名密钥（复用框架 JWT 密钥）；nil = 预览不可用。

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { FileSpreadsheet, FileText, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,9 @@ export interface FileDropFieldProps {
   labelledBy?: string
   disabled?: boolean
   className?: string
+  /** 渲染在虚线框内部底行的附加入口（如「从文件库选择」）：与点击选择并列的第二条入口。
+      独立元素、不嵌进点击区，点击它不会触发选文件；仅在虚线框可见时出现。 */
+  extra?: ReactNode
 }
 
 function formatFileSize(bytes: number) {
@@ -30,7 +33,7 @@ function fileIcon(name: string) {
 }
 
 /** 文件选择：空态是可点击/可拖放的虚线框；single 选好后收成一张卡片，multiple 则保留虚线框并在下方列出文件。 */
-export function FileDropField({ files, onChange, multiple, accept, labelledBy, disabled, className }: FileDropFieldProps) {
+export function FileDropField({ files, onChange, multiple, accept, labelledBy, disabled, className, extra }: FileDropFieldProps) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -134,15 +137,12 @@ export function FileDropField({ files, onChange, multiple, accept, labelledBy, d
             </>,
           )
         ) : (
-          <button
-            type="button"
-            disabled={disabled}
-            aria-labelledby={labelledBy}
-            onClick={() => inputRef.current?.click()}
+          /* 虚线框拆成「外框（边框/拖拽高亮/附加入口）+ 内点击区」两层：附加入口（如从文件库）
+             是独立按钮，不能嵌进 button 元素里——内嵌交互元素是非法 HTML，点击行为也不可控 */
+          <div
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg border border-dashed px-4 py-4 transition-colors',
-              multiple ? 'text-start' : 'flex-col justify-center gap-2 py-5 text-center',
-              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              'flex flex-col gap-2 rounded-lg border border-dashed px-4 py-4 transition-colors',
+              multiple ? '' : 'justify-center py-5',
               rejected
                 ? 'border-destructive/60 bg-destructive/5'
                 : dragging
@@ -151,21 +151,34 @@ export function FileDropField({ files, onChange, multiple, accept, labelledBy, d
               disabled && 'cursor-not-allowed opacity-60',
             )}
           >
-            <span
+            <button
+              type="button"
+              disabled={disabled}
+              aria-labelledby={labelledBy}
+              onClick={() => inputRef.current?.click()}
               className={cn(
-                'flex size-9 shrink-0 items-center justify-center rounded-full transition-colors',
-                rejected
-                  ? 'bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20'
-                  : 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15',
+                'flex w-full items-center gap-3 rounded-md transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                multiple ? 'text-start' : 'flex-col justify-center gap-2 py-1 text-center',
+                disabled && 'cursor-not-allowed',
               )}
             >
-              <Upload className="size-4" aria-hidden="true" />
-            </span>
-            <span className={cn('flex flex-col gap-0.5', multiple && 'min-w-0 flex-1')}>
-              <span className="text-sm font-medium text-foreground">{t('common.dropFile')}</span>
-              {extText ? <span className="text-xs text-muted-foreground">{t('common.supportedFormats', { ext: extText })}</span> : null}
-            </span>
-          </button>
+              <span
+                className={cn(
+                  'flex size-9 shrink-0 items-center justify-center rounded-full transition-colors',
+                  rejected
+                    ? 'bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20'
+                    : 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/15',
+                )}
+              >
+                <Upload className="size-4" aria-hidden="true" />
+              </span>
+              <span className={cn('flex flex-col gap-0.5', multiple && 'min-w-0 flex-1')}>
+                <span className="text-sm font-medium text-foreground">{t('common.dropFile')}</span>
+                {extText ? <span className="text-xs text-muted-foreground">{t('common.supportedFormats', { ext: extText })}</span> : null}
+              </span>
+            </button>
+            {extra ? <div className="flex justify-end">{extra}</div> : null}
+          </div>
         )}
         {rejected ? (
           <p role="alert" className="text-xs text-destructive">

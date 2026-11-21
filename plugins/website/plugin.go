@@ -36,6 +36,8 @@ type module struct {
 	once sync.Once
 	svc  *Service
 	sub  sync.Once
+	// rec 是官网访问统计的采集器：Register 装配（挂 pub 中间件），Start 起 flusher。
+	rec *viewRecorder
 }
 
 func (m *module) service(d *core.Deps) *Service {
@@ -56,6 +58,14 @@ func (*module) Name() string { return "website" }
 // Register 注册管理端与公开官网路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: m.service(d), gw: newAIGateway(d), previewKey: previewKeyOf(d)}
+	// 站点时区：访问统计的 day 归日与窗口计算用它（未配置退 UTC，与其他模块同口径）。
+	loc := time.UTC
+	if l, err := time.LoadLocation(d.Config.App.Timezone); err == nil && d.Config.App.Timezone != "" {
+		loc = l
+	}
+	h.tz = loc
+	// 访问统计采集器：公开路由组挂匿名浏览中间件，管理端出聚合查询。
+	m.rec = newViewRecorder(d.DB, loc, d.Log)
 	// 询盘附件存储：local / S3 跟随 config.storage，与 IM 附件同一套驱动。
 	// 装配失败只是附件不可用（上传接口回 503），留言本身照常入库。
 	if d.Config != nil {
@@ -95,6 +105,9 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.Use(core.RequirePlatformFeature())
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
+	// 访问统计：公开页浏览/访客/询盘漏斗的聚合查询（采集在 pub 组的中间件，权限独立于站点设置——
+	// 菜单键就是权限码，不能共用）。
+	g.GET("/analytics", core.Perm("website:analytics"), core.Desc("官网访问统计"), h.analytics)
 
 	// 站点订单（官网商品页在线购买）：管理端业务记录列表，资金状态在 pay 中台按 bizNo 对账。
 	g.GET("/site-orders", core.Perm("website:order"), core.Desc("站点订单列表"), h.listSiteOrders)
@@ -232,6 +245,9 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 			site.contactLocal = newIPLimiter(contactRateMax, contactRateWindow)
 		}
 		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
+		// 访问统计采集：匿名会话 cookie + 异步批量落库（bot/静态资源/机器文件在中间件内排除）。
+		// 挂最外层才能覆盖语言分组与全部页面路由；写入有损（队列满丢弃），不影响页面响应。
+		pub.Use(m.rec.viewMiddleware())
 		// 站点默认语言固定渲染在无前缀路径上（站点设置 DefaultLang，auto 时为平台默认语言）；
 		// cookie / 浏览器语言只影响首页协商与语言中立端点。
 		pub.Use(LanguageContext(SiteDefaultLanguage()), langNegotiate)
@@ -360,6 +376,11 @@ func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
 // 并挂上新留言通知（站内信 + 可选邮件抄送）。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
+	// 访问统计 flusher：批量落库浏览行，ctx 取消时冲掉余量退出（与 notifier 同一生命周期，
+	// 每轮 Start 一个 flusher，旧 flusher 随旧 ctx 退出）。
+	if m.rec != nil {
+		go m.rec.runFlusher(ctx)
+	}
 	// 品牌主题激活时官网内容归主题与管理员所有：出厂营销内容（导航/特性/新闻/页面）
 	// 不再补种，否则出厂卡片会在每次重启后混回品牌站。设置行仍要存在（渲染依赖它）。
 	if !themeActive(ctx, svc) {

@@ -80,4 +80,11 @@ export const routes: ModuleRoute[] = [
     platform: true,
     menu: { title: 'plugin_website.menu.orders', icon: 'ReceiptText', order: 74, group: 'system' },
   },
+  {
+    path: 'website/analytics',
+    component: lazy(() => import('./AnalyticsPage')),
+    perm: 'website:analytics',
+    platform: true,
+    menu: { title: 'plugin_website.menu.analytics', icon: 'ChartLine', order: 75, group: 'system' },
+  },
 ]

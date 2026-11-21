@@ -1487,11 +1487,26 @@ html[data-scheme="light"] .shot-light { display: block; }
 .docs-foot a { color: var(--text-2); }
 .docs-foot a:hover { color: var(--text); }
 
-/* ---- 404 ---- */
+/* ---- 404 / 错误页：极简居中，主次按钮一眼可分 ---- */
 
-.notfound { text-align: center; padding: 140px 0; }
-.notfound .fig { display: block; margin-bottom: 14px; }
-.notfound .section-sub { margin: 14px 0 28px; }
+.notfound { min-height: 58vh; text-align: center; padding: 112px 0 96px; }
+.notfound .fig { display: block; margin-bottom: 18px; font-size: 12px; font-weight: 600; letter-spacing: 0.18em; }
+.notfound .page-title { letter-spacing: -0.02em; }
+.notfound .section-sub { max-width: 520px; margin: 14px auto 26px; }
+.notfound .hero-cta { justify-content: center; gap: 10px; margin-top: 0; }
+/* .hero-cta .btn-primary 在首页被打成文字链，这里收回成有辨识度的主按钮 */
+.notfound .hero-cta .btn-primary {
+  height: 32px;
+  padding: 0 14px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+.notfound .hero-cta .btn-primary::after { content: none; }
+.notfound .hero-cta .btn-ghost { height: 32px; padding: 0 14px; font-size: 13px; }
 
 /* ---- 插件市场 ---- */
 

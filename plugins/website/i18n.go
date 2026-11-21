@@ -628,6 +628,28 @@ func (f *Feature) localize(code string) {
 	f.Description = pi18n.Pick(tr, "description", f.Description)
 }
 
+func (f *Faq) localize(code string) {
+	tr := translations(f.I18nJSON, code)
+	f.Question = pi18n.Pick(tr, "question", f.Question)
+	f.Answer = pi18n.Pick(tr, "answer", f.Answer)
+}
+
+// translated 判断某语言是否真的录过译文：For 只做完整码/语基匹配，不会回退原文，
+// 所以可以用它把未翻译的 FAQ 挡在非默认语言之外，而不是让中文问答混进英文站。
+func (f *Faq) translated(code string) bool {
+	return translations(f.I18nJSON, code) != nil
+}
+
+func (c *Category) localize(code string) {
+	tr := translations(c.I18nJSON, code)
+	c.Title = pi18n.Pick(tr, "title", c.Title)
+}
+
+func (c *ProductCategory) localize(code string) {
+	tr := translations(c.I18nJSON, code)
+	c.Title = pi18n.Pick(tr, "title", c.Title)
+}
+
 func (p *Post) localize(code string) {
 	tr := translations(p.I18nJSON, code)
 	p.Title = pi18n.Pick(tr, "title", p.Title)
@@ -662,7 +684,7 @@ var (
 		"siteDesc": {Max: 300}, "homeTitle": {Max: 200}, "homeSubtitle": {Max: 500},
 		"homeCtaLabel": {Max: 64}, "seoKeywords": {Max: 300}, "footerNote": {Max: 300},
 	}
-	navI18nFields = pi18n.Fields{"label": {Max: 64}, "description": {Max: 200}}
+	navI18nFields     = pi18n.Fields{"label": {Max: 64}, "description": {Max: 200}}
 	featureI18nFields = pi18n.Fields{
 		"title": {Max: 128}, "description": {Max: 500},
 	}
@@ -676,6 +698,9 @@ var (
 		"title": {Max: 200}, "keywords": {Max: 300}, "summary": {Max: 500},
 		"seoTitle": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
 	}
+	faqI18nFields             = pi18n.Fields{"question": {Max: 300}, "answer": {Max: 5000}}
+	categoryI18nFields        = pi18n.Fields{"title": {Max: 100}}
+	productCategoryI18nFields = pi18n.Fields{"title": {Max: 100}}
 )
 
 // i18nJSON 只用于 seed/backfill 的编译期常量，序列化不会失败。

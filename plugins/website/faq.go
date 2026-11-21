@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/response"
+	pi18n "nexadmin/pkg/i18n"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/importspec"
 )
@@ -30,7 +31,7 @@ type FaqQuery struct {
 func faqFilter(tx *gorm.DB, q FaqQuery) *gorm.DB {
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		tx = tx.Where("LOWER(question) LIKE LOWER(?) OR LOWER(answer) LIKE LOWER(?)", like, like)
+		tx = tx.Where("LOWER(question) LIKE LOWER(?) OR LOWER(answer) LIKE LOWER(?) OR LOWER(COALESCE(i18n_json, '')) LIKE LOWER(?)", like, like, like)
 	}
 	if q.Enabled == "true" {
 		tx = tx.Where("enabled = ?", true)
@@ -60,12 +61,22 @@ func (s *Service) ListFaqs(ctx context.Context, q FaqQuery) ([]Faq, int64, error
 }
 
 // PublicFaqs 公开页只取启用的（sort 排序），渲染 FAQ 板块。
-func (s *Service) PublicFaqs(ctx context.Context) []Faq {
+// 非默认语言只返回真正录过译文的条目：FAQ 是营销内容，宁可少几条也不要把中文问答
+// 摆到英文站上；默认语言仍展示全部（含未翻译的原文）。
+func (s *Service) PublicFaqs(ctx context.Context, lang string) []Faq {
 	var rows []Faq
 	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("sort, id DESC").Find(&rows).Error; err != nil {
 		return nil
 	}
-	return rows
+	out := rows[:0]
+	for i := range rows {
+		if lang != defaultLang.Code && !rows[i].translated(lang) {
+			continue
+		}
+		rows[i].localize(lang)
+		out = append(out, rows[i])
+	}
+	return out
 }
 
 // FaqForm 是 FAQ 编辑表单。
@@ -74,6 +85,7 @@ type FaqForm struct {
 	Answer   string `json:"answer"`
 	Sort     int    `json:"sort"`
 	Enabled  bool   `json:"enabled"`
+	I18nJSON string `json:"i18nJson"`
 }
 
 // SaveFaq 创建（id=0）或更新一条 FAQ；问题必填，答案限长。
@@ -96,10 +108,15 @@ func (s *Service) SaveFaq(ctx context.Context, id idgen.ID, f FaqForm) (*Faq, er
 	} else {
 		row = Faq{}
 	}
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, faqI18nFields)
+	if err != nil {
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
+	}
 	row.Question = f.Question
 	row.Answer = strings.TrimSpace(f.Answer)
 	row.Sort = f.Sort
 	row.Enabled = f.Enabled
+	row.I18nJSON = i18n
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
@@ -202,7 +219,19 @@ func (s *Service) importFaqRow(ctx context.Context, row map[string]string) error
 		}
 		sort = maxSort + 10
 	}
-	_, err = s.SaveFaq(ctx, id, FaqForm{Question: question, Answer: row["answer"], Sort: sort, Enabled: enabled})
+	// 导入只覆盖模板里的列：已有行按问题匹配时保留译文，不能因为重导一次答案就把译文洗掉。
+	i18n := ""
+	if id != 0 {
+		var exist Faq
+		if err := s.db.WithContext(ctx).First(&exist, "id = ?", int64(id)).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return rowError(ctx, err)
+			}
+		} else {
+			i18n = exist.I18nJSON
+		}
+	}
+	_, err = s.SaveFaq(ctx, id, FaqForm{Question: question, Answer: row["answer"], Sort: sort, Enabled: enabled, I18nJSON: i18n})
 	return rowError(ctx, err)
 }
 

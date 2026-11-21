@@ -1153,7 +1153,11 @@ func (s *Service) SaveCategory(ctx context.Context, id idgen.ID, f CategoryForm)
 	} else {
 		row = Category{}
 	}
-	row.Title, row.Sort = f.Title, f.Sort
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, categoryI18nFields)
+	if err != nil {
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
+	}
+	row.Title, row.Sort, row.I18nJSON = f.Title, f.Sort, i18n
 	if slugOut != "" {
 		row.Slug = slugOut
 	}
@@ -1575,6 +1579,10 @@ func (s *Service) PublishedPostBy(ctx context.Context, slug, lang string) (*Post
 		return nil, gorm.ErrRecordNotFound
 	}
 	row.localize(lang)
+	// 详情里的分类徽标走 Preload，单独本地化，别让英文页挂着中文栏目名。
+	for i := range row.Categories {
+		row.Categories[i].localize(lang)
+	}
 	// 浏览量自增：非致命，计数失败不影响渲染（预览令牌的草稿访问不计）。
 	_ = s.db.WithContext(ctx).Model(&Post{}).Where("id = ?", int64(row.ID)).
 		UpdateColumn("views", gorm.Expr("views + 1")).Error

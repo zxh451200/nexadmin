@@ -33,7 +33,8 @@ import { downloadFilesZip, useDeleteFiles, useFileList, useMoveFiles, useUpdateF
 const PAGE_SIZE_GRID = 24
 const CATEGORIES = ['image', 'video', 'doc', 'other'] as const
 /** 卡片最小 190px 左右；再往上加列会让文件名和三行元信息全被截断 */
-const GRID_CLASS = 'grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+// 铺满后列数随宽度自适应（每列 ≥190px），卡片尺寸恒定、窗口越宽列越多；窄屏维持 2 列
+const GRID_CLASS = 'grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]'
 
 interface Filters {
   keyword: string
@@ -406,7 +407,9 @@ export default function FilePage() {
   )
 
   return (
-    <PageContainer>
+    // 文件管理是工作台型页面：无视全局「舒适宽度」直接铺满——限宽会在宽窗口下留出
+    // 一圈布局留白，框选起手区（挂在本页内容行上）够不到，宫格也浪费宽度。
+    <PageContainer className="max-w-none">
       <PageHeader title={t('fileMgr.title')} description={t('fileMgr.description')} actions={uploadBtn} />
 
       {/* 框选的起手区放在整个内容行上：卡片外那圈空白（左侧分组卡下方、表头那一行）在真机上
@@ -465,7 +468,7 @@ export default function FilePage() {
               <Card className="overflow-hidden rounded-xl">
                 <div ref={gridRef} className="select-none p-3">
                 {isLoading ? (
-                  <div className={cn('file-grid', GRID_CLASS)}>
+                  <div className={GRID_CLASS}>
                     {Array.from({ length: 10 }, (_, i) => (
                       <Skeleton key={i} className="aspect-4/3 w-full rounded-lg" />
                     ))}
@@ -473,7 +476,7 @@ export default function FilePage() {
                 ) : rows.length === 0 ? (
                   <EmptyState title={t('fileMgr.empty')} />
                 ) : (
-                  <ul className={cn('file-grid', GRID_CLASS)}>
+                  <ul className={GRID_CLASS}>
                     {rows.map((f) => {
                       const checked = selected.includes(f.id)
                       return (

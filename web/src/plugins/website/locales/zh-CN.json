@@ -12,7 +12,8 @@
       "messages": "留言管理",
       "openSite": "打开官网",
       "orders": "站点订单",
-      "faq": "常见问题"
+      "faq": "常见问题",
+      "analytics": "访问统计"
     },
     "settings": {
       "title": "站点设置",
@@ -207,6 +208,9 @@
       "categoryAdd": "添加分类",
       "categoryCollapse": "收起",
       "categoryTitleRequiredHint": "分类标题必填",
+      "categoryI18n": "栏目译文",
+      "categoryI18nTitle": "栏目译文：{{name}}",
+      "categoryI18nHint": "只改各语言的展示名；slug 与新闻归属不变。未翻译的语言回退原文。",
       "categoryEdit": "编辑分类",
       "categoryDeleteConfirm": "确认删除分类「{{name}}」？{{count}} 篇新闻将不再属于该栏目。",
       "tags": "标签",
@@ -686,6 +690,52 @@
     "purchase": {
       "enabled": "开启产品在线购买",
       "enabledHint": "有定价的产品详情页出「立即购买」，匿名访客下单走支付中台收款；关闭后入口立即消失，已有订单不受影响。"
+    },
+    "analytics": {
+      "title": "访问统计",
+      "description": "公开官网的浏览量、访客与询盘转化。第一方匿名统计：不含 IP 与个人身份，bot 爬虫不采集。",
+      "empty": "暂无数据：官网公开页有真实访客后，这里会出现曲线与排行。",
+      "kpi": {
+        "views": "浏览量",
+        "sessions": "访客数",
+        "inquiries": "询盘量",
+        "realtime": "实时访客",
+        "realtimeHint": "近 5 分钟在站"
+      },
+      "range": {
+        "d7": "近 7 天",
+        "d14": "近 14 天",
+        "d30": "近 30 天",
+        "window": "近 {{days}} 天"
+      },
+      "trend": {
+        "title": "流量趋势",
+        "summaryViews": "次浏览",
+        "series": {
+          "views": "浏览量",
+          "sessions": "访客",
+          "inquiries": "询盘"
+        }
+      },
+      "sources": {
+        "title": "流量来源"
+      },
+      "refKind": {
+        "direct": "直接访问",
+        "search": "搜索引擎",
+        "social": "社交媒体",
+        "external": "外部链接",
+        "internal": "站内跳转"
+      },
+      "paths": {
+        "title": "热门页面"
+      },
+      "funnel": {
+        "title": "浏览 → 询盘",
+        "views": "浏览",
+        "inquiries": "询盘",
+        "rate": "转化率"
+      }
     }
   }
 }

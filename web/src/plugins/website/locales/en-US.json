@@ -12,7 +12,8 @@
       "messages": "Messages",
       "openSite": "Open website",
       "orders": "Site orders",
-      "faq": "FAQ"
+      "faq": "FAQ",
+      "analytics": "Analytics"
     },
     "settings": {
       "title": "Site settings",
@@ -207,6 +208,9 @@
       "categoryAdd": "Add category",
       "categoryCollapse": "Collapse",
       "categoryTitleRequiredHint": "Category title is required",
+      "categoryI18n": "Category translation",
+      "categoryI18nTitle": "Category translation: {{name}}",
+      "categoryI18nHint": "Only the display name changes; the slug and post assignments stay the same. Untranslated languages fall back to the original.",
       "categoryEdit": "Edit category",
       "categoryDeleteConfirm": "Delete category \"{{name}}\"? {{count}} posts will no longer belong to it.",
       "tags": "Tags",
@@ -686,6 +690,52 @@
     "purchase": {
       "enabled": "Enable product checkout",
       "enabledHint": "Products with a price get a \"Buy now\" entry on their detail page; anonymous visitors pay through the pay hub. Turning it off hides the entry at once — existing orders are unaffected."
+    },
+    "analytics": {
+      "title": "Analytics",
+      "description": "Page views, visitors and inquiry conversion of the public site. First-party anonymous analytics: no IP or personal identity; bots are excluded.",
+      "empty": "No data yet: curves and rankings appear once the public site gets real visitors.",
+      "kpi": {
+        "views": "Page views",
+        "sessions": "Visitors",
+        "inquiries": "Inquiries",
+        "realtime": "Realtime visitors",
+        "realtimeHint": "active in last 5 min"
+      },
+      "range": {
+        "d7": "Last 7 days",
+        "d14": "Last 14 days",
+        "d30": "Last 30 days",
+        "window": "Last {{days}} days"
+      },
+      "trend": {
+        "title": "Traffic trend",
+        "summaryViews": "views",
+        "series": {
+          "views": "Page views",
+          "sessions": "Visitors",
+          "inquiries": "Inquiries"
+        }
+      },
+      "sources": {
+        "title": "Traffic sources"
+      },
+      "refKind": {
+        "direct": "Direct",
+        "search": "Search engine",
+        "social": "Social media",
+        "external": "External link",
+        "internal": "Internal"
+      },
+      "paths": {
+        "title": "Top pages"
+      },
+      "funnel": {
+        "title": "Views → Inquiries",
+        "views": "Views",
+        "inquiries": "Inquiries",
+        "rate": "Conversion"
+      }
     }
   }
 }

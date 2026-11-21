@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CircleAlert, CircleCheck, Download, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -6,6 +6,16 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import {
+  LocaleFormActions,
+  LocaleFormProvider,
+  LocalizedField,
+  LocaleSwitcher,
+  SharedFieldShell,
+  useLocaleForm,
+  useSharedField,
+  type TranslateBatch,
+} from '@/framework/components/i18n'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -13,19 +23,23 @@ import { FileDropField } from '@/framework/components/FileDropField'
 import { saveBlob } from '@/framework/components/export/csv'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
-import { Textarea } from '@/framework/ui/textarea'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { EditorSchemaGate } from './EditorSchemaGate'
+import TranslationStatus from './TranslationStatus'
 import {
   createFaqExportJob,
+  translateContent,
   FAQ_IMPORT_SOURCE,
   fetchProductImportJob,
   fetchProductImportTemplate,
   useDeleteFaqs,
   useFaqs,
+  useI18nSchema,
+  useLanguages,
   useReorderFaqs,
   useRunProductImport,
   useSaveFaq,
@@ -33,23 +47,40 @@ import {
   type ProductImportJob,
 } from './api'
 
-/** FAQ 编辑弹窗：问题 + 答案（纯文本，公开页换行保留）+ 排序 + 启用。 */
-function FaqFormBody({ editing, onOpenChange }: { editing: FaqItem | null; onOpenChange: (v: boolean) => void }) {
+/**
+ * FAQ 编辑弹窗：问题/答案走语言表单，排序与启用是全局字段。
+ * 公开站按语言只展示有译文的条目，没翻译的语言留空即可，不必硬凑一版中文。
+ */
+function FaqFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) => void; editing: FaqItem | null }) {
   const { t } = useTranslation()
   const save = useSaveFaq()
-  const [question, setQuestion] = useState(editing?.question ?? '')
-  const [answer, setAnswer] = useState(editing?.answer ?? '')
-  const [sort, setSort] = useState(String(editing?.sort ?? 0))
+  const lf = useLocaleForm()
+  const { disabled: sharedDisabled } = useSharedField()
+  const [sortText, setSortText] = useState(String(editing?.sort ?? 0))
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
+  const [questionMissing, setQuestionMissing] = useState(false)
 
   const submit = async () => {
-    if (!question.trim()) return
+    const base = lf.baseValues()
+    if (!(base.question ?? '').trim()) {
+      setQuestionMissing(true)
+      toast.error(t('plugin_website.faq.questionRequired'))
+      return
+    }
+    setQuestionMissing(false)
     try {
-      await save.mutateAsync({ id: editing?.id, question: question.trim(), answer, sort: Number(sort) || 0, enabled })
+      await save.mutateAsync({
+        id: editing?.id,
+        question: (base.question ?? '').trim(),
+        answer: base.answer ?? '',
+        sort: Math.trunc(Number(sortText)) || 0,
+        enabled,
+        i18nJson: lf.serialize().i18nJson,
+      })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error((e as Error).message)
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -58,43 +89,63 @@ function FaqFormBody({ editing, onOpenChange }: { editing: FaqItem | null; onOpe
       open
       onOpenChange={onOpenChange}
       title={editing ? t('plugin_website.faq.editTitle') : t('plugin_website.faq.addTitle')}
-      size="md"
+      side="right"
+      className="space-y-4"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()} disabled={save.isPending || !question.trim()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>{t('common.save')}</Button>
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="faq-question">{t('plugin_website.faq.fields.question')}</Label>
-          <Input
-            id="faq-question"
-            value={question}
-            maxLength={300}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder={t('plugin_website.faq.questionPlaceholder')}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="faq-answer">{t('plugin_website.faq.fields.answer')}</Label>
-          <Textarea
-            id="faq-answer"
-            rows={6}
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder={t('plugin_website.faq.answerPlaceholder')}
-          />
-          <p className="text-xs text-muted-foreground">{t('plugin_website.faq.answerHint')}</p>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="faq-sort">{t('plugin_website.faq.fields.sort')}</Label>
-          <Input id="faq-sort" type="number" value={sort} onChange={(e) => setSort(e.target.value)} />
-        </div>
-        <SwitchRow label={t('plugin_website.faq.fields.enabled')} checked={enabled} onCheckedChange={setEnabled} />
+      <div className="flex items-center justify-between gap-2 pb-1">
+        <LocaleSwitcher />
+        <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
+      </div>
+      <div className="flex flex-col gap-3">
+        <LocalizedField fieldKey="question" required />
+        {questionMissing ? <p className="text-xs text-destructive">{t('plugin_website.faq.questionRequired')}</p> : null}
+        <LocalizedField fieldKey="answer" />
+        <p className="text-xs text-muted-foreground">{t('plugin_website.faq.answerHint')}</p>
+        <SharedFieldShell labelKey="plugin_website.faq.fields.sort">
+          <Input type="number" step={1} value={sortText} disabled={sharedDisabled} onChange={(e) => setSortText(e.target.value)} />
+        </SharedFieldShell>
+        <SwitchRow
+          label={t('plugin_website.faq.fields.enabled')}
+          checked={enabled}
+          disabled={sharedDisabled}
+          onCheckedChange={setEnabled}
+        />
+        <LocaleFormActions />
       </div>
     </ResponsiveDialog>
+  )
+}
+
+function FaqFormDialog({ onOpenChange, editing }: { onOpenChange: (v: boolean) => void; editing: FaqItem | null }) {
+  const { data: languages = [] } = useLanguages()
+  const { data: schema, isError, refetch } = useI18nSchema('faq')
+  const defaultLocale = languages.find((l) => l.default)?.code ?? ''
+  const translate = useCallback<TranslateBatch>(
+    (texts, to, format) => translateContent('faq', texts, defaultLocale, to, format),
+    [defaultLocale],
+  )
+
+  if (!schema || !defaultLocale) {
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
+  }
+
+  return (
+    <LocaleFormProvider
+      schema={schema}
+      locales={languages}
+      defaultLocale={defaultLocale}
+      base={{ question: editing?.question ?? '', answer: editing?.answer ?? '' }}
+      i18nJson={editing?.i18nJson}
+      translate={translate}
+    >
+      <FaqFormBody onOpenChange={onOpenChange} editing={editing} />
+    </LocaleFormProvider>
   )
 }
 
@@ -209,6 +260,8 @@ export default function FaqPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { start: startExportJob } = useAsyncJob()
+  // 预取字段 schema：点新增/编辑时直接命中缓存，不再先闪一个空表单。
+  useI18nSchema('faq')
   // FAQ 是首页板块条目，量级小：整表拉取（服务端单页上限 200），不做服务端分页——
   // DataTable 的拖动排序只在无分页时可用（拖完要能按全量顺序落库）。
   const page = 1
@@ -289,6 +342,11 @@ export default function FaqPage() {
           <span className="block max-w-[24rem] truncate text-xs text-muted-foreground" title={f.answer}>{f.answer}</span>
         </div>
       ),
+    },
+    {
+      key: 'i18n',
+      title: t('plugin_website.i18n.status'),
+      render: (f) => <TranslationStatus value={f.i18nJson} fields={['question', 'answer']} />,
     },
     {
       key: 'sort',
@@ -386,7 +444,7 @@ export default function FaqPage() {
           </Can>
         )}
       />
-      {open ? <FaqFormBody editing={editing} onOpenChange={setOpen} /> : null}
+      {open ? <FaqFormDialog editing={editing} onOpenChange={setOpen} /> : null}
       {importOpen ? <FaqImportDialog onOpenChange={setImportOpen} /> : null}
     </PageContainer>
   )

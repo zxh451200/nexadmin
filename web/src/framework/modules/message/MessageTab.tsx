@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCheck, ExternalLink, Trash2 } from 'lucide-react'
+import { Check, ExternalLink, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -215,7 +215,7 @@ export function MessageTab({ unread }: { unread: number }) {
               })}
             />
             <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
-              <CheckCheck aria-hidden="true" />
+              <Check aria-hidden="true" />
               {t('message.readAll')}
             </Button>
             <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>

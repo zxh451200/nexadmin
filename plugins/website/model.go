@@ -107,6 +107,8 @@ type Faq struct {
 	Answer   string `gorm:"type:text;not null" json:"answer"`
 	Sort     int    `json:"sort"`
 	Enabled  bool   `json:"enabled"`
+	// I18nJSON 是非默认语言的问题/答案译文；空 = 回退原文。非默认语言只展示有译文的条目。
+	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 }
 
 func (Faq) TableName() string { return "plg_website_faq" }
@@ -126,7 +128,7 @@ const (
 // 金额铁律与 pay 中台一致：金额由服务端按产品定价与数量计算，绝不透传客户端金额。
 type SiteOrder struct {
 	database.PlatformModel
-	OrderNo   string `gorm:"size:40;not null;uniqueIndex:uk_website_order_no" json:"orderNo"`
+	OrderNo   string   `gorm:"size:40;not null;uniqueIndex:uk_website_order_no" json:"orderNo"`
 	ProductID idgen.ID `gorm:"not null;index" json:"-"`
 	// ProductSlug/Title 是下单时的快照：商品后来改名/下架不影响订单回执。
 	ProductSlug  string  `gorm:"size:64;not null" json:"-"`
@@ -146,11 +148,11 @@ type SiteOrder struct {
 	BuyerPhone string `gorm:"column:buyer_phone;size:64;not null;default:''" json:"buyerPhone"`
 	Remark     string `gorm:"size:300;not null;default:''" json:"remark"`
 	// Status 与 PaymentNo 关联 pay 中台支付单；pay.* 事件翻转本地状态。
-	Status     string    `gorm:"size:16;not null;default:'pending';index" json:"status"`
-	PaymentNo  string    `gorm:"column:payment_no;size:40;not null;default:''" json:"paymentNo"`
-	PaidAt     *time.Time `json:"paidAt,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	Status    string     `gorm:"size:16;not null;default:'pending';index" json:"status"`
+	PaymentNo string     `gorm:"column:payment_no;size:40;not null;default:''" json:"paymentNo"`
+	PaidAt    *time.Time `json:"paidAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 func (SiteOrder) TableName() string { return "plg_website_order" }
@@ -241,10 +243,10 @@ type Nav struct {
 	Label    string      `gorm:"size:64;not null" json:"label"`
 	// Description 是二级菜单里跟在标题下的一句话说明；为空时面板退化成纯链接列。
 	Description string `gorm:"size:200;not null;default:''" json:"description"`
-	Href     string      `gorm:"size:255;not null" json:"href"`
-	Sort     int         `json:"sort"`
-	Enabled  bool        `json:"enabled"`
-	I18nJSON string      `gorm:"type:text" json:"i18nJson"`
+	Href        string `gorm:"size:255;not null" json:"href"`
+	Sort        int    `json:"sort"`
+	Enabled     bool   `json:"enabled"`
+	I18nJSON    string `gorm:"type:text" json:"i18nJson"`
 	// Children 只在公开页装配树时填充，不入库。
 	Children []Nav `gorm:"-" json:"children,omitempty"`
 }
@@ -373,12 +375,14 @@ type PostVersion struct {
 func (PostVersion) TableName() string { return "plg_website_post_version" }
 
 // Category 是新闻分类，即编辑部的栏目：后台单独维护、集合有限、公开侧按栏目导航。
-// 标题只存默认语言：栏目是组织维度，跨语言展示时直接落原文即可。
+// Title 是默认语言原文（也是判重依据）；I18nJSON 存其他语言的展示名，缺译回退原文。
 type Category struct {
 	database.PlatformModel
 	Title string `gorm:"size:100;not null;uniqueIndex:uk_plg_website_category_title" json:"title"`
 	Slug  string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_category_slug" json:"slug"`
 	Sort  int    `json:"sort"`
+	// I18nJSON 存栏目名的非默认语言译文；slug 全局唯一且不变，译文改名不影响链接。
+	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// PostCount 是栏目下的新闻数：保存时回填，不落库。界面用它排栏目，
 	// 也让人在删栏目之前先看见「这里面有 12 篇」。
 	PostCount int64 `gorm:"-" json:"postCount"`
@@ -415,7 +419,7 @@ var productStatuses = map[string]bool{
 }
 
 // ProductCategory 是产品类目：对标阿里的「商品分组」，但支持最多 3 级树形层级。
-// 标题只存默认语言：与新闻分类一样，类目是组织维度，跨语言展示时直接落原文。
+// Title 是默认语言原文；I18nJSON 存其他语言的展示名，slug 与层级不随语言变化。
 type ProductCategory struct {
 	database.PlatformModel
 	// ParentID 是上级类目 ID，0 = 顶级；JSON 里按字符串传输（雪花 ID 超出 JS 安全整数）。
@@ -423,6 +427,8 @@ type ProductCategory struct {
 	Title    string      `gorm:"size:100;not null" json:"title"`
 	Slug     string      `gorm:"size:64;not null;uniqueIndex:uk_plg_website_product_category_slug" json:"slug"`
 	Sort     int         `json:"sort"`
+	// I18nJSON 存类目名的非默认语言译文；缺译回退原文。
+	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// ProductCount 是该类目（不含子类目）下的商品数：保存时回填，不落库。
 	ProductCount int64 `gorm:"-" json:"productCount"`
 	// Children 只在树装配时填充，不入库。
