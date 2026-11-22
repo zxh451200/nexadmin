@@ -10,10 +10,12 @@ import (
 //   - IP     是 c.ClientIP()（受 server.trusted_proxies 控制）。
 //   - Peer   是 TCP 对端地址（RemoteAddr 的主机部分），转发头无法伪造。
 //   - Proxied 为真表示请求带有任何常见转发头（客户端自带也可能，所以只能“更严”）。
+//   - UA     是 User-Agent：令牌签发观察点用它登记会话设备。
 type RequestInfo struct {
 	IP      string
 	Peer    string
 	Proxied bool
+	UA      string
 }
 
 type requestInfoKey struct{}
@@ -35,7 +37,7 @@ func NewRequestInfo(r *http.Request, clientIP string) RequestInfo {
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	return RequestInfo{IP: clientIP, Peer: host, Proxied: viaProxy(r.Header)}
+	return RequestInfo{IP: clientIP, Peer: host, Proxied: viaProxy(r.Header), UA: r.UserAgent()}
 }
 
 // DirectLoopback 报告请求是否由本机直接发起：TCP 对端是回环地址，且没有任何转发头。

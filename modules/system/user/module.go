@@ -3,6 +3,7 @@
 package user
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,7 @@ import (
 	"nexadmin/core/apidoc"
 	"nexadmin/core/auth"
 	"nexadmin/core/job"
+	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/session"
 )
 
@@ -32,10 +34,24 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if d.Auth != nil {
 		d.Auth.SetSessionPolicyProvider(func() auth.SessionPolicy { return sessionPolicy(d.DB) })
 	}
-	m.registerOAuth(d.Public, d) // /auth/providers、/auth/oauth/*（第三方快捷登录）
-	m.registerLoginVerify(d)     // POST /auth/login/verify（二次验证换令牌；无 LoginGate 注册时没有挑战，端点恒返回统一错误）
 	h := &handler{svc: &service{db: d.DB, cache: d.Cache, notify: d.Notify, sessions: session.Shared(d.Cache, d.Config.Auth.RefreshTTL)}, log: d.Log}
 	svc := h.svc
+	// 令牌签发即登记会话：session.Middleware 只在 profile/message 等路由惰性登记，
+	// 不登记的会话不受 KickUser 吊销控制——管理员重置密码/停用就踢不掉这类在用会话。
+	// 登录 ctx 还没有租户，会话 key 会写成无前缀；按 claims 的租户补上，保证与
+	// 管理端 KickUser / 在线列表读的 key 同一命名空间。
+	if d.Auth != nil {
+		d.Auth.SetSessionToucher(func(ctx context.Context, cl *auth.Claims, ip, ua string) {
+			if svc.sessions != nil {
+				if _, ok := tenant.From(ctx); !ok && cl.TenantID != 0 {
+					ctx = tenant.With(ctx, cl.TenantID)
+				}
+				_ = svc.sessions.Touch(ctx, cl, ip, ua, func() string { return cl.Username })
+			}
+		})
+	}
+	m.registerOAuth(d.Public, d) // /auth/providers、/auth/oauth/*（第三方快捷登录）
+	m.registerLoginVerify(d)     // POST /auth/login/verify（二次验证换令牌；无 LoginGate 注册时没有挑战，端点恒返回统一错误）
 	m.provisioner(svc)
 	d.Notify.SetDirectory(directory{svc: h.svc}) // 邮件 / 短信渠道按用户资料里的邮箱 / 手机号发送
 	m.registerForgot(d)                          // POST /auth/forgot/send-code、/auth/forgot/reset（匿名）

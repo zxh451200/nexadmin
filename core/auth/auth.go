@@ -152,6 +152,7 @@ type Service struct {
 	singleSession bool
 	provider      atomic.Pointer[Provider]
 	policy        atomic.Pointer[sessionPolicyFunc]
+	toucher       atomic.Pointer[sessionTouchFunc] // 令牌签发观察点（见 SetSessionToucher）；nil 安全
 
 	x       extState      // 登录扩展点注册表（见 extend.go）；零值可用
 	chTTL   time.Duration // 二次验证挑战有效期（0 = 默认）
@@ -225,6 +226,22 @@ func (s *Service) SetSessionPolicyProvider(fn func() SessionPolicy) {
 	}
 	f := sessionPolicyFunc(fn)
 	s.policy.Store(&f)
+}
+
+// sessionTouchFunc 是令牌签发观察点的签名：cl 是刚签发的 ACCESS 令牌载荷
+// （ID=access JTI，RID=配对 refresh 的 JTI），ip/ua 来自请求来源信息。
+type sessionTouchFunc func(ctx context.Context, cl *Claims, ip, ua string)
+
+// SetSessionToucher 注册令牌签发观察点：登录与刷新轮换每次签发令牌对时回调一次，
+// 供会话登记方（user 模块的 session.Store）在签发瞬间落记录。没有这个登记点，
+// 会话要到用户第一次访问挂了 session 中间件的路由才进 store，期间的令牌不受
+// KickUser 吊销控制（管理员重置密码/停用踢不掉）。重复注册覆盖；nil 清除。
+func (s *Service) SetSessionToucher(fn sessionTouchFunc) {
+	if fn == nil {
+		s.toucher.Store(nil)
+		return
+	}
+	s.toucher.Store(&fn)
 }
 
 // sessionPolicy 合并注册的运行时时限与配置默认值：0 表示该维度沿用配置（最长会话除外，0 = 不设上限）。
@@ -319,6 +336,21 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 	refresh, err := mk(kindRefresh, rid, "", refreshTTL)
 	if err != nil {
 		return Pair{}, err
+	}
+	// 令牌签发观察点：会话登记方（user 模块的 session.Store）在此落记录。session.Middleware
+	// 只在 profile/message 等路由惰性登记，从不经过那些路由的会话不进 store——
+	// 管理员重置密码/停用时的 KickUser 就吊销不到它们。签发瞬间登记补上这个缺口。
+	if s.toucher.Load() != nil {
+		if ri, ok := RequestInfoFrom(ctx); ok {
+			cl := Claims{
+				UserID: u.ID, TenantID: u.TenantID, Username: u.Username, Super: u.Super, Kind: kindAccess, RID: rid,
+				SessionStart:     sessionStart,
+				ExternalSession:  session,
+				SessionBinding:   binding,
+				RegisteredClaims: jwt.RegisteredClaims{ID: accessJTI, IssuedAt: jwt.NewNumericDate(now)},
+			}
+			(*s.toucher.Load())(ctx, &cl, ri.IP, ri.UA)
+		}
 	}
 	if s.singleSession {
 		leases, ok := cache.As[cache.Lease](s.cache)
