@@ -82,7 +82,7 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
       <div className="dot-grid-light absolute inset-0" style={{ maskImage: mask, WebkitMaskImage: mask }} aria-hidden="true" />
       <div className="pointer-events-none absolute -inset-s-24 -top-24 size-96 rounded-full bg-primary-foreground/20 blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-32 inset-e-0 size-112 rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-s-1/4 top-[38%] size-64 rounded-full bg-primary/40 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-s-1/4 top-[38%] size-64 rounded-full bg-primary/30 blur-3xl" aria-hidden="true" />
 
       {/* 几何装饰：双层六边形（呼应品牌 logo）+ 轨道环 + 实心小点缀；克制的透明度，保持大留白 */}
       <div
