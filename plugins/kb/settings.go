@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -17,6 +18,9 @@ import (
 )
 
 const settingKeyGeneral = "general"
+
+// maxSystemPromptRunes 是管理员追加回答风格的长度上限（runes）。
+const maxSystemPromptRunes = 2000
 
 // Setting 是插件设置的键值行。
 type Setting struct {
@@ -103,5 +107,10 @@ func normalizeSettings(st *Settings) {
 	if st.TopK < 1 || st.TopK > 10 {
 		st.TopK = DefaultSettings().TopK
 	}
+	// SystemPrompt 拼进每轮问答的 system prompt：不设上限的配置会被 Run 的输入上限
+	// 以 ErrInputTooLong 拒掉，机器人全线静默转人工——写入时截断而不是靠调用方兜底。
 	st.SystemPrompt = strings.TrimSpace(st.SystemPrompt)
+	if runes := utf8.RuneCountInString(st.SystemPrompt); runes > maxSystemPromptRunes {
+		st.SystemPrompt = string([]rune(st.SystemPrompt)[:maxSystemPromptRunes])
+	}
 }

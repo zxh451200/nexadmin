@@ -365,6 +365,7 @@ func (s *Service) chunks(ctx context.Context, model string) ([]indexedChunk, err
 	finger := model + ":" + strconv.FormatInt(count, 10) + ":" + strconv.FormatInt(lastAt, 10)
 	s.cache.mu.RLock()
 	ok := s.cache.finger == finger && len(s.cache.chunks) > 0
+	loading := s.cache.loading
 	var chunks []indexedChunk
 	if ok {
 		chunks = s.cache.chunks
@@ -373,11 +374,27 @@ func (s *Service) chunks(ctx context.Context, model string) ([]indexedChunk, err
 	if ok {
 		return chunks, nil
 	}
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-	if s.cache.finger == finger && len(s.cache.chunks) > 0 { // 双检：并发重建只做一次
-		return s.cache.chunks, nil
+	if loading && len(s.cache.chunks) > 0 {
+		// 重建单飞：别的 goroutine 正在查库建索引，先拿旧索引顶上（文档刚变过可能
+		// 短暂偏旧），新指纹由下一次请求再换——而不是排着队等全表 Join 跑完。
+		s.cache.mu.RLock()
+		stale := s.cache.chunks
+		s.cache.mu.RUnlock()
+		if len(stale) > 0 {
+			return stale, nil
+		}
 	}
+	s.cache.mu.Lock()
+	if s.cache.finger == finger && len(s.cache.chunks) > 0 { // 双检：并发重建只做一次
+		chunks = s.cache.chunks
+		s.cache.mu.Unlock()
+		return chunks, nil
+	}
+	s.cache.loading = true
+	s.cache.mu.Unlock()
+
+	// 重建在锁外做：全表 Join + 向量 JSON 解析是大活，持锁会让期间所有检索
+	// （含机器人应答）排队。
 	var rows []struct {
 		DocID      string `gorm:"column:doc_id"`
 		Title      string `gorm:"column:title"`
@@ -388,18 +405,29 @@ func (s *Service) chunks(ctx context.Context, model string) ([]indexedChunk, err
 		Select("c.document_id AS doc_id, d.title AS title, c.content AS content, c.vector AS vector").
 		Joins("JOIN plg_kb_document d ON d.id = c.document_id AND d.status = ? AND d.model = ?", StatusReady, model).
 		Order("c.document_id, c.seq").Scan(&rows).Error
+	chunks = make([]indexedChunk, 0, len(rows))
+	if err == nil {
+		for _, r := range rows {
+			var vec []float64
+			if json.Unmarshal([]byte(r.VectorJSON), &vec) != nil || len(vec) == 0 {
+				continue // 坏行跳过，不让一条脏数据废掉整个索引
+			}
+			chunks = append(chunks, indexedChunk{docID: r.DocID, title: r.Title, content: r.Content, vector: vec})
+		}
+	}
+
+	s.cache.mu.Lock()
+	s.cache.loading = false
 	if err != nil {
+		s.cache.mu.Unlock()
 		return nil, err
 	}
-	chunks = make([]indexedChunk, 0, len(rows))
-	for _, r := range rows {
-		var vec []float64
-		if json.Unmarshal([]byte(r.VectorJSON), &vec) != nil || len(vec) == 0 {
-			continue // 坏行跳过，不让一条脏数据废掉整个索引
-		}
-		chunks = append(chunks, indexedChunk{docID: r.DocID, title: r.Title, content: r.Content, vector: vec})
+	if s.cache.finger == finger && len(s.cache.chunks) > 0 {
+		chunks = s.cache.chunks // 并发竞争：别的 goroutine 已换上同指纹新结果
+	} else {
+		s.cache.finger, s.cache.chunks = finger, chunks
 	}
-	s.cache.finger, s.cache.chunks = finger, chunks
+	s.cache.mu.Unlock()
 	if s.log != nil {
 		s.log.Info("kb: index rebuilt", "chunks", len(chunks), "model", model)
 	}

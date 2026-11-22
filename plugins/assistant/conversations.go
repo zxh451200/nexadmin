@@ -265,7 +265,16 @@ func (s *service) editConversation(c *gin.Context, deleting bool) {
 	} else {
 		result = q.Updates(map[string]any{"name": name, "updated_at": time.Now().UTC()})
 	}
-	if result.Error != nil || result.RowsAffected != 1 {
+	if result.Error != nil {
+		reply(c, 503, "conversation unavailable")
+		return
+	}
+	if result.RowsAffected != 1 {
+		if deleting {
+			// 并发下已被删掉：404（不存在）而不是 503（存储故障）
+			reply(c, 404, "conversation unavailable")
+			return
+		}
 		reply(c, 503, "conversation unavailable")
 		return
 	}

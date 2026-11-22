@@ -28,6 +28,12 @@ const (
 	seenTTL = 3 * time.Minute
 	// historyLimit 是构建上下文时带入的最近消息数。
 	historyLimit = 12
+	// botRatePerMin / botDailyCap 是 bot 级全局频控：kb 的 Caller 是 Exempt（不受租户
+	// 配额约束），且限流键按会话拆——没有这一层，匿名访客的 AI 调用就没有任何全局
+	// 上限（embedding 在限流检查之前就已发出）。分钟 30 封顶并发问答、每日 500 封顶
+	// 成本；超限走兜底转人工（单会话有 BotPaused 防刷，跨会话兜底量也有界）。
+	botRatePerMin = 30
+	botDailyCap   = 500
 )
 
 // botName 是 AI 回复显示的发送方名（挂件会加 AI 徽标）。
@@ -89,6 +95,8 @@ func (b *bot) Handle(e event.Event) {
 }
 
 // duplicate 多实例防重：共享缓存上对 (convNo, seq) 做自增，拿到 v>1 的实例直接放弃。
+// 无 Counter 的回落用 SetNX（原子占位）替代 Exists+Set 两步——两步之间另一实例
+// 可同时通过，造成重复应答。
 func (b *bot) duplicate(data im.EventData) bool {
 	if b.cache == nil {
 		return false
@@ -98,6 +106,13 @@ func (b *bot) duplicate(data im.EventData) bool {
 		v, _, err := c.Incr(b.ctx, key, seenTTL)
 		return err == nil && v > 1
 	}
+	if l, ok := cache.As[cache.Locker](b.cache); ok {
+		won, err := l.SetNX(b.ctx, key, "1", seenTTL)
+		if err != nil {
+			return false // 缓存故障放行（与限流 fail-open 同一取向），漏答可追问
+		}
+		return !won
+	}
 	ok, _ := b.cache.Exists(b.ctx, key)
 	if ok {
 		return true
@@ -106,15 +121,48 @@ func (b *bot) duplicate(data im.EventData) bool {
 	return false
 }
 
+// botAllow bot 级全局频控：分钟窗口 + 当日计数两层，cache 计数多实例共享。
+// 超限返回 false，由调用方走兜底转人工。
+func (b *bot) botAllow(ctx context.Context) bool {
+	if b.cache == nil {
+		return true // 无缓存不设防（单实例部署本来也没有共享状态可计）
+	}
+	now := time.Now()
+	if c, ok := b.cache.(cache.Counter); ok {
+		n, _, err := c.Incr(ctx, "kb:bot:rate:"+now.Format("200601021504"), 2*time.Minute)
+		if err == nil && n > botRatePerMin {
+			return false
+		}
+		n, _, err = c.Incr(ctx, "kb:bot:day:"+now.Format("20060102"), 26*time.Hour)
+		if err == nil && n > botDailyCap {
+			return false
+		}
+		return true
+	}
+	return true // 无 Counter 的回落不设第二层（与 duplicate 回落同样的边缘场景）
+}
+
 func (b *bot) run() {
 	for {
 		select {
 		case data := <-b.queue:
-			b.answer(data)
+			b.answerSafe(data)
 		case <-b.ctx.Done():
 			return
 		}
 	}
+}
+
+// answerSafe 单条处理包 recover：worker 是常驻协程，goroutine panic 不可被外层
+// recover，一次 panic 就是整个进程崩溃；依赖链（svc/im/cache）出 panic 只该丢
+// 这一条消息，日志留 panic 值。
+func (b *bot) answerSafe(data im.EventData) {
+	defer func() {
+		if r := recover(); r != nil && b.log != nil {
+			b.log.Error("kb: answer panic", "convNo", data.ConvNo, "panic", r)
+		}
+	}()
+	b.answer(data)
 }
 
 // answer 处理一条访客消息。
@@ -126,6 +174,11 @@ func (b *bot) answer(data im.EventData) {
 	}
 	if !b.svc.Ready(ctx) {
 		// 模型没配完整：静默跳过（保持人工现状），不做兜底刷屏——这是配置问题，不是访客问题。
+		return
+	}
+	if !b.botAllow(ctx) {
+		// 全局频控超限：embedding/模型的成本入口先于调用收口，兜底转人工。
+		b.fallback(data.ConvNo, st.AIFallbackText)
 		return
 	}
 	conv, msgs, err := im.Messages(ctx, data.ConvNo, 0, historyLimit)
@@ -153,6 +206,9 @@ func (b *bot) answer(data im.EventData) {
 	if strings.TrimSpace(question) == "" {
 		return
 	}
+	// im 消息上限 2000 字节而 kb 问答 500 runes：超长的粘贴型提问按头部截断，
+	// 而不是必然 400 → 兜底转人工（前 500 字通常已含问题本体，完整原文坐席侧可见）。
+	question = truncateRunes(question, maxAskRunes)
 	// AI 侧的限流/配额键用会话号（访客匿名，没有用户身份），平台级调用不受租户开关约束。
 	who := ai.Caller{UserID: "kb:" + data.ConvNo, Exempt: true}
 	res, err := b.svc.Answer(ctx, who, question, false)

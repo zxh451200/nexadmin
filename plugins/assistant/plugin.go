@@ -177,7 +177,12 @@ func (s *service) session(c *gin.Context) {
 		if loadErr != nil || len(raw) > coreai.MaxRunBytes || json.Unmarshal([]byte(raw), &pending) != nil || !pending.valid() || pending.ConversationID != conversationKeyID(key) ||
 			!time.Now().Before(t.Confirmation.ExpiresAt) {
 			t.Status, t.Confirmation = "confirmation_expired", nil
-		} else if e != nil || binding != pending.Binding {
+		} else if e != nil {
+			// 凭证绑定取不出来（未配 mcp:list / 无凭证）：确认流对这批用户不可用，
+			// 但不该把他们锁在自己的会话外——按过期降级让会话可读；角色补上权限或
+			// 重新登录后确认流自然恢复。真凭证轮换（binding 不匹配）仍 403。
+			t.Status, t.Confirmation = "confirmation_expired", nil
+		} else if binding != pending.Binding {
 			reply(c, 403, "confirmation belongs to another credential")
 			return
 		}
