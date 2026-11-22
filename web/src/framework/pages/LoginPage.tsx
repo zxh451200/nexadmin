@@ -82,18 +82,18 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
       <div className="dot-grid-light absolute inset-0" style={{ maskImage: mask, WebkitMaskImage: mask }} aria-hidden="true" />
       <div className="pointer-events-none absolute -inset-s-24 -top-24 size-96 rounded-full bg-primary-foreground/20 blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-32 inset-e-0 size-112 rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-s-1/3 top-1/2 size-64 rounded-full bg-primary/40 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-s-1/4 top-[38%] size-64 rounded-full bg-primary/40 blur-3xl" aria-hidden="true" />
 
       {/* 几何装饰：双层六边形（呼应品牌 logo）+ 轨道环 + 实心小点缀；克制的透明度，保持大留白 */}
       <div
-        className="pointer-events-none absolute inset-e-12 top-20 size-36 animate-[login-float_14s_ease-in-out_infinite] motion-reduce:animate-none"
+        className="pointer-events-none absolute inset-e-8 top-14 size-36 animate-[login-float_14s_ease-in-out_infinite] motion-reduce:animate-none"
         aria-hidden="true"
       >
         <Hexagon className="absolute inset-0 text-primary-foreground/20" strokeWidth={0.6} />
         <Hexagon className="absolute inset-0 m-auto size-24 text-primary-foreground/13" strokeWidth={0.6} />
       </div>
       <Hexagon
-        className="pointer-events-none absolute inset-e-52 top-64 size-5 animate-[login-float-slow_18s_ease-in-out_infinite] fill-primary-foreground/20 text-transparent motion-reduce:animate-none"
+        className="pointer-events-none absolute inset-e-44 top-56 size-5 animate-[login-float-slow_18s_ease-in-out_infinite] fill-primary-foreground/20 text-transparent motion-reduce:animate-none"
         aria-hidden="true"
       />
       <div
