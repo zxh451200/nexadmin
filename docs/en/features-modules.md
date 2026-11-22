@@ -3,7 +3,7 @@ title: Built-in module list
 summary: What each built-in module and plugin does, where it lives, and what it depends on.
 ---
 
-### How to read this
+## How to read this
 
 - The **module name** is the name in `disabled_modules` (the module's `Name()`).
 - Abbreviated permissions inherit the row's prefix: `create` on the user row means `user:create`. For the routes behind each permission, see [Permission codes and endpoints](features-permissions.md).
@@ -12,7 +12,7 @@ summary: What each built-in module and plugin does, where it lives, and what it 
 > [!TIP]
 > Looking for "which page does X"? Read the [Admin tour](overview.md). Looking for "what does this permission code cover"? Read [Permission codes and endpoints](features-permissions.md).
 
-### Which module is where
+## Which module is where
 
 Listed in admin-menu order. Find a name below in "Module details" for the fine print.
 
@@ -49,7 +49,7 @@ Listed in admin-menu order. Find a name below in "Module details" for the fine p
 | `region` | No menu | Province/city/district data and sync |
 | `ai` | No menu | AI status, natural-language filtering, translation, writing |
 
-### Platform data: who may change it
+## Platform data: who may change it
 
 Some settings are **one row shared by every tenant** — those tables have no `tenant_id`. "May use this module" and "may overwrite this row" are therefore different questions; a permission code only answers the first.
 
@@ -73,7 +73,7 @@ The criterion is `core.IsPlatformCaller` (`core/router.go:51`): **a super admin,
 - Opening these settings to tenant self-service first requires tenant-scoping the tables (three-engine migrations adding `tenant_id` plus reshaped unique keys). That is a design decision to make, not a TODO to queue.
 - [Permission codes and endpoints](features-permissions.md) marks each route that carries the extra gate ("also platform-level").
 
-### System Settings: 13 sections
+## System Settings: 13 sections
 
 | Group | Sections (`?tab=`) | Served by |
 | --- | --- | --- |
@@ -87,9 +87,9 @@ The criterion is `core.IsPlatformCaller` (`core/router.go:51`): **a super admin,
 - The LDAP, SSO and map menu rows stay in place but are hidden. Do not delete them or change their parent — permission codes remain assignable. The legacy `/ldap/config`, `/system/sso-apps` and `/system/map` URLs redirect to the matching section.
 - Live cache state is under Monitoring → Cache monitor.
 
-### Module details
+## Module details
 
-#### System
+### System
 
 - `user`: account CRUD (batch included), enable/disable, password reset, unlock, role / department / post assignment, xlsx import/export (exports go to the export center). Also the login provider and the setup wizard's admin-creation entry — **do not disable it**, or sign-in goes away too.
 - `dept`: tree via `parent_id` plus a materialized path; a cross-level drag (`PUT /depts/:id/move`) rewrites the whole subtree's path in one transaction. Reads return the full tree by default because every department dropdown depends on it; only the department page's `scene=manage` calls clip it for non-super-admins whose scope is narrower than "all" — ancestors up to the root are kept and marked `readonly:true`, and out-of-scope detail is 403.
@@ -99,7 +99,7 @@ The criterion is `core.IsPlatformCaller` (`core/router.go:51`): **a super admin,
 - `file`: folders, tus resumable uploads, previews, public and signed links, move and rename, local or S3 storage, bounded by the tenant's storage quota.
 - `backup`: immediate backup, scheduled backups with retention, download and delete; also requires super admin.
 
-#### Monitoring
+### Monitoring
 
 - `log`: operation and sign-in logs can be queried, deleted, pruned and exported. Exports always go to the export center with an explicit column whitelist (no request params, responses or stack traces). `log.export_max_rows` is a **per-job** cap — exceeding it fails the whole job and asks for narrower filters.
 - `sendlog`: channel, scene (captcha / notice / phone bind / account notice / security alert / test), recipient, title or template name, status, failure reason and duration. Recipients are masked (`138****1234`, `a***@x.com`); codes, bodies and keys are never stored. Writes are enqueued and a failure only reaches the log; in-app messages are not recorded.
@@ -107,9 +107,9 @@ The criterion is `core.IsPlatformCaller` (`core/router.go:51`): **a super admin,
 - `online`: session list and force logout, backed by cache indexes rather than a table.
 - Data-scope clipping actually applies to: users, departments (writes plus the department page's `scene=manage` read), notices (admin-side by creator, with extra publish-target limits), and operation / sign-in logs.
 
-#### Development, security and menu-less endpoints
+### Development, security and menu-less endpoints
 
-- `plugin`: installed plugins with version, licence state and a runtime toggle. Disabling immediately closes that plugin's routes and menu entries; plugins with workers need a restart after being re-enabled. See the [plugin development guide](plugin-development.md).
+- `plugin`: installed plugins with version, licence state and a runtime toggle. Disabling immediately closes that plugin's routes and menu entries; plugins with workers need a restart after being re-enabled. See the [plugin development guide](plugin-dev.md).
 - `openapi`: open-platform apps, event catalog, webhooks and deliveries, online API docs; personal access tokens live in Profile.
 - `sso`: this site as an OIDC Provider — downstream app registration, secret reset, signing-key rotation. App portal `/portal` lists the apps you can enter.
 - `region`: provinces/cities/districts are readable with a login; `region:sync` is needed for sync status, and the five write endpoints also require a platform caller — what they replace is the snapshot every tenant's address picker reads. Data ships embedded in `core/region`; synced snapshots live in `sys_region_snapshot` (no `tenant_id`).
@@ -119,14 +119,14 @@ The criterion is `core.IsPlatformCaller` (`core/router.go:51`): **a super admin,
 - `assistant`: personal named-session CRUD requiring `assistant:use`, capped at 30 per tenant per user. `plg_assistant_conversation` belongs to platform-database migrations, not tenant business tables.
 - `about`: version, build time, database engine, Go version and the open-source licences of backend dependencies.
 
-#### Plugins and licensing
+### Plugins and licensing
 
 - Base services and general-purpose plugins are free; business enhancements are paid. The initial free plan covers `cron`, `codegen`, `imports`, `totp`, `ldap`, `maps`, `crm` and `realname`; others are planned as pro. Formal purchase terms have not been published, so the catalogue is not a price or licence commitment.
-- A free plan does not convert existing pro packages, and a manifest or source tree does not prove a plugin was compiled and mounted. Release packs contain no plugins; `nexadmin new` ships only `totp` by default (disable with `--without-totp`). Install the rest on demand or name them at derivation time with `--plugins <id>,<id>`.
+- A free plan does not convert existing pro packages; the master repo compiles and mounts `totp` and `ldap`, while the manifest or source tree of the other free plugins does not prove they were compiled and mounted. Release packs contain no plugins; `nexadmin new` ships only `totp` by default (disable with `--without-totp`). Install the rest on demand or name them at derivation time with `--plugins <id>,<id>`.
 - `plugin list` reads disk only (free shows `-` in the licence column); for runtime state use `GET /plugins`, startup logs and the actual endpoints.
 - The LDAP plugin accepts a CA certificate (PEM, multiple allowed) in its config page, so internal self-signed LDAPS/StartTLS works; leaving it empty trusts system roots only.
 
-### Easy-to-miss rules
+## Easy-to-miss rules
 
 - The factory menus include a "Help Docs" external link (`https://example.com/docs`, `docs:view`), disabled by default — a placeholder.
 - `internal/modules/example` is a sample business module (module name `example`, `GET /example/hello`, `/example/ping`), not part of the framework.

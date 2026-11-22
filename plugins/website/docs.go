@@ -130,6 +130,8 @@ var docGroups = []docGroup{
 			Summary: "构建、单机/容器部署、升级、备份与日常运维。"},
 		{Slug: "media", File: "媒体能力接入.md", Title: "媒体能力接入",
 			Summary: "图片 WebP、视频托管与嵌入、地图选点的开关、接入方式与排障。"},
+		{Slug: "third-party", File: "第三方开源组件.md", Title: "第三方开源组件",
+			Summary: "框架引入的第三方 UI 与素材组件、各自许可与出处，升级依赖时核对。"},
 	}},
 }
 

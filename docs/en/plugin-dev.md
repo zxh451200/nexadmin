@@ -329,31 +329,13 @@ Market installs hand the downloaded bytes straight to `go build` / `npm build`, 
 - Producer and consumer stay separate: the website's own `/plugins/<id>/download` fetch (`market.Package`) does not verify anything — it is the side that *produces* the `.sha256`, so there is nothing to compare against. Verification happens only in the client-side `Download`.
 - `nexadmin plugin install <local zip>` has no catalog entry to compare with, so the operator supplying the file owns its trustworthiness; verify it first with `nexadmin plugin verify`.
 
-### Website multi-language (website plugin)
+### Display, localization and statistics
 
-**`sys_language` is the sole source of truth for platform languages.** The website consumes it through `core.Languages()`; `languages` in `config.yaml` only seeds an empty table. Do not maintain a separate `locales/languages.json` list.
-
-1. A platform super admin maintains `code` (such as `ja-JP`), `name`, `short`, `dir`, `htmlLang`, `ogLocale`, `prefix`, `dateFormat` and the default language in System Settings → Advanced → Languages.
-2. Website UI dictionaries live in `plugins/website/locales/<code>.json`, with matching keys across languages. These are embedded source assets: rebuild and deploy the binary after changes. Restarting an old binary cannot update its dictionaries.
-3. Changes to the language set or URL prefixes affect routes registered at startup; the save response reports `needRestart`. Restart, then verify navigation, `hreflang`, `og:locale:alternate` and the sitemap.
-
-**Maintain technical documentation only in `docs/`; use the website CMS for marketing content.** Markdown is embedded in the binary and requires a rebuild and deployment after edits. Do not duplicate technical documentation in the CMS or the retired VitePress site. Document paths use stable language `Code`, not the editable URL `prefix`: `zh-CN` reads the Chinese source files in `docs/`, English reads `docs/en/<slug>.md`, and other languages use the lowercase primary subtag of Code (e.g. `ja-JP` → `docs/ja/<slug>.md`). Translations carry `title` / `summary` frontmatter; missing translations fall back to the Chinese source, not a claim of completed translation. Changing the default language or URL prefix does not move files. News, product descriptions and marketing pages are edited, translated and published per language in the CMS without rebuilding for content changes.
-
-Conventions:
-
-- The default language (`default: true`, and its `prefix` must be empty) renders on prefix-less URLs; other languages render under `/<prefix>`. `?lang=<code>` switches and remembers cookie `nex_site_lang`; language-switch links keep current filter parameters.
-- Without a language cookie, the default-language homepage shows a dismissible switch hint (based on `Accept-Language`) to visitors preferring other languages; **it never auto-302s**, avoiding duplicate search indexing, and responses carry `Vary: Accept-Language`.
-- Admin content (site settings, navs, features, pages, posts) stores translations in each table's `i18n_json`: `{"en-US":{"title":"…"}}`; empty fields fall back to the source text on that language's pages. The backend only accepts configured languages and whitelisted fields, and rich-text translations are sanitized too.
-- The editor uses **whole-form locale switching**: one dropdown at the top of the dialog decides which language you are editing, there is a single form instance, and **the number of languages never changes the form height**. In translation mode each field shows its source text underneath, rich text gets a collapsible read-only source panel, and locale-independent fields (slug, cover) are disabled and tagged "shared". The components live in `web/src/framework/components/i18n/` and are reusable from derived projects.
-- The translatable field whitelist, length limits and widgets exist only in Go (`entityViews` in `plugins/website/schema.go`); the frontend reads them from `GET /plugins/website/i18n/schema/:entity`. `TestEntityViewsMatchWhitelist` catches drift between the two. Adding a translatable field means changing that one place — no UI code.
-- The **algorithms** — parsing the translation document, sanitising, length clamping, completeness and per-language publishing — live in `pkg/i18n` (`Normalize` / `Translatable` / `NormalizePublish` / `Published`). They know nothing about specific content or where the language list comes from: implement `Locales` (two methods, `Resolve` / `All`) and you can reuse them. Derived projects adding their own translatable content should use `pkg/i18n` plus `web/src/framework/components/i18n` rather than inventing a second JSON convention. The UI-string catalogue (`core/i18n` + the i18n-editor plugin) is a different thing — do not merge the two.
-- Posts and pages support **per-language publishing** (`published_json`, non-default languages only): a language with missing translations cannot be published — the server downgrades it rather than trusting the client's completeness claim — and its direct URL returns 404 while staying out of that language's listings, `hreflang` and the sitemap. An empty column means publishing has never been configured per language, so every language follows the row's `published` flag and an upgrade changes no existing visibility. Navs, features and settings have no URL to take offline and therefore expose no such switch.
-- Batch machine translation goes through a plugin-owned route, `POST /plugins/website/i18n/translate/<entity>` (each entity keeps its own edit permission instead of teaching `modules/ai` about plugin codes), reuses the `core/ai` gateway, and only fills fields that are still blank.
-- Market catalog entries use `i18n` maps to localize name/description (see the YAML comments above); category names, placeholder prices like `TBD/Free`, and date formats come from the language dictionary.
-- Upgraded legacy databases: `ensureSeedI18n` only backfills rows whose `i18n_json` is empty and whose source text still matches the factory copy; existing translations are never overwritten.
-- Stats: public downloads are counted per download; ratings are anonymous 1–5 stars, one row per IP per plugin, re-ratable or clearable (`score=0`). Admin one-click installs do not count as public downloads.
+- Market catalog entries use `i18n` maps to localize name/description (see the YAML comments above); category names, placeholder prices like `TBD/Free` and date formats come from the website's language dictionary — no need to invent a second convention in the plugin.
+- Public downloads are counted per download; ratings are anonymous 1–5 stars, one row per IP per plugin, re-ratable or clearable (`score=0`). Admin one-click installs do not count as public downloads.
 - Private/self-hosted GitHub: `NEXADMIN_MARKET_GITHUB_API` overrides the API root (GitHub Enterprise).
-- Integrity verification: by default "verify whenever a checksum is available, warn and continue when none is"; `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` turns "no checksum available" into a refusal (see "Download integrity verification" above).
+
+The website plugin owns the language list, dictionaries, per-language publishing and the docs/CMS split — plugin authors do not handle these. See the "region / languages" section of the Configuration reference and the pre-production verification section of the Deployment guide for details.
 
 ## 8. Submission and review
 
@@ -429,11 +411,65 @@ Per-plugin example list prices live in the vendor's purchase-page draft. Tier pr
 
 **Anything special for multi-instance deployments?** There is no distributed lock available for plugins — background tasks must prevent duplicate execution themselves; the cron example uses optimistic database claiming (`UPDATE ... WHERE last_slot < ?` and checks affected rows) as a reference. Multi-instance requirements and known concurrency windows are governed by §10 of the Deployment & Operations Guide.
 
-**Known limitations (current framework version)**
-- Domain validation is implemented: `domains` in the license is compared against the current site domain (exact or `*.example.com` wildcard; the site domain comes from `site.domain` / `site.domains` / `sso.issuer`, falling back to the first request's `Host` when none is set; `license.allow_dev_hosts` allows loopback addresses). On mismatch the plugin state is `invalid`, routes return 403, and the reason shows on the plugin management page. No `domains` in the license means no domain binding.
-- Expired licenses go offline automatically: a periodic admin check (`CheckEvery`, default hourly) plus a check before each plugin request marks expired plugins `expired` with routes returning 403 — no restart needed; the periodic check only refreshes the plugin management page, the request path is checked in real time.
-- `requires_nexadmin` is validated: when mounting (and in `nexadmin plugin install`), the framework version is checked against it; unsatisfied means no mounting (state `invalid`, even a valid license won't help), and `plugin install --allow-incompatible` skips it (CLI only; the admin marketplace does not offer this switch). Empty values, or an unknown framework version (dev builds without a version), pass through; an unparsable range counts as unsatisfied.
-- Licenses are not checked online — only offline revocation exists: the vendor signs a revocation list `config/license-revoked.json` via `plugin revoke` (or export from the license admin) and distributes it with upgrade packages; after signature verification the framework marks licenses whose serial numbers appear in the list as `revoked` (routes return 403, reason shown on the plugin management page); file changes need no restart. This is an auxiliary measure, not strong protection: with source delivery, buyers can delete the list or remove the check. Old licenses without serial numbers cannot be individually revoked. Keep license validity windows short and renew on time; if the vendor's private key leaks or wholesale revocation is needed, remove the corresponding public key from the key set (`config/license-keys.pub` or the built-in list) — all licenses signed by that key become invalid.
-- Multiple public keys are supported: validation uses the built-in key plus appended keys from `config/license-keys.pub` (one base64 per line, `#` starts a comment); the license file's `kid` selects which key (old license files without `kid` try all keys in turn). To rotate keys, append the new key first and remove the old one after old licenses expire — no source changes needed. The built-in key is the development key and must be replaced before official release (`nexadmin release check` blocks on it).
-- A plugin's routes can mount immediately on license import only after it declares the API-only hot-mount contract. The official plugins do not each declare it yet, so rely on the returned `needRestart` and restart when required. The declaration implements `plugin.RuntimeRoutes` with `RequiresRootRoutes() bool` returning `false`, and all routes must live under `/api/v1/plugins/<id>/`.
-- Plugin migrations, menu writes and hot-mounting are not fully verified against real databases yet — state your verification scope in the submission notes.
+## 12. Known limitations (current version)
+
+This section describes boundaries that are "just how the framework is today", not a to-do list. Skim it before writing a plugin to save a round of rework.
+
+### Domain binding
+
+The license's `domains` are compared against the site domain: exact match, or a `*.example.com` wildcard. The site domain comes from `site.domain` / `site.domains` / `sso.issuer`, falling back to the first request's `Host` when none is set; loopback addresses can be allowed via `license.allow_dev_hosts`.
+
+On mismatch the plugin state is `invalid`, routes return 403, and the reason shows on the plugin management page. No `domains` in the license means no domain binding.
+
+### License expiry
+
+Expired licenses go offline automatically — no restart needed. A periodic admin check (`CheckEvery`, default hourly) refreshes the state on the plugin management page; there is also a real-time check before every plugin route is entered, so a slightly stale page state does not affect enforcement.
+
+### Framework version range
+
+`requires_nexadmin` is validated when the plugin mounts, and also by `nexadmin plugin install`. If unsatisfied, the plugin is not mounted (state `invalid` — even a valid license won't help).
+
+- CLI installs can skip it with `--allow-incompatible`; the admin marketplace has no such switch.
+- An empty value, or an unknown framework version (dev builds without a version number), passes through.
+- An unparsable range counts as unsatisfied.
+
+### Revocation and public keys
+
+Licenses are **not** checked online — only offline revocation exists: the vendor uses `plugin revoke` (or export from the license admin) to produce a signed revocation list `config/license-revoked.json`, distributed with upgrade packages. After signature verification the framework marks licenses whose serial numbers appear in the list as `revoked` (403, reason shown on the plugin management page); file changes need no restart.
+
+> [!WARNING]
+> Offline revocation is an auxiliary measure, not strong protection: with source delivery, buyers can delete the list or remove the check, and old licenses without serial numbers cannot be individually revoked. What really works is shorter validity windows and timely renewal. If the private key leaks or wholesale revocation is needed, remove the corresponding public key from the key set (`config/license-keys.pub` or the built-in list) — all licenses signed by that key become invalid.
+
+Multiple public keys are supported: the built-in key plus keys appended in `config/license-keys.pub` (one base64 key per line, `#` starts a comment). The license file's `kid` selects which key; old license files without `kid` try all keys in turn. To rotate keys, append the new key first and remove the old one after old licenses expire — no source changes needed. The built-in key is the development key and must be replaced before official release (`nexadmin release check` blocks on it).
+
+### Runtime toggling: what takes effect immediately
+
+**Takes effect immediately** (no restart):
+
+- The plugin's own routes — `gate` / `admit` decide from runtime state; after disabling, requests return 403 with a reason
+- Availability in `GET /plugins/active`
+- Sidebar menu visibility — `MenuVisible` uses the same criterion as `/plugins/active`, so no entry is left that leads to a 403
+
+**Requires a restart**:
+
+- Established WebSocket / SSE connections — guards are appended, not removed
+- Event subscriptions — `core/event` has only `Subscribe`, no `Unsubscribe`
+- Job registration — runtime deregistration in `core/job` is not a public capability
+- Service singletons created with `sync.Once` inside the plugin
+- Background workers — unless the Module implements `plugin.RestartableStarter`
+
+The `RestartableStarter` contract: when `Start` returns it must provide `Done()`; after ctx cancellation all tasks confirm their exit before the framework calls `Start` again with a fresh ctx on re-enable.
+
+**No official plugin implements it yet**, so a plugin with a worker that is disabled and then re-enabled requires a restart: re-enabling sets `needRestart=true`, and routes and menus stay unavailable in the meantime — the framework does not pretend it is alive.
+
+The disabled list is a node-local file (`data/licenses/disabled.json`); cluster nodes do not sync it automatically: either toggle node by node, or use the `disabled_plugins` config distributed with your config. `nexadmin plugin list` reads only disk and config, not this overlay.
+
+### Hot mounting
+
+A plugin's routes can mount immediately on license import only after it declares the "API-only" hot-mount contract. No official plugin declares it yet, so after importing a license go by the returned `needRestart` and restart if required.
+
+Declaration: implement `plugin.RuntimeRoutes`'s `RequiresRootRoutes() bool` returning `false`, with all routes under `/api/v1/plugins/<id>/`.
+
+### Real-database verification scope
+
+Plugin migrations, menu writes and hot-mounting are not yet fully verified against a real database. State your verification scope explicitly in the submission notes; do not substitute unit-test conclusions for it.

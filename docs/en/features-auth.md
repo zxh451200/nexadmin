@@ -3,7 +3,7 @@ title: Login and authentication
 summary: Sign-in methods, captcha and lockout rules, token lifetimes.
 ---
 
-### Login methods
+## Login methods
 
 The login page shows methods per configuration; unconfigured ones are absent without errors (`GET /api/v1/auth/methods` returns `methods`, `providers`, `registerProviders`, `forgotEnabled`). All three methods issue the same JWT dual-token pair on success.
 
@@ -17,7 +17,7 @@ Supported providers: WeCom, DingTalk, Feishu, Google (OIDC, code + PKCE), GitHub
 
 The callback page is `/admin/login/oauth/<provider>`, and `redirect_uris` must be its full URL — that is exactly what Settings → Sign-in methods → Redirect URIs asks for, prefilled with the current site's address when a provider is enabled. Google / GitHub need outbound internet; configure `auth.proxy` on restricted networks. Config keys are in the Configuration Reference §3.
 
-#### Captcha
+### Captcha
 
 **Switch**: `captchaEnabled` under Settings → Security & sign-in → Sign-in security, on by default and effective immediately on save. When off, sign-in, self-registration and anonymous SMS code requests show no captcha at all; sign-in stays bound by IP rate limits and account lockout.
 
@@ -32,11 +32,11 @@ The callback page is `/admin/login/oauth/<provider>`, and `redirect_uris` must b
 - All three paths (sign-in, SMS, register) share one cache key and one `VerifyCaptcha` gate: IP-bound and single use. Issued tokens carry a form marker — slider `s|`, click `c|`, digit text unmarked.
 - **The hard tier accepts only click tokens server-side** (`VerifyCaptchaHard`); slider tokens and digit text are rejected. A script that calls `/auth/slider` directly to mint a token is blocked by the server, not merely by the frontend switching form. The trade-off: the digit code is unusable during escalation either, and the counter self-heals after a fixed 15-minute window.
 - The slider also inspects the trail: at least 6 samples, 150ms–15s duration, at least 40px of travel, landing within ±6px, plus speed dispersion and a teleport cap across samples. The form cannot be switched away, and the only exit in the UI is "use an image code instead".
-- There are 21 backdrop assets, each render overlaid with a random tone shift (applied to backdrop and cut-out alike), so a pre-marked image library cannot locate the notch; the notch X is not derived from the client-visible key.
+- There are 21 backdrop assets, each render overlaid with a random tone shift (applied to backdrop and cut-out alike), so a pre-marked image library cannot locate the notch; the notch X is not derived from the client-visible key. For the third-party components behind the slider and their licenses, see [Third-party open-source components](third-party.md).
 - The keyboard path was removed by product decision; the accessibility fallback is the digit code (typeable, with audio). All three forms have a refresh button in the top-right corner.
 - Operational metrics are exposed on `/metrics`: `nexadmin_auth_captcha_issued_total` / `verify_pass_total` / `verify_fail_total` (split by image / slider / click) and `escalation_total` (by slider / click tier).
 
-#### Lockout and rate limits
+### Lockout and rate limits
 
 - An account locks once consecutive password failures hit the limit: fallback 5 failures / 15 minutes, with the factory lockout duration at 30 minutes, adjustable in the `security` section of Settings or via the `login.max_retry` and `login.lock_minutes` system parameters.
 - Only **password** failures count, and they are counted per username — a clumsy human never gets locked. A slider drag miss only feeds the IP-side escalation counter. Slider-grinding automation still escalates, and escalation is immediate: once a drag miss pushes the IP counter past the hard threshold, the verify-failure response itself carries `CAPTCHA_REQUIRED_HARD` and the frontend switches to the click form on the spot, without waiting for the next wrong password.
@@ -44,7 +44,7 @@ The callback page is `/admin/login/oauth/<provider>`, and `redirect_uris` must b
 - A non-existent user still costs one bcrypt comparison, and the response is always "wrong username or password" while the real reason only reaches the log; lockout treats existing and non-existent usernames alike.
 - Forgot password (`POST /auth/forgot/send-code`, `/auth/forgot/reset`): recovery uses the available email / SMS channels and account bindings; codes last 10 minutes, with a 60-second cooldown, at most 5 attempts, and per-IP and per-account hourly limits. A non-unique email or phone across enabled accounts cannot use recovery and account existence is not disclosed; an admin must reset the password.
 
-#### Runtime configuration of sign-in methods
+### Runtime configuration of sign-in methods
 
 - The password / phone toggles, provider toggles and credentials, redirect URIs, WeCom AgentId, matching rules and outbound proxy are stored in `sys_setting.auth` and read per request — a save takes effect on the next login-page load, without editing `config.yaml` or restarting.
 - `config.yaml` becomes the fallback and seed: when the section was never saved everything follows the file; a saved provider only overrides the fields it filled (an empty secret keeps the file or env value), and turning it off disables it even if the file configures it.
@@ -52,7 +52,7 @@ The callback page is `/admin/login/oauth/<provider>`, and `redirect_uris` must b
 - Saving validates with the same merge rules: an enabled provider still missing `client_id` / `client_secret` / `redirect_uris` (plus `agent_id` for WeCom, `issuer` for OIDC) is rejected (`config.auth.provider_incomplete`), and so is leaving no sign-in method at all (`config.auth.no_login_method`) — no more "saved successfully, nothing on the login page".
 - Provider adapters are cached by a config fingerprint, so changed credentials, endpoints or proxy rebuild them on the next authorization instead of redeeming codes with a stale `client_id`.
 
-### Registration
+## Registration
 
 The register page is reachable once `auth.allow_register` or the `user.register_enabled` system parameter is on, and shows the same row of "quick sign-up" buttons under the register button, listing every configured provider — `registerProviders` from `/auth/methods` (equal to `providers` while self-registration is open, empty otherwise). Two registration paths coexist: username and password go through `POST /auth/register`, while a provider button goes through `GET /auth/oauth/<provider>/start?intent=register`.
 
@@ -61,7 +61,7 @@ The register page is reachable once `auth.allow_register` or the `user.register_
 - Creation obeys the same constraints as self-registration: the tenant plan's user quota (`ensureUserQuota`), a passwordless account (no password sign-in; use the provider afterwards or set a password in Profile), roles from `auth.register_roles` (same as password registration, **not** the provider's `default_role`), and the same `user.created` event on success.
 - If an administrator turns self-registration off mid-authorization, the register intent in the state lapses and the flow falls back to login semantics (no account is created), so a user who already authorized is not left stranded.
 
-### Tokens & sessions
+## Tokens & sessions
 
 - Access token (default 30 minutes) and refresh token (default 168 hours), HS256; refreshing revokes the old refresh immediately; logout revokes the current access and its paired refresh; revocation records live in cache, and cache unavailability rejects requests.
 - Optional `auth.single_session: true`: only the latest login's tokens are accepted for the same tenant+user; old access/refresh tokens are rejected, and refresh uses an atomic compare-and-swap so old sessions cannot overwrite new logins. Off by default; multi-instance requires shared Redis and identical configuration.

@@ -3,7 +3,12 @@ title: Permission codes and endpoints
 summary: The full mapping between permission codes and backend endpoints.
 ---
 
-Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics` are at the root). "Login only" = a valid login is required but no permission code is checked; "public" = no login (some protected by credentials, one-time state, signatures or rate limits); **"also platform-level"** = the endpoints on that line carry `core.RequirePlatform()` on top of the permission code and only accept a platform-level caller (super admin, or a request resolving to the default tenant — `core.IsPlatformCaller`, `core/router.go:51`), so a non-platform caller gets **403 + `error.platform_only` even with the permission code in place**; the two checks run in registration order, and read endpoints never carry this gate. Where one permission code mixes gated and ungated endpoints (`ticket:edit`, `region:sync`) they are split across two lines rather than sharing one. Grouped by module; endpoints sharing a permission code are on one line.
+Generated from source, grouped by module; endpoints sharing a permission code are on one line.
+
+- Paths omit the `/api/v1` prefix (`/healthz` and `/metrics` are at the root).
+- **Login only** = a valid login is required but no permission code is checked; **public** = no login (some protected by credentials, one-time state, signatures or rate limits).
+- **Also platform-level** = the endpoints on that line carry `core.RequirePlatform()` on top of the permission code and only accept a platform-level caller (super admin, or a request resolving to the default tenant — `core.IsPlatformCaller`, `core/router.go:51`), so a non-platform caller gets 403 + `error.platform_only` even with the permission code in place; the two checks run in registration order, and read endpoints never carry this gate.
+- Where one permission code mixes gated and ungated endpoints (`ticket:edit`, `region:sync`) they are split across two lines rather than sharing one.
 
 | Module | Permission | Endpoints |
 | --- | --- | --- |
@@ -47,6 +52,7 @@ Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics
 | openapi | `openapi:list` | `GET /openapi.json`<br>`GET /openapi/apps`<br>`GET /openapi/deliveries`<br>`GET /openapi/events`<br>`GET /openapi/routes`<br>`GET /openapi/webhooks` |
 | plugin | `plugin:list` | `GET /plugins` |
 | plugin | `plugin:license` (dynamically registered per installed plugin) | `POST /plugins/<id>/license` |
+| plugin | `plugin:edit` (super admin only; the route stays reserved after disabling, so a plugin disabled at startup can still be re-enabled) | `POST /plugins/<id>/enabled` |
 | plugin | Login only (forwarded to not-yet-mounted plugins; the license gate and the plugin's own `Perm` decide) | `ANY /plugins/<id>/*rest` |
 | profile | Login only | `DELETE /profile/bindings/:key`<br>`DELETE /profile/bindings/phone`<br>`DELETE /profile/sessions/:id`<br>`GET /profile`<br>`GET /profile/bindings`<br>`GET /profile/sessions`<br>`POST /profile/bindings/:key`<br>`POST /profile/bindings/phone`<br>`PUT /profile`<br>`PUT /profile/password` |
 | profile | Public (IP rate-limited, rule `sms_code`) | `POST /auth/sms-code` |
@@ -117,6 +123,10 @@ Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics
 | user | `user:resetPwd` | `POST /users/:id/reset-password` |
 | user | `user:unlock` | `POST /users/:id/unlock` |
 | user | `user:update` | `PUT /users/:id`<br>`PUT /users/:id/status` |
+| workflow (plugin, prefix `/plugins/workflow`) | `workflow:list` | `GET /plugins/workflow/defs`<br>`GET /plugins/workflow/defs/:id`<br>`GET /plugins/workflow/defs/:id/xml`<br>`GET /plugins/workflow/templates`<br>`GET /plugins/workflow/instances` (`todo=1` / `done=1` / `mine=started`)<br>`GET /plugins/workflow/instances/:id` |
+| workflow (plugin) | `workflow:edit` | `POST /plugins/workflow/defs`<br>`PUT /plugins/workflow/defs/:id`<br>`DELETE /plugins/workflow/defs/:id` |
+| workflow (plugin) | `workflow:start` | `POST /plugins/workflow/instances`<br>`POST /plugins/workflow/instances/:id/withdraw` |
+| workflow (plugin) | `workflow:approve` | `POST /plugins/workflow/instances/:id/approve`<br>`POST /plugins/workflow/instances/:id/reject`<br>`POST /plugins/workflow/instances/:id/countersign`<br>`POST /plugins/workflow/instances/:id/rollback`<br>`POST /plugins/workflow/instances/:id/escalate` |
 | example (sample business module) | Login only | `GET /example/hello` |
 | example (sample business module) | `example:ping` | `GET /example/ping` |
 | audit (plugin, prefix `/plugins/audit`) | `audit:clean` | `DELETE /plugins/audit/logs` |
@@ -143,6 +153,9 @@ Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics
 | im (plugin) | `im:edit` | `POST /plugins/im/conversations/:no/close`<br>`PUT /plugins/im/conversations/:no/tags`<br>`PUT /plugins/im/conversations/:no/note`<br>`POST /plugins/im/quick-replies`<br>`PUT /plugins/im/quick-replies/:id`<br>`DELETE /plugins/im/quick-replies/:id`<br>`POST /plugins/im/conversations/:no/transfer`<br>`POST /plugins/im/conversations/:no/merge`<br>`PUT /plugins/im/settings` |
 | im (plugin) | Super admin (`middleware.RequireSuper`, operation-logged) | `DELETE /plugins/im/conversations/:no`<br>`POST /plugins/im/conversations-delete` |
 | im (plugin) | Public (IP rate-limited; the unguessable conversation number acts as the visitor's capability token) | `GET /plugins/im/visitor/status`<br>`POST /plugins/im/visitor/conversations`<br>`GET /plugins/im/visitor/conversations/:no/messages`<br>`POST /plugins/im/visitor/conversations/:no/messages`<br>`POST /plugins/im/visitor/conversations/:no/read`<br>`POST /plugins/im/visitor/conversations/:no/typing`<br>`POST /plugins/im/visitor/conversations/:no/rating`<br>`POST /plugins/im/visitor/conversations/:no/attachments`<br>`GET /plugins/im/visitor/attachments/:token`<br>`GET /plugins/im/visitor/stream/:no` |
+| kb (plugin, prefix `/plugins/kb`; documents and chunks are platform-level tables, the whole group gated by `core.RequirePlatformFeature()`) | `kb:list` | `GET /plugins/kb/documents`<br>`GET /plugins/kb/settings`<br>`GET /plugins/kb/status`<br>`POST /plugins/kb/ask` |
+| kb (plugin) | `kb:edit` | `POST /plugins/kb/documents` (multipart upload, sync split and vectorize)<br>`POST /plugins/kb/documents/:id/reembed`<br>`PUT /plugins/kb/settings` |
+| kb (plugin) | `kb:delete` (operation-logged) | `DELETE /plugins/kb/documents/:id` (cascades chunks) |
 | ticket (plugin, prefix `/plugins/ticket`) | `ticket:list` | `GET /plugins/ticket/tickets`<br>`GET /plugins/ticket/tickets/stats`<br>`POST /plugins/ticket/tickets-export-async`<br>`GET /plugins/ticket/tickets/:no/replies`<br>`GET /plugins/ticket/tickets/:no/links`<br>`GET /plugins/ticket/canned`<br>`GET /plugins/ticket/sla`<br>`GET /plugins/ticket/groups`<br>`GET /plugins/ticket/rules`<br>`GET /plugins/ticket/biz-types`<br>`GET /plugins/ticket/tags`<br>`GET /plugins/ticket/fields`<br>`GET /plugins/ticket/sla/policies`<br>`GET /plugins/ticket/settings`<br>`GET /plugins/ticket/tickets/:no/attachments/:token` (the shared-config reads here are **not** platform-gated: a tenant agent sees the one set of definitions every tenant shares, and cannot change it) |
 | ticket (plugin) | `ticket:reply` | `POST /plugins/ticket/tickets/:no/replies`<br>`POST /plugins/ticket/tickets/:no/attachments`<br>`DELETE /plugins/ticket/tickets/:no/attachments/:token` |
 | ticket (plugin) | `ticket:edit` (also platform-level: these 17 write entry points touch the shared configuration rows, which have no `tenant_id`) | `POST /plugins/ticket/canned`<br>`PUT /plugins/ticket/canned/:id`<br>`DELETE /plugins/ticket/canned/:id`<br>`PUT /plugins/ticket/sla`<br>`POST /plugins/ticket/sla/policy`<br>`DELETE /plugins/ticket/sla/policy/:code`<br>`POST /plugins/ticket/groups`<br>`PUT /plugins/ticket/groups/:id`<br>`DELETE /plugins/ticket/groups/:id`<br>`PUT /plugins/ticket/groups/:id/members`<br>`POST /plugins/ticket/rules`<br>`PUT /plugins/ticket/rules/:id`<br>`DELETE /plugins/ticket/rules/:id`<br>`POST /plugins/ticket/fields`<br>`PUT /plugins/ticket/fields/:id`<br>`DELETE /plugins/ticket/fields/:id`<br>`PUT /plugins/ticket/settings` |

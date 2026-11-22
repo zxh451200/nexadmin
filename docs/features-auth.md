@@ -3,7 +3,7 @@ title: 登录与认证
 summary: 登录方式、验证码与锁号规则、令牌有效期。
 ---
 
-### 登录方式
+## 登录方式
 
 登录页按配置显示，没配置的不显示、不报错（`GET /api/v1/auth/methods` 返回 `methods`、`providers`、`registerProviders`、`forgotEnabled`）。三种方式登录成功后发同一套 JWT 双 token。
 
@@ -17,7 +17,7 @@ summary: 登录方式、验证码与锁号规则、令牌有效期。
 
 回调页是 `/admin/login/oauth/<provider>`，`redirect_uris` 必须是它的完整 URL —— 设置页「登录方式 → 回调地址」填的就是这个值，开启某个 provider 时默认带出当前站点的地址。Google / GitHub 需要服务器能访问外网，受限网络配 `auth.proxy`。配置键见《配置参考》第 3 节。
 
-#### 验证码
+### 验证码
 
 **开关**：设置页「安全与登录 → 登录安全」的 `captchaEnabled`，出厂开启、保存即生效。关闭后登录、自助注册、匿名短信取码都不再出现验证码；登录仍受 IP 限流与账号锁定约束。
 
@@ -32,11 +32,11 @@ summary: 登录方式、验证码与锁号规则、令牌有效期。
 - 三条链路（登录、短信、注册）共用同一个缓存键、同一个 `VerifyCaptcha` 消费闸：绑定 IP，校验一次即作废。签发的 token 带形态标记 —— 滑块 `s|`、点选 `c|`，图形码文本无标记。
 - **硬档在服务端只认点选 token**（`VerifyCaptchaHard`），滑块 token 与图形码文本都过不了：直接调 `/auth/slider` 换 token 的脚本被挡在服务端，而不只是前端切了形态。代价是升级期间图形码也用不了，计数按 15 分钟固定窗口后自愈。
 - 滑块还看轨迹：采样点 ≥6、时长 150ms–15s、推进 ≥40px、落点 ±6px，另加多点轨迹的速度离散度与瞬移上限。形态切换走不了，界面唯一的出口是「改用图形验证码」。
-- 底图素材共 21 张，每次出图叠加随机色调扰动（背景与抠块同一运算），预标记图库定位不到孔位；孔位横坐标不从前端可见的 key 派生。
+- 底图素材共 21 张，每次出图叠加随机色调扰动（背景与抠块同一运算），预标记图库定位不到孔位；孔位横坐标不从前端可见的 key 派生。滑块用到的第三方组件与许可见[第三方开源组件](第三方开源组件.md)。
 - 键盘路径按产品决策已移除，无障碍兜底就是图形码（可输入、有语音）。三种形态右上角都有刷新按钮。
 - 运营指标经 `/metrics` 暴露：`nexadmin_auth_captcha_issued_total` / `verify_pass_total` / `verify_fail_total`（按 image / slider / click 分型）与 `escalation_total`（按 slider / click 分级）。
 
-#### 锁号与限流
+### 锁号与限流
 
 - 连续密码错误达到上限即锁定账号：回落值 5 次 / 15 分钟，出厂系统参数的锁定时长为 30 分钟，可在设置页 `security` 分区或系统参数 `login.max_retry`、`login.lock_minutes` 调整。
 - 只数**密码**失败，且按用户名算 —— 真人手滑不会被锁号；滑块拖错只计入 IP 维度的升级计数。磨滑块的自动化照样会升级，且升级即时生效：拖错把 IP 计数推过硬阈值时，交卷失败的响应当场带 `CAPTCHA_REQUIRED_HARD`，前端立即切点选，不必等下一次密码失败。
@@ -44,7 +44,7 @@ summary: 登录方式、验证码与锁号规则、令牌有效期。
 - 用户不存在时也做一次 bcrypt 比较，对外统一提示「用户名或密码错误」，真实原因只进日志；锁定状态对存在与不存在的用户名一视同仁。
 - 忘记密码（`POST /auth/forgot/send-code`、`/auth/forgot/reset`）：按可用的邮件 / 短信渠道及账号绑定信息提供找回；验证码 10 分钟有效，冷却 60 秒，最多尝试 5 次，另有按 IP 与按账号的小时级限流。邮箱或手机号在启用账号中不唯一时拒绝找回，且不暴露账号是否存在，由管理员重置。
 
-#### 登录方式的运行时配置
+### 登录方式的运行时配置
 
 - 账号密码 / 手机号开关、provider 的开关与凭据、回调地址、企业微信 AgentId、账号匹配与限制、出站代理都存 `sys_setting.auth`，每次请求现读 —— 保存后下一次加载登录页即生效，不改 `config.yaml`、不重启。
 - `config.yaml` 退为回退与种子：该分区从未保存过时全部按文件走；保存过的 provider 只覆盖它填了的字段（密钥留空 = 继续用文件或环境变量里的），开关关闭则文件里配了也不生效。
@@ -52,7 +52,7 @@ summary: 登录方式、验证码与锁号规则、令牌有效期。
 - 保存时按同一套合并规则校验：开启的 provider 合起来仍缺 `client_id` / `client_secret` / `redirect_uris`（企微另缺 `agent_id`、OIDC 另缺 `issuer`）直接拒绝（`config.auth.provider_incomplete`）；一种登录方式都不剩也拒绝（`config.auth.no_login_method`）—— 不再出现「保存成功、登录页一行没有」。
 - provider 适配器按配置指纹缓存，改了凭据 / 端点 / 代理后下一次授权自动重建，不会拿旧 `client_id` 去换码。
 
-### 注册
+## 注册
 
 注册页在 `auth.allow_register` 或系统参数 `user.register_enabled` 开启后可达，注册按钮下方给出同一排「快捷注册」按钮，列出全部已配置 provider，即 `/auth/methods` 的 `registerProviders`（开放自助注册时等于 `providers`，关闭时为空）。两条注册通道并存：填账号密码走 `POST /auth/register`，点第三方按钮走 `GET /auth/oauth/<provider>/start?intent=register`。
 
@@ -61,7 +61,7 @@ summary: 登录方式、验证码与锁号规则、令牌有效期。
 - 建号走与自助注册同一条约束：租户套餐用户数上限（`ensureUserQuota`）、无密码（不可密码登录，后续用第三方登录或在个人中心设密码）、角色取 `auth.register_roles`（与账号密码注册一致，**不是** provider 的 `default_role`），成功后同样发布 `user.created` 事件。
 - 授权期间管理员关掉自助注册：state 里的注册意图作废，退回登录语义（不建号），已授权的用户不会被挡在门外。
 
-### 令牌与会话
+## 令牌与会话
 
 - access token（默认 30 分钟）和 refresh token（默认 168 小时），HS256 签名；刷新时旧 refresh 立即作废；登出吊销当前 access 及其配对的 refresh；吊销记录存缓存，缓存不可用时拒绝放行。
 - 可选 `auth.single_session: true`：同一租户、同一用户仅保留最后一次登录；旧 access/refresh 被拒绝，刷新使用缓存原子比较替换，避免旧会话覆盖新登录。默认关闭，多实例须共享 Redis 并保持配置一致。

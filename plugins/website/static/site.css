@@ -1474,8 +1474,10 @@ html[data-scheme="light"] .shot-light { display: block; }
 .docs-body[data-reveal] { opacity: 1 !important; transform: none !important; }
 .docs-body :not(pre) > code { overflow-wrap: anywhere; }
 .docs-body table { display: block; max-width: 100%; overflow-x: auto; }
-/* 首列多是两三个字的键名（「账号密码」「滑块拼图」），自动布局会把它压到一两个字就换行，
-   给个下限让它保持单行；长路径类表格只是多占一点宽度，不影响滚动。 */
+/* 列宽按内容自然展开，短值（允许/拒绝、权限码、键名）不竖排；超宽时整表横向滚动。
+   单元格里的 <br> 仍分段，接口清单这类长单元格不会缩成一整行，只读性更好。 */
+.docs-body table th, .docs-body table td { white-space: nowrap; }
+/* 首列多是两三个字的键名（「账号密码」「滑块拼图」），给个下限保留单行留白 */
 .docs-body table th:first-child, .docs-body table td:first-child { min-width: 7.5em; }
 /* 首列合并后的分组名固定顶对齐，避免 rowspan 单元格被浏览器按基线居中 */
 .docs-body table td[rowspan] { vertical-align: top; }
