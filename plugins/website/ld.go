@@ -100,6 +100,24 @@ func articleJSONLD(v *siteView, p *Post) template.JS {
 	)})
 }
 
+// faqJSONLD FAQPage（/faq 独立页）：整页可见的问答逐条进 mainEntity——结构化数据
+// 必须与页面可见内容一一对应（Google 富摘要口径）。答案去 markdown 反引号与 RSS 同口径。
+func faqJSONLD(faqs []Faq) template.JS {
+	entities := make([]any, 0, len(faqs))
+	for i := range faqs {
+		entities = append(entities, map[string]any{
+			"@type":          "Question",
+			"name":           faqs[i].Question,
+			"acceptedAnswer": map[string]any{"@type": "Answer", "text": rssPlain(faqs[i].Answer)},
+		})
+	}
+	return marshalLD(map[string]any{
+		"@context":   "https://schema.org",
+		"@type":      "FAQPage",
+		"mainEntity": entities,
+	})
+}
+
 // productJSONLD 产品详情：名称/描述/图集/品牌/类目 + 有价时的 Offer（询盘品无价不给 offers，
 // 空报价会被谷歌商品摘要判无效）+ 面包屑，一组两个实体。
 func productJSONLD(v *siteView, p *Product) template.JS {
@@ -191,7 +209,7 @@ func (h *siteHandler) rss(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "rss unavailable")
 		return
 	}
-	base := strings.TrimSuffix(baseURL(c), "/")
+	base := strings.TrimSuffix(siteBase(c, set.SiteOrigin), "/")
 	siteName := set.SiteName
 	if siteName == "" {
 		siteName = "NexAdmin"
@@ -211,6 +229,9 @@ func (h *siteHandler) rss(c *gin.Context) {
 	selfLink := base + "/rss.xml"
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	// 浏览器已不内置订阅预览，裸 XML 打开就是一屏标签：挂一张 XSL 让浏览器渲染成
+	// 「这是什么、怎么订阅」说明页；阅读器只解析 XML 结构，这行处理指令对它无感。
+	b.WriteString(`<?xml-stylesheet type="text/xsl" href="/website-assets/feed.xsl"?>` + "\n")
 	fmt.Fprintf(&b, `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>%s</title><link>%s/</link><description>%s</description><language>%s</language><atom:link href="%s" rel="self" type="application/rss+xml"/><pubDate>%s</pubDate><lastBuildDate>%s</lastBuildDate><generator>NexAdmin</generator>`+"\n",
 		rssEsc.Replace(siteName), base, rssEsc.Replace(set.SiteDesc), lang.Code, selfLink, stamp, stamp)
 	for _, p := range posts {
@@ -228,5 +249,8 @@ func (h *siteHandler) rss(c *gin.Context) {
 	}
 	b.WriteString(`</channel></rss>`)
 	c.Header("Cache-Control", "public, max-age=3600")
-	c.Data(http.StatusOK, "application/rss+xml; charset=utf-8", []byte(b.String()))
+	// MIME 用 application/xml 而不是专用的 application/rss+xml：Chrome 只对 XML 家族 MIME
+	// 解析并应用 XSLT 样式表，专用 MIME 退回纯文本（订阅说明页就废了）。阅读器按内容
+	// 解析、发现链接（layout head 的 rel=alternate）仍声明 RSS 类型，两边都不受影响。
+	c.Data(http.StatusOK, "application/xml; charset=utf-8", []byte(b.String()))
 }

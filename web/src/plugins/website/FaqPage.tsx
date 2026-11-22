@@ -339,7 +339,6 @@ export default function FaqPage() {
       render: (f) => (
         <div className="min-w-0">
           <span className="block max-w-[24rem] truncate font-medium text-foreground" title={f.question}>{f.question}</span>
-          <span className="block max-w-[24rem] truncate text-xs text-muted-foreground" title={f.answer}>{f.answer}</span>
         </div>
       ),
     },

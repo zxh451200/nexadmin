@@ -123,10 +123,15 @@
     <nav class="tk-footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.URL "/products"}}">{{.T "theme.torkon.allProducts"}}</a>
+    </nav>
+    {{if .Posts}}
+    <nav class="tk-footer-col" aria-label="{{.T "layout.resources"}}">
+      <h4>{{.T "layout.resources"}}</h4>
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
     </nav>
-    <nav class="tk-footer-col" aria-label="{{.T "layout.company"}}">
-      <h4>{{.T "layout.company"}}</h4>
+    {{end}}
+    <nav class="tk-footer-col" aria-label="{{.T "layout.contact"}}">
+      <h4>{{.T "layout.contact"}}</h4>
       {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
       <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
     </nav>

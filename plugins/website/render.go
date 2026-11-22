@@ -527,7 +527,7 @@ type siteView struct {
 	SiteDesc string
 	LogoURL  string
 	// FaviconURL / OgImageURL 是站点设置里的资产：浏览器标签图标与默认分享图（og:image 兜底），
-	// 空 = 模板回退内置 favicon.svg / og.png。
+	// 空 = 前台回退动态 /favicon.svg（站点名首字母标），分享图回退内置 og.png。
 	FaviconURL string
 	OgImageURL string
 	// HeadCode 是站点设置里的自定义 <head> 代码（统计脚本等）：管理员可信输入，经
@@ -558,6 +558,7 @@ type siteView struct {
 	ICP             string
 	FooterNote      string
 	SeoKeywords     string
+	SiteOrigin      string // 站点规范域名（设置里配的）：render 阶段推导 BaseURL 用
 	BaseURL         string // 绝对地址，用于 canonical / og:url / og:image
 	Path            string // 当前请求路径（含语言前缀），用于 canonical
 	Route           string // 去掉语言前缀的站内路径，用于导航高亮与语言切换

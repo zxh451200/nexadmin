@@ -4,7 +4,12 @@
     <p class="fig">{{.T "faq.fig"}}</p>
     <h1 class="page-title">{{.T "faq.title"}}</h1>
     {{if .Faqs}}
-    <div class="hp-faq faq-page-list">
+    {{/* 搜索是纯前端过滤（site.js 的 data-faq-search）：条目量级几十条，不值得为它加接口。 */}}
+    <input class="faq-search" type="search" data-faq-search
+           placeholder="{{.T "faq.searchPlaceholder"}}"
+           aria-label="{{.T "faq.searchPlaceholder"}}"
+           autocomplete="off">
+    <div class="hp-faq faq-page-list" data-faq-list>
       {{range .Faqs}}
       <details class="hp-faq-item">
         <summary>{{.Question}}</summary>
@@ -12,6 +17,7 @@
       </details>
       {{end}}
     </div>
+    <p class="faq-empty" data-faq-empty hidden>{{.T "faq.searchEmpty"}}</p>
     <p class="faq-contact">{{.T "faq.contactHint"}} <a href="{{.URL "/contact"}}">{{.T "faq.contactLink"}}<span aria-hidden="true">→</span></a></p>
     {{else}}
     <p class="empty">{{.T "faq.empty"}}</p>

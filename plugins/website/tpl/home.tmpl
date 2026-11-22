@@ -17,7 +17,13 @@
           {{- if $i}}<br>{{end}}<span class="hp-title-line">{{$line}}</span>
           {{- end}}
         </h1>
-        <p class="hp-hero-lede">{{.T "home.heroLede"}}</p>
+        {{if ne (.T "home.heroLede") ""}}
+        <p class="hp-hero-lede">
+          {{- range $i, $line := titleLines (.T "home.heroLede")}}
+          {{- if $i}}<br>{{end}}{{$line}}
+          {{- end}}
+        </p>
+        {{end}}
         {{if .HomeSubtitle}}<p class="hp-hero-sub">{{.HomeSubtitle}}</p>{{end}}
         <div class="hp-hero-actions">
           {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}

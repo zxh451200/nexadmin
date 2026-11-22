@@ -84,7 +84,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 	v := &siteView{
 		fx:       &fx{rates: rates, display: set.DefaultCurrency},
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
-		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
+		SiteOrigin: set.SiteOrigin, FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
 		TitleSuffix: set.TitleSuffix, HomeSlug: set.HomeSlug,
 		ThemeID:   set.Theme,
@@ -149,7 +149,7 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 		v.CurrencyOptions = currencyOptions(v.fx.rates, v.Lang.Code)
 	}
 	// canonical / og:url 需要绝对且带语言前缀的地址；Route 保留无前缀路径用于导航。
-	v.BaseURL = baseURL(c)
+	v.BaseURL = siteBase(c, v.SiteOrigin)
 	v.Route = stripLangPrefix(c.Request.URL.Path)
 	v.Path = v.Lang.Path(v.Route)
 	v.Query = c.Request.URL.RawQuery
@@ -160,6 +160,10 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 		v.PageLD = productJSONLD(v, v.Product)
 	case v.Post != nil:
 		v.PageLD = articleJSONLD(v, v.Post)
+	// FAQ 独立页整页都是可见问答，才有资格挂 FAQPage；首页板块虽然渲染同一份清单，
+	// 同一批问答不做双页声明——富摘要以 /faq 为唯一来源，避免两个 URL 抢同一个富结果。
+	case len(v.Faqs) > 0 && v.Route == "/faq":
+		v.PageLD = faqJSONLD(v.Faqs)
 	}
 	// 站点默认分享图兜底：内容级 OGImage 为空时用站点设置（absURL 补协议），仍空由模板回退内置 og.png。
 	if v.OGImage == "" && v.OgImageURL != "" {
@@ -893,6 +897,9 @@ var assetTypes = map[string]string{
 	".webp":  "image/webp",
 	".ico":   "image/x-icon",
 	".woff2": "font/woff2",
+	// feed.xsl：浏览器把 XML 套上这张表渲染成订阅说明页；MIME 不对（octet-stream）
+	// Chrome 会拒绝当样式表用，feed 退回裸 XML。
+	".xsl": "text/xsl; charset=utf-8",
 }
 
 // GET /website-assets/*path —— 服务 go:embed 的静态资源（site.css / site.js 等）；
@@ -928,6 +935,43 @@ func (h *siteHandler) asset(c *gin.Context) {
 	// 文件名带内容版本号（site.css?v=0.6.0），可安全长缓存；插件升级会换版本号。
 	c.Header("Cache-Control", "public, max-age=3600")
 	c.Data(http.StatusOK, ctype, b)
+}
+
+// GET /favicon.svg —— 前台站点缺省图标：圆角方块 + 站点名首字母，与页面 header/footer
+// 的品牌标（.brand-mark）同一设计语言，深浅配色随浏览器主题内嵌切换。此前用一张独立的
+// 渐变六边形图，和页面上的字母标对不上——标签页图标是用户看得最多的品牌位，必须与
+// 页内一致。站点设置上传了 FaviconURL 时 layout 直接用上传件，这里只是缺省值；
+// 后台不受影响：管理端 favicon 是平台品牌六边形核标（web/public/icon.svg），与侧栏
+// BrandMark 同一枚——平台管后台、商家管前台，各自 favicon 跟随各自页面品牌。
+func (h *siteHandler) favicon(c *gin.Context) {
+	set, err := h.svc.Settings(c.Request.Context())
+	if err != nil {
+		c.String(http.StatusInternalServerError, "favicon unavailable")
+		return
+	}
+	name := strings.TrimSpace(set.SiteName)
+	if name == "" {
+		name = "NexAdmin"
+	}
+	// 与模板 initial 同口径：取首字母大写。
+	glyph := strings.ToUpper(string([]rune(name)[0]))
+	svg := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="%s">
+  <style>
+    .tile { fill: #f7f8f8; }
+    .glyph { fill: #08090a; }
+    @media (prefers-color-scheme: light) {
+      .tile { fill: none; }
+      .glyph { fill: #08090a; }
+      .ring { fill: none; stroke: rgba(8, 9, 10, 0.16); stroke-width: 2; }
+    }
+  </style>
+  <rect class="tile" width="64" height="64" rx="20"/>
+  <rect class="ring" width="63" height="63" x="0.5" y="0.5" rx="19.5"/>
+  <path class="glyph" d="M16 48 V16 H25 L40 37 V16 H48 V48 H40 L24 27 V48 Z"/>
+</svg>`, rssEsc.Replace(fmt.Sprintf("%s — %s", glyph, name)))
+	c.Header("Cache-Control", "public, max-age=3600")
+	c.Data(http.StatusOK, "image/svg+xml; charset=utf-8", []byte(svg))
 }
 
 // themeAsset 服务主题插件内嵌的静态资源：rest 是 "<themeID>/<file>"。
@@ -981,6 +1025,17 @@ func baseURL(c *gin.Context) string {
 	return scheme + "://" + c.Request.Host
 }
 
+// siteBase 返回绝对地址前缀：站点设置里配了规范域名（SiteOrigin）就优先用它，
+// 否则按请求 Host + X-Forwarded-Proto 推导（baseURL）。sitemap/robots/atom/RSS/
+// JSON-LD 与页内 canonical 都走这里，保证多域名与反代场景下输出一致。
+func siteBase(c *gin.Context, origin string) string {
+	if o := strings.TrimSpace(origin); o != "" {
+		return strings.TrimSuffix(o, "/")
+	}
+	return baseURL(c)
+}
+
+// notFoundPage
 // notFoundPage 供核心在未注册路径上渲染官网 404（后台只占 /admin）。
 func (h *siteHandler) notFoundPage(c *gin.Context) bool {
 	m := c.Request.Method
@@ -1020,6 +1075,10 @@ func languageForPath(p string) Language {
 // 全部可抓；机器入口（下载、校验和、签名、附件、订单状态、签发出来的草稿预览）
 // 不是给搜索引擎的页面，挡在抓取层省抓取配额。
 func (h *siteHandler) robots(c *gin.Context) {
+	base := baseURL(c)
+	if set, serr := h.svc.Settings(c.Request.Context()); serr == nil {
+		base = siteBase(c, set.SiteOrigin)
+	}
 	var b strings.Builder
 	b.WriteString("User-agent: *\n")
 	b.WriteString("Allow: /\n")
@@ -1042,7 +1101,7 @@ func (h *siteHandler) robots(c *gin.Context) {
 	b.WriteString("Disallow: /plugins/*/download.sig\n")
 	// 草稿预览链接挂在正常页面路径的查询串上（?preview=<token>），按查询串挡。
 	b.WriteString("Disallow: /*?preview=\n")
-	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", baseURL(c))
+	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", base)
 	c.Header("Cache-Control", "public, max-age=3600")
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(b.String()))
 }
@@ -1078,7 +1137,7 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 			}
 		}
 	}
-	base := baseURL(c)
+	base := siteBase(c, set.SiteOrigin)
 	langs := Languages()
 	def := SiteDefaultLanguage()
 	var b strings.Builder

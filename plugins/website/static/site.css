@@ -1209,7 +1209,35 @@ html[data-scheme="light"] .shot-light { display: block; }
 }
 .news-search button:hover { color: var(--text); background: var(--hover); }
 /* FAQ 独立页：复用首页 hp-faq 折叠条样式，这里只补列表与页头的间距、页尾联系提示。 */
+.faq-search {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 24px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.faq-search:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(94, 109, 210, 0.25));
+}
 .faq-page-list { margin-top: 28px; }
+/* 搜索无命中：列表被过滤空时顶上这句，替代整页空态。 */
+.faq-empty {
+  margin-top: 28px;
+  padding: 32px 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-3);
+  border-top: 1px solid var(--border);
+}
 .faq-contact { margin-top: 24px; font-size: 14px; color: var(--text-2); }
 .faq-contact a { color: var(--text); font-weight: 500; text-decoration: none; }
 .faq-contact a:hover { text-decoration: underline; }
@@ -1517,10 +1545,13 @@ html[data-scheme="light"] .shot-light { display: block; }
 /* 文档正文很长，IntersectionObserver 的 5% 阈值在手机上可能永远达不到；正文不做入场隐藏 */
 .docs-body[data-reveal] { opacity: 1 !important; transform: none !important; }
 .docs-body :not(pre) > code { overflow-wrap: anywhere; }
-.docs-body table { display: block; max-width: 100%; overflow-x: auto; }
-/* 列宽按内容自然展开，短值（允许/拒绝、权限码、键名）不竖排；超宽时整表横向滚动。
-   单元格里的 <br> 仍分段，接口清单这类长单元格不会缩成一整行，只读性更好。 */
-.docs-body table th, .docs-body table td { white-space: nowrap; }
+/* display:block 的表格块默认撑满容器宽度，浏览器表格算法会把列宽摊成与内容无关的比例
+   （权限码与接口对照表：模块列摊到 662px、接口列 1649px 被容器裁掉）。width:max-content
+   让表格先按内容收紧到自然宽度，超宽再整体横向滚动——GitHub 文档表格同款规则。 */
+.docs-body table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+/* 单元格不设 nowrap：nowrap 会让每列的最小内容宽巨大（权限码/接口清单一列上千像素），
+   表格算法在容器内摊出离谱列宽（模块列摊到 662px、接口列被容器裁掉）。正常换行后
+   只有不可断的 token 才会撑出横向滚动；单元格里的 <br> 仍分段，接口清单的分行结构保留。 */
 /* 首列多是两三个字的键名（「账号密码」「滑块拼图」），给个下限保留单行留白 */
 .docs-body table th:first-child, .docs-body table td:first-child { min-width: 7.5em; }
 /* 首列合并后的分组名固定顶对齐，避免 rowspan 单元格被浏览器按基线居中 */
@@ -3849,8 +3880,13 @@ html[data-scheme="light"] .hp-hero-bg {
 }
 .hp-hero-in { position: relative; }
 
+/* 首屏文案居中（2026-11-23 恢复插件首版形态；c9c7ff1 起曾改 Linear 风左对齐）。
+   截图 stage 本就全宽在文案下方，居中只涉及文案这一层，构图与旧版苹果风一致。 */
+.hp-hero-copy { text-align: center; }
+
 .hp-hero-title {
   max-width: 20ch;
+  margin-inline: auto;
   font-size: clamp(40px, 4.6vw, 64px);
   line-height: 1.05;
   letter-spacing: -0.022em;
@@ -3864,20 +3900,24 @@ html[data-scheme="light"] .hp-hero-bg {
    17 个字，句子被切得很碎；30em 约 30 字一行，与下方技术事实同宽，右边界齐。 */
 .hp-hero-lede {
   margin-top: clamp(20px, 2.4vw, 28px);
+  margin-inline: auto;
   max-width: 30em;
   font-size: clamp(17px, 1.5vw, 20px);
   line-height: 1.55;
   letter-spacing: -0.013em;
   color: var(--text);
-  /* 中文断行按字数走，pretty 只避免孤字，仍会留「完全归你。」这种三字尾行；
-     balance 让两行长度接近，读起来是一个整句而不是被截断的碎片。 */
-  text-wrap: balance;
+  /* 断行点由文案里的换行显式控制（zh 在冒号后断）：balance 对中文是任意断字，
+     会把「公共」拆成「公/共」两行。模板按 \n 出 <br>，这里不再参与断行。 */
+  text-wrap: pretty;
 }
 
-/* 技术事实降一级：站点设置里维护的副标题，字号更小、颜色更淡。 */
+/* 技术事实降一级：站点设置里维护的副标题，字号更小、颜色更淡。
+   量宽与定位句对齐（30em）：居中构图里两块灰字同宽，右边界才齐——
+   44em 会出一条独宽长行，和两行定位句错落着难看。 */
 .hp-hero-sub {
   margin-top: 16px;
-  max-width: 44em;
+  margin-inline: auto;
+  max-width: 30em;
   font-size: 15px;
   line-height: 1.72;
   color: var(--text-2);
@@ -3888,6 +3928,7 @@ html[data-scheme="light"] .hp-hero-bg {
   margin-top: 30px;
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 8px 14px;
 }
@@ -3996,6 +4037,7 @@ html[data-scheme="light"] .hp .shot-light { display: block; }
 .hp-hero-caption {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   margin: 0;
   padding: 16px 0 26px;
@@ -4483,10 +4525,11 @@ html[data-scheme="light"] .hp-cta-glow {
   max-width: 20ch;
   margin: 0 auto;
   font-size: clamp(36px, 5.2vw, 68px);
-  line-height: 1.02;
-  letter-spacing: -0.045em;
+  /* 中文方块字满格，1.02 行高两行只剩 ~1.4px 缝隙；对齐 hp-hero-title 已调的
+     中文口径（1.05 / -0.022em、去描边）——12303e4 调首屏时漏了这里。 */
+  line-height: 1.05;
+  letter-spacing: -0.022em;
   font-weight: 500;
-  -webkit-text-stroke: 0.2px currentColor;
   text-wrap: balance;
 }
 .hp-cta p {

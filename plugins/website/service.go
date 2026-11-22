@@ -287,6 +287,12 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	row.HomeCTALabel = trimLen(f.HomeCTALabel, 64)
 	row.HomeCTAHref = trimLen(f.HomeCTAHref, 255)
 	row.SeoKeywords = trimLen(f.SeoKeywords, 300)
+	// SiteOrigin 存规范域名：剥尾部斜杠；非空必须以 http(s):// 开头，防止手滑写成裸域名
+	// 导致拼出的绝对地址变成 https://https://www.x.com/...
+	row.SiteOrigin = strings.TrimSuffix(strings.TrimSpace(f.SiteOrigin), "/")
+	if row.SiteOrigin != "" && !strings.HasPrefix(row.SiteOrigin, "http://") && !strings.HasPrefix(row.SiteOrigin, "https://") {
+		return nil, response.BadRequest("website.site_origin_invalid")
+	}
 	row.ContactEmail = trimLen(f.ContactEmail, 128)
 	row.ContactPhone = trimLen(f.ContactPhone, 64)
 	row.QRCodeURL = trimLen(f.QRCodeURL, 255)

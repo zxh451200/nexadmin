@@ -745,6 +745,7 @@ dashboard:
   invalid_card_id: "%s 中有不合法的卡片 ID"
   duplicate_card_id: "%s 中有重复的卡片 ID"
 website:
+  site_origin_invalid: "规范域名需要以 http:// 或 https:// 开头"
   slug_invalid: "slug 只能是小写字母、数字与连字符，长度 1-64"
   slug_reserved: "slug 不可用：%s"
   i18n_invalid: "多语言内容格式不正确"
@@ -819,7 +820,6 @@ website:
   product_category_title_required: "商品类目需要名称"
   product_category_not_found: "商品类目不存在"
   product_category_in_use: "该类目（含子类目）下还有商品，请先把商品移到其他类目再删除"
-  product_category_not_leaf: "该类目下还有子类目，商品请挂到末级类目（父级只用于分组归档）"
   rating_invalid: "评分必须在 1-5 之间"
   import_products_title: "产品导入"
   export_center_disabled: "导出中心未启用，无法提交异步导出任务"

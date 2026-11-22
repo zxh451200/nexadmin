@@ -60,6 +60,8 @@ export interface SiteSettings {
   ogImageUrl: string
   /** 自定义 <head> 代码（统计脚本等），原样注入；空 = 不注入 */
   headCode: string
+  /** 站点规范域名（如 https://www.example.com）：sitemap/robots/JSON-LD/canonical 的绝对地址优先用它；空 = 按请求推导 */
+  siteOrigin: string
   /** <title> 后缀，替换默认的「 - 站点名」；空 = 沿用内置组合 */
   titleSuffix: string
   /** 被设为首页的单页 slug；空 = 内置首页。页面被删或未发布时官网自动回退内置首页 */

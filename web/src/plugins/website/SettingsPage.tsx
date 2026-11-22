@@ -52,7 +52,7 @@ import {
 
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
-  | 'siteName' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
+  | 'siteName' | 'siteOrigin' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme' | 'defaultLang'
   | 'defaultCurrency' | 'currencyRates'
   | 'staffCount' | 'annualRevenue' | 'mainMarkets' | 'responseTime'
@@ -639,6 +639,7 @@ function SettingsFormBody({
           ) : null}
           {tab === 'seo' ? (
             <>
+              {sharedInput('siteOrigin', undefined, t('plugin_website.hint.siteOrigin'))}
               {localizedField('seoKeywords')}
               {sharedInput('titleSuffix', undefined, t('plugin_website.hint.titleSuffix'))}
               <SharedFieldShell labelKey="plugin_website.fields.ogImageUrl" hint={t('plugin_website.hint.ogImageUrl')}>
@@ -1053,6 +1054,7 @@ export default function SettingsPage() {
         headCode: data.headCode ?? '',
         titleSuffix: data.titleSuffix ?? '',
         homeSlug: data.homeSlug ?? '',
+        siteOrigin: data.siteOrigin ?? '',
         homeCtaHref: data.homeCtaHref,
         theme: data.theme ?? '',
         defaultLang: data.defaultLang ?? '',

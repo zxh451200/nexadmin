@@ -192,18 +192,17 @@ function useUnitOptions(): Option[] {
 /**
  * 产品类目多选（可搜）：与付款方式同款的弹出选择器，收起时只占一行，
  * 展开才见树形清单（缩进表层级、右侧商品数）；搜索命中时连同祖先链一起保留，层级不丢。
+ * 层级不设限，任意层级都可勾（WooCommerce/Magento 同款口径）——类目树是运营自建的，
+ * 公开页按整棵子树聚合，挂父级与挂末级在归档页看到的结果一致，无需限制。
  */
 function CategoryPicker({
-  value, onChange, categories, disabled, className, leafOnly = false,
+  value, onChange, categories, disabled, className,
 }: {
   value: string[]
   onChange: (ids: string[]) => void
   categories: CatNode[]
   disabled?: boolean
   className?: string
-  /** 挂载用（商品表单）：父级只作分组，不能勾；已经挂着的存量父级仍可取消。
-   *  筛选用的选择器保持 false——按父级筛是「按整棵子树筛」，那是合法操作。 */
-  leafOnly?: boolean
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -228,19 +227,15 @@ function CategoryPicker({
     return categories.filter((c) => keep.has(c.id))
   }, [categories, byId, kw])
   const options: Option[] = shown.map((c) => {
-    const isGroup = leafOnly && !!c.children?.length
-    const selected = value.includes(c.id)
     return {
       value: c.id,
       label: c.title,
-      // 分组行不可点；但已经挂着的（存量数据）要能取消，否则商品永远摘不掉这个父级
-      disabled: isGroup && !selected,
       node: (
         <span className="flex w-full items-center gap-2">
           {/* 层级用「缩进 + 破折号前缀」表达——企业站后台（WordPress / 织梦一类）最通用的做法，
               比纯缩进更醒目：2 级「— 名称」，3 级「—— 名称」。 */}
           <span
-            className={cn('flex min-w-0 items-center', isGroup && 'font-medium')}
+            className="flex min-w-0 items-center"
             style={{ paddingInlineStart: `${(c.depth - 1) * 18}px` }}
           >
             {c.depth > 1 ? (
@@ -248,13 +243,8 @@ function CategoryPicker({
                 {'—'.repeat(c.depth - 1)}
               </span>
             ) : null}
-            <span className="truncate">{c.title}</span>
+            <span className="truncate" title={c.title}>{c.title}</span>
           </span>
-          {isGroup ? (
-            <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-              {t('plugin_website.product.categoryGroupTag')}
-            </span>
-          ) : null}
           {/* 计数是子树口径（含后代），和筛选结果条数一致；有子类目的行补一句说明，免得被当成「直挂数」 */}
           <span
             className="num ms-auto text-xs text-muted-foreground"
@@ -297,13 +287,6 @@ function CategoryPicker({
         search={search}
         onSearchChange={setSearch}
         emptyText={t(kw ? 'plugin_website.product.categoryNoMatch' : 'plugin_website.product.categoriesEmpty')}
-        footer={
-          leafOnly ? (
-            <p className="border-t border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-              {t('plugin_website.product.categoryLeafHint')}
-            </p>
-          ) : undefined
-        }
       />
     </PickerShell>
   )
@@ -547,7 +530,7 @@ function ProductFormBody({
               <span className="truncate text-xs text-muted-foreground">{productPath}</span>
             </SharedFieldShell>
             <SharedFieldShell labelKey="plugin_website.product.categories">
-              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} leafOnly />
+              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} />
             </SharedFieldShell>
           </div>
         </FormSection>

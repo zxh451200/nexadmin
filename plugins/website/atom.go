@@ -26,7 +26,7 @@ func (h *siteHandler) atom(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "atom unavailable")
 		return
 	}
-	base := strings.TrimSuffix(baseURL(c), "/")
+	base := strings.TrimSuffix(siteBase(c, set.SiteOrigin), "/")
 	siteName := set.SiteName
 	if siteName == "" {
 		siteName = "NexAdmin"
@@ -43,6 +43,8 @@ func (h *siteHandler) atom(c *gin.Context) {
 	stamp := build.UTC().Format(time.RFC3339)
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	// 与 rss.xml 同一张 XSL：浏览器里是人能读的说明页，阅读器照常解析 Atom 结构。
+	b.WriteString(`<?xml-stylesheet type="text/xsl" href="/website-assets/feed.xsl"?>` + "\n")
 	fmt.Fprintf(&b, `<feed xmlns="http://www.w3.org/2005/Atom"><title>%s</title><link href="%s/"/><link href="%s/atom.xml" rel="self" type="application/atom+xml"/><id>%s/</id><updated>%s</updated><generator>NexAdmin</generator>`+"\n",
 		rssEsc.Replace(siteName), base, base, base, stamp)
 	for _, p := range posts {
@@ -60,5 +62,6 @@ func (h *siteHandler) atom(c *gin.Context) {
 	}
 	b.WriteString(`</feed>`)
 	c.Header("Cache-Control", "public, max-age=3600")
-	c.Data(http.StatusOK, "application/atom+xml; charset=utf-8", []byte(b.String()))
+	// MIME 口径与 rss 相同：application/xml 才能让 Chrome 应用 feed.xsl 样式表。
+	c.Data(http.StatusOK, "application/xml; charset=utf-8", []byte(b.String()))
 }

@@ -111,16 +111,18 @@
     <nav class="au-footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.URL "/products"}}">{{.T "theme.auvex.allProducts"}}</a>
-      {{if .Posts}}<a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>{{end}}
     </nav>
-    <nav class="au-footer-col" aria-label="{{.T "layout.company"}}">
-      <h4>{{.T "layout.company"}}</h4>
-      {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
-      <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
-      {{if .Posts}}<a href="{{.BaseURL}}/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>{{end}}
+    {{if .Posts}}
+    <nav class="au-footer-col" aria-label="{{.T "layout.resources"}}">
+      <h4>{{.T "layout.resources"}}</h4>
+      <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
+      <a href="{{.BaseURL}}/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>
     </nav>
+    {{end}}
     <nav class="au-footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>
+      {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
+      <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
       {{if .ContactEmail}}<a class="au-footer-mail" href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.ContactEmail}}</a>{{end}}
       {{if .ContactPhone}}<a href="tel:{{.ContactPhone}}">{{.ContactPhone}}</a>{{end}}
       {{if .ICP}}<a class="au-footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}

@@ -294,6 +294,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		pub.POST("/plugins/:id/rate", rateLimit, site.marketRate)
 		pub.GET("/website-assets/*path", site.asset)
 		pub.HEAD("/website-assets/*path", site.asset)
+		pub.GET("/favicon.svg", site.favicon)
+		pub.HEAD("/favicon.svg", site.favicon)
 		pub.GET("/robots.txt", site.robots)
 		pub.HEAD("/robots.txt", site.robots)
 		pub.GET("/sitemap.xml", site.sitemap)

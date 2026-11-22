@@ -785,6 +785,27 @@
     } catch (e) { /* 地图初始化失败不挡联系页，地址卡仍可读 */ }
   }
 
+  // ---- FAQ 搜索：/faq 独立页的纯前端过滤 ----
+  // 问题与答案一起匹配（textContent 天然覆盖两层）；清空输入即恢复全量，
+  // 打开状态原样保留——过滤不打断正在读的条目。
+  function initFaqSearch() {
+    var input = document.querySelector('[data-faq-search]');
+    var list = document.querySelector('[data-faq-list]');
+    if (!input || !list) return;
+    var empty = document.querySelector('[data-faq-empty]');
+    var items = Array.prototype.slice.call(list.querySelectorAll('.hp-faq-item'));
+    input.addEventListener('input', function () {
+      var kw = input.value.trim().toLowerCase();
+      var shown = 0;
+      items.forEach(function (item) {
+        var hit = !kw || item.textContent.toLowerCase().indexOf(kw) !== -1;
+        item.hidden = !hit;
+        if (hit) shown++;
+      });
+      if (empty) empty.hidden = shown > 0;
+    });
+  }
+
   // ---- 页面级绑定 ----
   function initSite() {
     i18n = readI18n();
@@ -797,6 +818,7 @@
     initProductDetail();
     initOrderStatus();
     initProductSort();
+    initFaqSearch();
     decorateZoomables();
     clearWinHandlers();
     if (revealObserver) { revealObserver.disconnect(); revealObserver = null; }

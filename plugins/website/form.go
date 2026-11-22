@@ -18,6 +18,8 @@ type SettingForm struct {
 	HomeCTALabel string `json:"homeCtaLabel"`
 	HomeCTAHref  string `json:"homeCtaHref"`
 	SeoKeywords  string `json:"seoKeywords"`
+	// SiteOrigin 是站点规范域名：存前剥尾部斜杠，非空必须以 http(s):// 开头（服务层校验）。
+	SiteOrigin string `json:"siteOrigin"`
 	ContactEmail string `json:"contactEmail"`
 	ContactPhone string `json:"contactPhone"`
 	QRCodeURL    string `json:"qrCodeUrl"`

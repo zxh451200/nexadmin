@@ -23,6 +23,10 @@ type Setting struct {
 	HomeCTALabel  string `gorm:"size:64;not null" json:"homeCtaLabel"`  // 主按钮文字，空 = 不显示
 	HomeCTAHref   string `gorm:"size:255;not null" json:"homeCtaHref"`
 	SeoKeywords   string `gorm:"size:300;not null" json:"seoKeywords"`
+	// SiteOrigin 是站点规范域名（如 https://www.example.com）：sitemap/robots/atom/RSS/JSON-LD
+	// 与页内 canonical、og:url 的绝对地址优先用它，空 = 按请求 Host + X-Forwarded-Proto 推导。
+	// 多域名接入或反代未透传 Host/协议头时填它，避免爬虫把 http/https 或多个域名当有效 URL。
+	SiteOrigin string `gorm:"column:site_origin;size:200;not null;default:''" json:"siteOrigin"`
 	ContactEmail  string `gorm:"size:128;not null" json:"contactEmail"`
 	ContactPhone  string `gorm:"size:64;not null" json:"contactPhone"`   // 页脚与联系页的电话，空 = 不显示
 	QRCodeURL     string `gorm:"size:255;not null" json:"qrCodeUrl"`     // 页脚二维码（公众号/客服），空 = 不显示
@@ -45,7 +49,7 @@ type Setting struct {
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// FaviconURL 是浏览器标签图标；OgImageURL 是站点默认分享图（og:image 兜底）。
-	// 空分别回退模板内置 favicon.svg 与 og.png。
+	// 空 = 前台回退动态 /favicon.svg（站点名首字母标，与页内品牌一致），分享图回退 og.png。
 	FaviconURL string `gorm:"column:favicon_url;size:255;not null;default:''" json:"faviconUrl"`
 	OgImageURL string `gorm:"column:og_image_url;size:255;not null;default:''" json:"ogImageUrl"`
 	// HeadCode 是自定义 <head> 代码（统计脚本、站点验证等）：原样注入 <head>，仅 website:setting

@@ -746,6 +746,7 @@ dashboard:
   invalid_card_id: "%s contains an invalid card ID."
   duplicate_card_id: "%s contains a duplicate card ID."
 website:
+  site_origin_invalid: "The canonical origin must start with http:// or https://"
   slug_invalid: "Slug may only contain lowercase letters, digits and hyphens, 1-64 characters."
   slug_reserved: "Slug unavailable: %s"
   i18n_invalid: "The multilingual content is not in a valid format."
@@ -820,7 +821,6 @@ website:
   product_category_title_required: "A product category needs a name."
   product_category_not_found: "Product category not found."
   product_category_in_use: "This category (including children) still has products; move them to another category before deleting."
-  product_category_not_leaf: "This category has subcategories; assign the product to a leaf category (parent categories are for grouping only)."
   rating_invalid: "The rating must be between 1 and 5."
   import_products_title: "Product import"
   export_center_disabled: "The export center is disabled; async export jobs cannot be submitted."
