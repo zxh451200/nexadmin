@@ -191,8 +191,10 @@ func (s *Service) ConfigSave(ctx context.Context, f LdapConfigForm) (*ConfigView
 }
 
 // TestConnection 验证连通性:拨号 + 服务账号绑定(可选)+ 按过滤器空跑一次搜索。
-func (s *Service) TestConnection(ctx context.Context) error {
-	cfg, err := s.Config(ctx)
+// form 非 nil 时测「当前表单填写值」——测试正是保存前发现问题的手段,所以这里不做
+// enabled 相关校验,也不落库;绑定密码留空沿用已保存密码。form 为 nil 时测已保存配置。
+func (s *Service) TestConnection(ctx context.Context, form *LdapConfigForm) error {
+	cfg, err := s.configForTest(ctx, form)
 	if err != nil {
 		return err
 	}
@@ -213,6 +215,54 @@ func (s *Service) TestConnection(ctx context.Context) error {
 		return response.BadRequest("ldap.test_failed").Wrap(serr)
 	}
 	return nil
+}
+
+// configForTest 组装测试用配置:form 为 nil 返回已保存配置;否则按 ConfigSave 的同一套
+// trim/默认值规则规范化表单值(注释各字段语义见 ConfigSave),口令取「表单优先、留空沿用已保存」。
+func (s *Service) configForTest(ctx context.Context, form *LdapConfigForm) (*LdapConfig, error) {
+	saved, err := s.Config(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if form == nil {
+		return saved, nil
+	}
+	f := *form
+	f.Host = strings.TrimSpace(f.Host)
+	f.BaseDN = strings.TrimSpace(f.BaseDN)
+	f.BindDN = strings.TrimSpace(f.BindDN)
+	f.UserFilter = strings.TrimSpace(f.UserFilter)
+	if f.Port <= 0 {
+		f.Port = DefaultPort
+	}
+	if f.UserFilter == "" {
+		f.UserFilter = DefaultFilter
+	}
+	if f.AttrUsername == "" {
+		f.AttrUsername = DefaultAttrUser
+	}
+	if f.AttrEmail == "" {
+		f.AttrEmail = DefaultAttrMail
+	}
+	if f.AttrNickname == "" {
+		f.AttrNickname = DefaultAttrCN
+	}
+	if f.TimeoutMS <= 0 {
+		f.TimeoutMS = DefaultTimeout
+	}
+	bindPw := f.BindPassword
+	if bindPw == "" {
+		bindPw = saved.BindPasswordPlain
+	}
+	return &LdapConfig{
+		Enabled: f.Enabled, Host: f.Host, Port: f.Port,
+		UseTLS: f.UseTLS, StartTLS: f.StartTLS,
+		BindDN: f.BindDN, BaseDN: f.BaseDN, UserFilter: f.UserFilter,
+		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname,
+		MatchExisting: f.MatchExisting, AutoCreate: f.AutoCreate, DefaultRole: f.DefaultRole,
+		TimeoutMS: f.TimeoutMS, CACert: strings.TrimSpace(f.CACert),
+		BindPasswordPlain: bindPw,
+	}, nil
 }
 
 // secretEncrypt/secretDecrypt 包装 core/secret:测试环境没有默认密钥时退化为明文/原样。

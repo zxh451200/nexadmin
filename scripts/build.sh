@@ -13,5 +13,11 @@ echo "==> 构建前端"
 
 echo "==> 构建后端 $VERSION"
 mkdir -p bin
-go build -trimpath -tags embedweb -ldflags "-s -w -X main.version=$VERSION" -o bin/nexadmin-server ./cmd/server
-echo "完成: bin/nexadmin-server"
+# Windows（Git Bash / MSYS）下产物必须是 bin/nexadmin-server.exe：ctl 的 start/stop 与
+# quickstart 文档都按带 .exe 的名字找进程，构建成无扩展名文件会被当成「构建成功但没生效」。
+OUT=bin/nexadmin-server
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) OUT=bin/nexadmin-server.exe ;;
+esac
+go build -trimpath -tags embedweb -ldflags "-s -w -X main.version=$VERSION" -o "$OUT" ./cmd/server
+echo "完成: $OUT"

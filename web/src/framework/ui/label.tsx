@@ -20,17 +20,9 @@ const Label = React.forwardRef<
     ref={ref}
     className={cn(labelVariants(), className)}
     {...props}
-    /* Radix 在 mousedown 的 detail>1（双击）上 preventDefault——本意是防双击误触关联控件，顺带把浏览器
-       原生的「双击选词」也禁了，label 上的字段名没法复制。这里不碰 mousedown（误触保护仍在），
-       双击时手动选中 label 全部文本，把复制还回来。 */
-    onDoubleClick={(e) => {
-      const sel = window.getSelection()
-      if (!sel) return
-      const range = document.createRange()
-      range.selectNodeContents(e.currentTarget)
-      sel.removeAllRanges()
-      sel.addRange(range)
-    }}
+    /* label 文本的可复制（双击选中整个 label）由 framework/lib/label-copy 的全局监听统一保证：
+       Radix 在 mousedown 的 detail>1（双击）上 preventDefault，原生双击选词被吞，按元素补偿
+       已升级为全局方案（覆盖含各处裸 <label> 在内的所有 label），这里不再逐元素挂。 */
   >
     {children}
     {required ? (

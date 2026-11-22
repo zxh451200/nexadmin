@@ -53,7 +53,7 @@ summary: 内置模块与插件各能做什么、入口在哪、依赖什么。
 
 有些配置是**所有租户共用一行**——表里根本没有 `tenant_id`。所以「能用这个模块」和「能改这一行」是两件事：权限点只回答前者。
 
-判据是 `core.IsPlatformCaller`（`core/router.go:51`）：**超管，或请求落在默认租户**，单源是 `tenant.IsPlatformCallerID`，随会话以 `auth.User.Platform` 下发给前端。在这之外，`core.RequirePlatform()`（`core/router.go:63`）给 **55 条写路由**又加一道闸——权限点和这道闸都要过。
+判据是 `core.IsPlatformCaller`：**超管，或请求落在默认租户**，单源是 `tenant.IsPlatformCallerID`，随会话以 `auth.User.Platform` 下发给前端。在这之外，`core.RequirePlatform()`给 **55 条写路由**又加一道闸——权限点和这道闸都要过。
 
 | 这些写路由 | 条数 | 代码位置 |
 | --- | --- | --- |

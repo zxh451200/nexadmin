@@ -14,8 +14,8 @@ import { getMapProviders } from '@/framework/map'
 import type { GeoPoint } from '@/framework/map'
 import '@/framework/map/loader'
 
-/** 地址复合值：region 是省市区编码，address 是详细地址（持久化的自由文本）。
-    完整地址不落库，由区划树 + address 推导。 */
+/** 地址复合值：region 是省市区三级编码（街道不存码，行业主流做法），address 是持久化的
+    自由文本——level=4 时选中的街道名会折在 address 开头。完整地址不落库，由区划树 + address 推导。 */
 export interface AddressValue {
   region?: RegionValue
   address?: string
@@ -32,6 +32,17 @@ export interface AddressFieldProps {
 
 function toRegionValue(path: RegionNode[]): RegionValue {
   return { province: path[0]?.code, city: path[1]?.code, district: path[2]?.code }
+}
+
+/** 街道不单独存储（行业主流：省市区三级代码 + 详细地址文本，街道写进文本）：
+    四级省份选完街道会把街道名折进详细地址开头。这里按区县子级的名称前缀找出已折叠的
+    街道名，供「清除地区时连街道一起剥掉」「换选街道时替换前缀」使用。
+    直辖市不走这条路径：末位街道的码存在 region 的 district 槽位里，显示由区划树带出。 */
+function splitStreet(tree: RegionNode[], region: RegionValue | undefined, address: string): string | undefined {
+  const district = findRegionPath(tree, region)[2]
+  return (district?.children ?? [])
+    .filter((c) => address.startsWith(c.name))
+    .sort((a, b) => b.name.length - a.name.length)[0]?.name
 }
 
 function sameRegion(a?: RegionValue, b?: RegionValue): boolean {
@@ -76,6 +87,9 @@ function saveRecent(tree: RegionNode[], v: AddressValue): RecentAddress[] {
 
 /**
  * 顺丰/电商式地址字段：省市区选择 + 详细地址 + 完整地址三段联动，外加地图选点与最近使用。
+ * - level=4 的第四级街道/乡镇不存码（行业主流：省市区三级代码，街道写进详细地址文本）：
+ *   选完街道街道名折进详细地址开头；清除地区会连街道名一起剥掉（用户输入的正文保留），
+ *   换选街道会替换旧街道前缀，不残留。
  * - 往完整地址里输入（如「中牟散大声地111」）会**边打边解析**：区划选择器与详细地址实时跟进
  *   （区县名认短别名“中牟”、曾用名“思茅”，不带省市时按全树唯一命中补全；完整地址输入框自身
  *   有草稿保护，联动不会顶掉正在输入的内容）；粘贴一段完整地址立即解析回填；解析不命中时整串
@@ -124,17 +138,9 @@ export function AddressField({ value, onChange, level = 3, disabled, className }
     onChange?.({ region: v.region, address: v.address })
   }
 
-  // RegionSelect 在 level=4 会带出街道代码：街道名折进详细地址开头，region 只保留三级代码
-  //（完整地址推导时街道已包含在 address 文本里，不会重复出现）
-  const foldStreet = (v: AddressValue): AddressValue => {
-    const path = findRegionPath(tree, v.region)
-    if (path.length < 4) return v
-    const st = path[3].name
-    const addr = v.address ?? ''
-    return { region: { province: path[0].code, city: path[1].code, district: path[2].code }, address: addr.startsWith(st) ? addr : st + addr }
-  }
-
-  // 解析结果的装配：level=4 时第 4 级可能是街道——街道名同样折进详细地址开头
+  // 解析结果的装配：level=4 时第 4 级可能是街道——街道名折进详细地址开头。
+  // 只认 path.length>=4：直辖市路径三级里末位就是街道，但那个街道码已经存在 region 的
+  // district 槽位里（完整地址由区划树推导时自然带出），再折进正文会出现两次。
   const toAddressValue = (path: RegionNode[], rest: string, fallback?: RegionValue): AddressValue => {
     if (!path.length) return { region: fallback, address: rest }
     if (path.length >= 4) return { region: toRegionValue(path), address: path[3].name + rest }
@@ -143,7 +149,11 @@ export function AddressField({ value, onChange, level = 3, disabled, className }
 
   const applyParsed = (text: string) => {
     const clean = text.trim()
-    if (!clean) return
+    if (!clean) {
+      // 整段删空 = 连地区带正文一起清掉（否则完整地址看起来删了，底下还留着旧值）
+      if (region?.province || address) emit({ region: {}, address: '' })
+      return
+    }
     const { path, rest } = parseRegionAddress(tree, clean, level)
     const next = toAddressValue(path, rest, region)
     emit(next)
@@ -202,11 +212,34 @@ export function AddressField({ value, onChange, level = 3, disabled, className }
         value={region ?? null}
         disabled={disabled}
         onChange={(r) => {
-          const v = foldStreet({ region: r, address })
+          // 街道不存码（行业主流：省市区三级代码，街道写进详细地址文本）
+          if (!r.province) {
+            // 清除地区：连折叠进详细地址开头的街道名一起剥掉，用户输入的正文保留
+            const old = splitStreet(tree, region, address)
+            const rest = old && address.startsWith(old) ? address.slice(old.length) : address
+            emit({ region: r, address: rest })
+            setRecent(saveRecent(tree, { region: r, address: rest }))
+            return
+          }
+          const path = findRegionPath(tree, r)
+          const street = path[3]?.name
+          if (!street) {
+            // 只到三级就收口（直辖市末位街道的码已存进 region、显示由区划树带出；
+            // 搜索结果/旧数据可能没有街道）：没有需要折进正文的街道，地址原样保留
+            const v = { region: toRegionValue(path), address }
+            emit(v)
+            setRecent(saveRecent(tree, v))
+            return
+          }
+          // 四级省份换选街道：先剥掉旧街道前缀再折进新街道，避免旧街道残留在正文前（实测会叠出双街道）
+          const old = splitStreet(tree, region, address)
+          const rest = old && address.startsWith(old) ? address.slice(old.length) : address
+          const v = { region: toRegionValue(path), address: street + rest }
           emit(v)
           setRecent(saveRecent(tree, v))
         }}
       />
+      {/* label 文本的可复制性由 framework/lib/label-copy 的全局双击选中原语统一保证 */}
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {t('picker.addressDetail')}
         <Input

@@ -151,16 +151,15 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   useEffect(() => setOverride(null), [data])
   const tree = override ?? data
 
-  // 展开状态记在 localStorage（按 columnSettingsKey，没有就按页面路径），刷新后保持
+  // 展开状态记在 localStorage（按 columnSettingsKey，没有就按页面路径），刷新后保持。
+  // defaultExpandAll 的页面不吃记忆：一次随手折叠的记忆会永久压住「默认全部展开」，
+  // 之后每次进页都是折叠的（部门树实测如此），这类页面每次进页都按默认全部展开。
   const storageKey = `nex-tree-expanded:${columnSettingsKey ?? window.location.pathname}`
-  const restored = useRef(false)
   const [expanded, setExpanded] = useState<Set<string>>(() => {
+    if (defaultExpandAll) return new Set()
     try {
       const raw = localStorage.getItem(storageKey)
-      if (raw) {
-        restored.current = true
-        return new Set<string>(JSON.parse(raw) as string[])
-      }
+      if (raw) return new Set<string>(JSON.parse(raw) as string[])
     } catch {
       // 存储不可用或数据损坏：按默认处理
     }
@@ -188,10 +187,12 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       if (ids.size) setRevealed((prev) => new Set([...prev, ...ids]))
     }
     setExpanded(next)
-    try {
-      localStorage.setItem(storageKey, JSON.stringify([...next]))
-    } catch {
-      // 存储不可用时仅本次生效
+    if (!defaultExpandAll) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify([...next]))
+      } catch {
+        // 存储不可用时仅本次生效
+      }
     }
   }
   const [dragId, setDragId] = useState<string | null>(null)
@@ -201,7 +202,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   useDragCursor(!!dragId)
   // 拖到视口边缘时自动滚动（长表必需）
   useEdgeAutoScroll(!!dragId, () => scrollRef.current)
-  const initialized = useRef(restored.current) // 已有记忆就不再套用「默认全部展开」
+  const initialized = useRef(false) // 默认全部展开只在首批数据到达时套用一次
   useEffect(() => {
     if (!defaultExpandAll || initialized.current || data.length === 0) return
     initialized.current = true

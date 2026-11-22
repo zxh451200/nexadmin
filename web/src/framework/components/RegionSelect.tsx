@@ -22,12 +22,12 @@ export interface RegionSelectProps {
 
 const KEYS = ['province', 'city', 'district', 'street'] as const
 
-// 列宽下限：中文区划名多是 3–5 字，低于这个宽度点了不好按；上限 11rem 防住
-// 「内蒙古自治区」「巴音郭楞蒙古自治州」这类长名把整列按 max-content 撑开——
-// 4 列合计曾到 660px+，窄窗口下比「触发器左缘→视口右缘」还宽，Radix 碰撞规避会把
-// 整块弹层左移压出对话框边缘（看着像左边被截断）。超出上限的长名截断成省略号。
+// 列宽下限：中文区划名多是 3–5 字，低于这个宽度点了不好按。列容器另用 max-w-[11rem]
+// 钳制（不能写进 minmax 的 max 位：固定上限是「增长上限」，每列会直接膨胀到上限而非按内容收缩），
+// 防住「内蒙古自治区」「巴音郭楞蒙古自治州」这类长名按 max-content 把 4 列撑到 660px+——
+// 窄窗口下比「触发器左缘→视口右缘」还宽，Radix 碰撞规避会把整块弹层左移压出对话框
+// 边缘（看着像左边被截断）。超出钳制的长名截断成省略号。
 const COL_MIN = '6.5rem'
-const COL_MAX = '11rem'
 
 // 直辖市、港澳与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现；
 // 台湾省只到省级（没有公开的下级区划），选完就该收在省级这一列。
@@ -201,10 +201,15 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       ) : (
         <div
           className="grid divide-x divide-border rtl:divide-x-reverse"
-          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(${COL_MIN}, ${COL_MAX}))` }}
+          style={{
+            // 单列时 1fr 撑满弹层（w-64 那点宽度是给搜索框留的，max-content 轨道在定宽容器里
+            // 不拉伸，会剩下大块空白）；多列时按内容收紧——弹层宽度本身随内容走，不拉伸才不留空白
+            gridTemplateColumns: `repeat(${columns.length}, minmax(${COL_MIN}, ${columns.length === 1 ? '1fr' : 'max-content'}))`,
+          }}
         >
           {columns.map((_, i) => (
-            <div key={KEYS[i]}>{list(i)}</div>
+            // 11rem 钳制只在多列时需要（防长名撑爆总宽）；单列 1fr 已撑满弹层，再钳制会空出右侧
+            <div key={KEYS[i]} className={columns.length > 1 ? 'max-w-[11rem]' : undefined}>{list(i)}</div>
           ))}
         </div>
       )}

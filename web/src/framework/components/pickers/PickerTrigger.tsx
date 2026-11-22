@@ -37,7 +37,11 @@ export const PickerTrigger = React.forwardRef<HTMLButtonElement, PickerTriggerPr
         {/* 给「清除」X 留位置放在文字区里，箭头仍在最右边；之前把右内边距加在整个按钮上，箭头被挤到 X 底下重叠 */}
         <span className={cn('flex min-w-0 flex-1 items-center gap-2', showClear && 'pe-8')}>
           {icon}
-          <span className={cn('min-w-0 flex-1 truncate', !hasValue && 'text-muted-foreground')}>
+          <span
+            className={cn('min-w-0 flex-1 truncate', !hasValue && 'text-muted-foreground')}
+            // 长名被截断后悬停可看全名（所有选择器共用这条触发器）
+            title={hasValue && typeof display === 'string' ? display : undefined}
+          >
             {hasValue ? display : placeholder ?? t('common.pleaseSelect')}
           </span>
         </span>

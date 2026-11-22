@@ -60,6 +60,9 @@ summary: 插件怎么交付与安装、free 与 pro 的区别、授权文件校�
 | `maps` | 地图服务 | 0.1.0 |
 | `realname` | 证件实名 | 0.1.0 |
 | `totp` | 两步验证 | 0.1.0 |
+| `website-theme-auvex` | 官网主题 · AUVEX 数控机床 | 1.0.0 |
+| `website-theme-solaris` | 官网主题 · SOLARIS 储能系统 | 1.0.0 |
+| `website-theme-torkon` | 官网主题 · TORKON 工业工具 | 1.0.0 |
 
 ### 专业
 

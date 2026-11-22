@@ -32,8 +32,17 @@ func (h *handler) configSave(c *gin.Context) {
 }
 
 // POST /plugins/ldap/test —— 连通性测试(拨号 + 绑定 + 搜索空跑)。
+// body 可选:带表单时测「当前填写值」(密码留空沿用已保存密码,不落库);不带时测已保存配置。
 func (h *handler) test(c *gin.Context) {
-	if err := h.svc.TestConnection(c.Request.Context()); err != nil {
+	var form *LdapConfigForm
+	if c.Request.Body != nil && c.Request.ContentLength > 0 {
+		f := LdapConfigForm{}
+		if !response.BindJSON(c, &f) {
+			return
+		}
+		form = &f
+	}
+	if err := h.svc.TestConnection(c.Request.Context(), form); err != nil {
 		response.Fail(c, err)
 		return
 	}

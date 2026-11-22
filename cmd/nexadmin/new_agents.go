@@ -80,7 +80,7 @@ var agentsMD = strings.ReplaceAll(`# AI 开发规则（AGENTS.md）
 你在 NexAdmin 二开项目里工作。目录所有权：框架区（core/ modules/ pkg/ cmd/ web/src/framework/ migrations/framework/ docs/ deploy/ config/default.yaml）绝不修改；
 go.mod、go.sum、web/package.json 只能新增自己的依赖（精确版本），不改已有条目；其余代码只写在 internal/、web/src/pages/、web/src/locales/、web/src/theme.css、config/config.yaml、migrations/business/。
 需要框架没有的能力时停下并汇报缺口，不要手改框架区。后端模块在自己包的 init() 里 core.RegisterBuiltin，不改 main.go；业务表前缀 biz_，迁移只增不改；只使用 AGENTS.md 里列出的 nexadmin 命令。
-前端：用 framework 页面骨架（AppLayout/DataTable/FormLayout/ResponsiveDialog），移动优先；颜色只用语义 token；方向用逻辑类（ms-/me-/ps-/pe-/text-start）；文案进 web/src/locales 的 zh-CN 与 en-US 两份；先写 *.mock.ts 让页面跑通再接接口。
+前端：用 framework 页面骨架（AppLayout/DataTable/FormLayout/ResponsiveDialog），移动优先；颜色只用语义 token；方向用逻辑类（ms-/me-/ps-/pe-/text-start）；文案进 web/src/locales 的 zh-CN 与 en-US 两份；业务内容要多语言时用 web/src/framework/components/i18n（整表换语言 + 按语言发布），不要自己按语言克隆字段；先写 *.mock.ts 让页面跑通再接接口。
 完成标准：go build ./...、go vet ./...、cd web && npx tsc --noEmit 通过；汇报时列出新增/修改的文件。
 ^^^
 `, "^", "`")
