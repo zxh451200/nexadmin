@@ -158,6 +158,11 @@ func (c *Ctl) Stop() error {
 		return fmt.Errorf("调用关停接口失败: %w", err)
 	}
 	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		// 404 = 端口上的进程没注册关停路由（前台直跑没令牌，或旧版二进制）——
+		// pid 文件是上一代托管进程的过期身份，按真实形态提示，不能说成「令牌不符」。
+		return fmt.Errorf("端口 %d 上的进程没有关停接口：它不是 start 托管的（前台直跑或旧版二进制），pid 文件已过期；请到它的终端按 Ctrl+C，或按 PID 结束后再试", p.Port)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("关停被拒绝（HTTP %d），pid 文件里的令牌与运行中的进程不符", resp.StatusCode)
 	}
