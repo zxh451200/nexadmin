@@ -202,6 +202,12 @@
     '.chat-msg-card-title{display:block;font-size:13px;font-weight:600;line-height:1.5}',
     '.chat-msg-card-line{display:block;font-size:11.5px;line-height:1.65;opacity:.85}',
     '.chat-msg-card-link{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;text-decoration:underline;text-underline-offset:2px}',
+    // 地址/名片键值卡：label 淡色、值加重，行距收紧——观感对齐坐席端的结构化卡片
+    '.chat-msg-card-kv{display:flex;gap:6px;font-size:11.5px;line-height:1.7}',
+    '.chat-msg-card-k{flex:none;opacity:.72}',
+    '.chat-msg-card-v{min-width:0;overflow-wrap:anywhere;font-weight:600}',
+    '.chat-msg-card-v.is-bare{font-weight:400;opacity:.85}',
+    '.chat-msg-card-note{display:block;margin-top:5px;padding-top:5px;border-top:1px solid rgba(128,128,128,.28);white-space:pre-wrap;font-size:11.5px;line-height:1.55;opacity:.85}',
     // 纯文本气泡里的裸链接：与气泡文字同色加下划线，可点
     '.chat-bubble a{color:inherit;text-decoration:underline;text-underline-offset:2px}',
     '.chat.is-expanded .chat-panel{width:min(760px,calc(100vw - 40px));max-width:calc(100vw - 40px);height:min(86dvh,840px);max-height:86dvh}',
@@ -563,6 +569,51 @@
       a.title = url;
       bubble.appendChild(a);
     }
+    // 地址/名片卡片：[标记] + 「键: 值」行（与坐席端 ImPage 的解析同协议，冒号全半角都认）。
+    // 键值行渲染成 label + 值的两列小行，空行之后的留言正文单独一段；解析不出键值结构的
+    // 多行标记消息（访客手打的「[笑] …」）退回 chat-bubble-card 纯文本样式。
+    function buildKVCard(bubble, label, lines) {
+      var rows = [], note = [], inNote = false;
+      for (var i = 0; i < lines.length; i++) {
+        var t = String(lines[i] || '').trim();
+        if (!inNote && t === '') { inNote = true; continue; }
+        if (inNote) { if (t) note.push(t); continue; }
+        if (!t) continue;
+        var kv = t.match(/^([^:：]{1,20})[:：]\s*(.+)$/);
+        rows.push(kv ? { k: kv[1].trim(), v: kv[2].trim() } : { k: '', v: t });
+      }
+      var kvCount = 0, bare = 0;
+      for (var j = 0; j < rows.length; j++) { if (rows[j].k) kvCount++; else bare++; }
+      if (kvCount < 2 || bare > 1) return false;
+      bubble.textContent = '';
+      bubble.setAttribute('data-card-done', '1');
+      var lab = document.createElement('span');
+      lab.className = 'chat-msg-card-label';
+      lab.textContent = label;
+      bubble.appendChild(lab);
+      rows.forEach(function (r) {
+        var row = document.createElement('div');
+        row.className = 'chat-msg-card-kv';
+        if (r.k) {
+          var k = document.createElement('span');
+          k.className = 'chat-msg-card-k';
+          k.textContent = r.k;
+          row.appendChild(k);
+        }
+        var v = document.createElement('span');
+        v.className = 'chat-msg-card-v' + (r.k ? '' : ' is-bare');
+        v.textContent = r.v;
+        row.appendChild(v);
+        bubble.appendChild(row);
+      });
+      if (note.length) {
+        var n = document.createElement('span');
+        n.className = 'chat-msg-card-note';
+        n.textContent = note.join('\n');
+        bubble.appendChild(n);
+      }
+      return true;
+    }
     function decorateMessages() {
       if (!log) return;
       Array.prototype.forEach.call(log.querySelectorAll('.chat-bubble'), function (b) {
@@ -581,6 +632,7 @@
             buildProductCard(b, m[1], lines, urlIdx);
             return;
           }
+          if (buildKVCard(b, m[1], lines)) return;
           b.classList.add('chat-bubble-card');
         }
         linkifyBubble(b);

@@ -1179,8 +1179,9 @@ html[data-scheme="light"] .shot-light { display: block; }
 .post-row-arrow { color: var(--text-3); opacity: 0; transition: opacity 0.15s; }
 .post-row:hover .post-row-arrow { opacity: 1; }
 .empty { color: var(--text-3); padding: 40px 0; }
-/* 新闻列表搜索：单行检索框 + 提交按钮；语义 token 与主题联动，窄屏自适应折行。 */
-.news-search { display: flex; flex-wrap: wrap; gap: 8px; max-width: 460px; margin-top: 16px; }
+/* 新闻列表搜索：单行检索框 + 提交按钮；语义 token 与主题联动，窄屏自适应折行。
+   列表 section 是 padding-top:0 顶上来的，第一条的上边框就贴着搜索框下缘——呼吸感留在搜索框自己的下边距上。 */
+.news-search { display: flex; flex-wrap: wrap; gap: 8px; max-width: 460px; margin-top: 16px; margin-bottom: 28px; }
 .news-search input {
   flex: 1;
   min-width: 0;
