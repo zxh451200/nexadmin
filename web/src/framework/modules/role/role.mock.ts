@@ -43,7 +43,7 @@ export const roleSeed: Role[] = [
   },
   {
     id: ids.auditor,
-    name: '审计 Auditor',
+    name: '审计',
     code: 'auditor',
     sort: 30,
     status: '1',
@@ -56,7 +56,7 @@ export const roleSeed: Role[] = [
   },
   {
     id: ids.editor,
-    name: '内容编辑 Editor',
+    name: '内容编辑',
     code: 'editor',
     sort: 40,
     status: '0',

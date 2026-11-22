@@ -28,18 +28,18 @@ const d = (
 })
 
 let items: SysDept[] = [
-  d(1, null, '总公司 Headquarters', 10, 'Admin', '010-88886666', 'hq@nexadmin.io'),
+  d(1, null, '总公司', 10, 'Admin', '010-88886666', 'hq@nexadmin.io'),
   d(2, 1, '研发中心', 10, '张伟', '010-88886601', 'rd@nexadmin.io'),
   d(3, 1, '市场中心', 20, 'Emily Chen', '010-88886602', 'marketing@nexadmin.io'),
   d(4, 1, '运营中心', 30, '李娜', '010-88886603', 'ops@nexadmin.io'),
   d(5, 1, '综合管理部', 40, '王芳', '010-88886604', 'admin@nexadmin.io'),
-  d(6, 2, '前端组 Frontend', 10, '刘洋', '010-88886611', 'fe@nexadmin.io'),
-  d(7, 2, '后端组 Backend', 20, 'Kevin Zhao', '010-88886612', 'be@nexadmin.io'),
-  d(8, 2, '测试组 QA', 30, '陈静', '010-88886613', 'qa@nexadmin.io'),
+  d(6, 2, '前端组', 10, '刘洋', '010-88886611', 'fe@nexadmin.io'),
+  d(7, 2, '后端组', 20, 'Kevin Zhao', '010-88886612', 'be@nexadmin.io'),
+  d(8, 2, '测试组', 30, '陈静', '010-88886613', 'qa@nexadmin.io'),
   d(9, 3, '品牌部', 10, '周杰', '010-88886621', 'brand@nexadmin.io'),
-  d(10, 3, '销售部 Sales', 20, 'Linda Wu', '010-88886622', 'sales@nexadmin.io', '0'),
+  d(10, 3, '销售部', 20, 'Linda Wu', '010-88886622', 'sales@nexadmin.io', '0'),
   d(11, 4, '客服部', 10, '赵敏', '010-88886631', 'cs@nexadmin.io'),
-  d(12, 5, '人力资源组 HR', 10, '孙丽', '010-88886641', 'hr@nexadmin.io'),
+  d(12, 5, '人力资源组', 10, '孙丽', '010-88886641', 'hr@nexadmin.io'),
 ]
 
 const bySort = (a: SysDept, b: SysDept) => a.sort - b.sort || a.id.localeCompare(b.id)

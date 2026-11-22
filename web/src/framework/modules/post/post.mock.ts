@@ -27,12 +27,12 @@ const p = (
 
 let items: SysPost[] = [
   p(1, '董事长', 'chairman', 1, '1', '公司最高负责人'),
-  p(2, '技术总监 CTO', 'cto', 2, '1', '统筹研发中心技术路线'),
+  p(2, '技术总监', 'cto', 2, '1', '统筹研发中心技术路线'),
   p(3, '前端工程师', 'frontend', 6, '1', 'React / TypeScript'),
-  p(4, '后端工程师 Backend Engineer', 'backend', 7, '1', 'Go / PostgreSQL'),
+  p(4, '后端工程师', 'backend', 7, '1', 'Go / PostgreSQL'),
   p(5, '测试工程师', 'qa', 8),
   p(6, '市场经理', 'marketing_manager', 3, '1', '负责品牌与市场活动'),
-  p(7, '客服专员 Support', 'support', 11, '1'),
+  p(7, '客服专员', 'support', 11, '1'),
   p(8, '人事专员', 'hr', 12, '0', '暂停招聘，岗位冻结'),
 ]
 

@@ -45,18 +45,54 @@ type seedDept struct {
 }
 
 var seedDepts = []seedDept{
-	{1, 0, "总公司 Headquarters", 10, "Admin", "010-88886666", "hq@nexadmin.io", "1"},
+	{1, 0, "总公司", 10, "Admin", "010-88886666", "hq@nexadmin.io", "1"},
 	{2, 1, "研发中心", 10, "张伟", "010-88886601", "rd@nexadmin.io", "1"},
 	{3, 1, "市场中心", 20, "Emily Chen", "010-88886602", "marketing@nexadmin.io", "1"},
 	{4, 1, "运营中心", 30, "李娜", "010-88886603", "ops@nexadmin.io", "1"},
 	{5, 1, "综合管理部", 40, "王芳", "010-88886604", "admin@nexadmin.io", "1"},
-	{6, 2, "前端组 Frontend", 10, "刘洋", "010-88886611", "fe@nexadmin.io", "1"},
-	{7, 2, "后端组 Backend", 20, "Kevin Zhao", "010-88886612", "be@nexadmin.io", "1"},
-	{8, 2, "测试组 QA", 30, "陈静", "010-88886613", "qa@nexadmin.io", "1"},
+	{6, 2, "前端组", 10, "刘洋", "010-88886611", "fe@nexadmin.io", "1"},
+	{7, 2, "后端组", 20, "Kevin Zhao", "010-88886612", "be@nexadmin.io", "1"},
+	{8, 2, "测试组", 30, "陈静", "010-88886613", "qa@nexadmin.io", "1"},
 	{9, 3, "品牌部", 10, "周杰", "010-88886621", "brand@nexadmin.io", "1"},
-	{10, 3, "销售部 Sales", 20, "Linda Wu", "010-88886622", "sales@nexadmin.io", "0"},
+	{10, 3, "销售部", 20, "Linda Wu", "010-88886622", "sales@nexadmin.io", "0"},
 	{11, 4, "客服部", 10, "赵敏", "010-88886631", "cs@nexadmin.io", "1"},
-	{12, 5, "人力资源组 HR", 10, "孙丽", "010-88886641", "hr@nexadmin.io", "1"},
+	{12, 5, "人力资源组", 10, "孙丽", "010-88886641", "hr@nexadmin.io", "1"},
+}
+
+// legacyDeptNames 早期出厂部门名带英文后缀（总公司 Headquarters…）。部门名是数据不是 UI 文案，
+// 中文产品里两套语言挤在一行既难看也难检索，seedDepts 已收成纯中文；存量库按「固定种子 ID +
+// 旧名」就地改名，名字被用户改过的行不匹配，不会被覆盖。
+var legacyDeptNames = map[int]string{
+	1:  "总公司 Headquarters",
+	6:  "前端组 Frontend",
+	7:  "后端组 Backend",
+	8:  "测试组 QA",
+	10: "销售部 Sales",
+	12: "人力资源组 HR",
+}
+
+func seedDeptName(n int) string {
+	for _, s := range seedDepts {
+		if s.n == n {
+			return s.name
+		}
+	}
+	return ""
+}
+
+// SeedOnStartup 实现 setup.StartupSeeder：每次启动先把早期双语名就地改名，再补缺失的出厂部门。
+func (module) SeedOnStartup(db *gorm.DB) error {
+	db = db.WithContext(tn.Skip(context.Background()))
+	for n, old := range legacyDeptNames {
+		name := seedDeptName(n)
+		if name == "" {
+			continue
+		}
+		if err := db.Model(&Dept{}).Where("id = ? AND name = ?", int64(seedID(n)), old).Update("name", name).Error; err != nil {
+			return err
+		}
+	}
+	return module{}.Seed(db)
 }
 
 // Seed 幂等种入默认租户的出厂部门：按固定 ID 判断，已存在一律不动。
