@@ -704,7 +704,11 @@
         "sessions": "访客数",
         "inquiries": "询盘量",
         "realtime": "实时访客",
-        "realtimeHint": "近 5 分钟在站"
+        "realtimeHint": "近 5 分钟在站",
+        "bounce": "跳出率",
+        "bounceHint": "只看一页就离开的访客占比",
+        "duration": "访问时长",
+        "durationHint": "平均停留（多页访客）"
       },
       "range": {
         "d7": "近 7 天",
@@ -722,8 +726,15 @@
         }
       },
       "sources": {
-        "title": "流量来源"
+        "title": "流量来源",
+        "topDomains": "来源域明细"
       },
+      "devices": {
+        "title": "设备画像",
+        "browser": "浏览器",
+        "os": "操作系统"
+      },
+      "deviceOther": "其他",
       "refKind": {
         "direct": "直接访问",
         "search": "搜索引擎",
@@ -733,6 +744,9 @@
       },
       "paths": {
         "title": "热门页面"
+      },
+      "entries": {
+        "title": "入口页"
       },
       "funnel": {
         "title": "浏览 → 询盘",

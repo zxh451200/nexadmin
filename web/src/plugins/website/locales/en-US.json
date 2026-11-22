@@ -704,7 +704,11 @@
         "sessions": "Visitors",
         "inquiries": "Inquiries",
         "realtime": "Realtime visitors",
-        "realtimeHint": "active in last 5 min"
+        "realtimeHint": "active in last 5 min",
+        "bounce": "Bounce rate",
+        "bounceHint": "visitors who saw only one page",
+        "duration": "Visit duration",
+        "durationHint": "average time on site (multi-page visits)"
       },
       "range": {
         "d7": "Last 7 days",
@@ -722,8 +726,15 @@
         }
       },
       "sources": {
-        "title": "Traffic sources"
+        "title": "Traffic sources",
+        "topDomains": "Top source domains"
       },
+      "devices": {
+        "title": "Devices",
+        "browser": "Browser",
+        "os": "Operating system"
+      },
+      "deviceOther": "Other",
       "refKind": {
         "direct": "Direct",
         "search": "Search engine",
@@ -733,6 +744,9 @@
       },
       "paths": {
         "title": "Top pages"
+      },
+      "entries": {
+        "title": "Entry pages"
       },
       "funnel": {
         "title": "Views → Inquiries",

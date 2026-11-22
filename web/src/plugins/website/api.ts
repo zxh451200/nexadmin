@@ -1387,6 +1387,12 @@ export interface AnalyticsRefRow {
   sessions: number
 }
 
+/** 设备画像 / 来源大类汇总的一行：key 是浏览器/系统/来源类目，sessions 去重会话 */
+export interface AnalyticsDeviceRow {
+  key: string
+  sessions: number
+}
+
 export interface AnalyticsData {
   days: AnalyticsDays
   views: number
@@ -1394,9 +1400,19 @@ export interface AnalyticsData {
   inquiries: number
   /** 近 5 分钟去重会话（近似实时在线） */
   realtime: number
+  /** 跳出率 0-100：只有一次浏览的会话占比（口径对齐 Plausible） */
+  bounceRate: number
+  /** 平均访问时长（秒）：会话首末浏览间隔均值，单浏览会话不计入 */
+  avgDuration: number
   trend: AnalyticsPoint[]
   topPaths: AnalyticsPathRow[]
+  /** 入口页：每个会话的首个浏览页 */
+  entryPages: AnalyticsPathRow[]
   referrers: AnalyticsRefRow[]
+  /** 来源五大类的会话份额（与 referrers 明细互补，跨 host 会话不可加） */
+  refKindStats: AnalyticsDeviceRow[]
+  browsers: AnalyticsDeviceRow[]
+  oses: AnalyticsDeviceRow[]
 }
 
 /** 访问统计总览；60s 轮询让「实时访客」名实相符（其余指标顺带刷新）。

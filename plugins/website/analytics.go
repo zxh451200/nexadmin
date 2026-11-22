@@ -69,6 +69,8 @@ type PageView struct {
 	RefHost    string    `gorm:"column:ref_host"`
 	RefKind    string    `gorm:"column:ref_kind"`
 	SessionKey string    `gorm:"column:session_key"`
+	Browser    string    `gorm:"column:browser"`
+	OS         string    `gorm:"column:os"`
 	CreatedAt  time.Time `gorm:"column:created_at"`
 	UpdatedAt  time.Time `gorm:"column:updated_at"`
 }
@@ -83,6 +85,8 @@ type viewRow struct {
 	refHost    string
 	refKind    string
 	sessionKey string
+	browser    string
+	os         string
 	createdAt  time.Time
 }
 
@@ -108,10 +112,12 @@ func (r *viewRecorder) viewMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		// 静态资产与机器文件不占浏览口径
+		// 静态资产与机器文件不占浏览口径；订单状态轮询是 AJAX 数据端点（3s 一次），
+		// 记进来会把 PV 淹掉——订单页本身照记。
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/website-assets") ||
-			path == "/robots.txt" || path == "/sitemap.xml" || path == "/rss.xml" {
+			path == "/robots.txt" || path == "/sitemap.xml" || path == "/rss.xml" || path == "/atom.xml" ||
+			(strings.HasPrefix(path, "/website/orders/") && strings.HasSuffix(path, "/status")) {
 			c.Next()
 			return
 		}
@@ -145,6 +151,7 @@ func (r *viewRecorder) viewMiddleware() gin.HandlerFunc {
 			return
 		}
 		refHost, refKind := classifyRef(c.Request.Header.Get("Referer"), c.Request.Host)
+		browser, os := parseUA(ua)
 		row := viewRow{
 			id:         int64(id),
 			day:        now.Format("2006-01-02"),
@@ -152,6 +159,8 @@ func (r *viewRecorder) viewMiddleware() gin.HandlerFunc {
 			refHost:    trimLen(refHost, 120),
 			refKind:    refKind,
 			sessionKey: trimLen(vid, 64),
+			browser:    browser,
+			os:         os,
 			createdAt:  time.Now().UTC(),
 		}
 		r.enqueue(row)
@@ -193,6 +202,53 @@ func classifyRef(referer, requestHost string) (host, kind string) {
 	return h, refExternal
 }
 
+// parseUA 从 UA 里解出浏览器与操作系统（坐席端设备画像用）。只求大类准确，不引
+// 第三方库：竞品仪表盘（Plausible/Umami）的设备卡也是五六个大类，细分版本对
+// 官网运营没有决策价值。解析不了的归 other（聚合时照样占一格，口径诚实）。
+func parseUA(ua string) (browser, os string) {
+	ua = strings.TrimSpace(ua)
+	if ua == "" {
+		return "other", "other"
+	}
+	// 浏览器按特化程度判，顺序敏感：Edge/Opera 的 UA 里也含 Chrome/，要先判它们。
+	switch {
+	case strings.Contains(ua, "Edg/"), strings.Contains(ua, "Edge/"):
+		browser = "Edge"
+	case strings.Contains(ua, "OPR/"), strings.Contains(ua, "Opera"):
+		browser = "Opera"
+	case strings.Contains(ua, "Firefox/"), strings.Contains(ua, "FxiOS/"):
+		browser = "Firefox"
+	case strings.Contains(ua, "CriOS/"):
+		browser = "Chrome"
+	case strings.Contains(ua, "Chrome/"):
+		browser = "Chrome"
+	case strings.Contains(ua, "Safari/"):
+		browser = "Safari"
+	default:
+		browser = "other"
+	}
+	// 系统按 UA 出现的平台段判；iPad 的桌面化 UA（Macintosh 且无 Touch）识别不了，归 macOS 可接受。
+	switch {
+	case strings.Contains(ua, "Windows NT"), strings.Contains(ua, "Win32"):
+		os = "Windows"
+	case strings.Contains(ua, "iPhone"), strings.Contains(ua, "iPod"):
+		os = "iOS"
+	case strings.Contains(ua, "iPad"), strings.Contains(ua, "Touch"):
+		os = "iPadOS"
+	case strings.Contains(ua, "Android"):
+		os = "Android"
+	case strings.Contains(ua, "Mac OS X"), strings.Contains(ua, "Macintosh"):
+		os = "macOS"
+	case strings.Contains(ua, "CrOS"):
+		os = "ChromeOS"
+	case strings.Contains(ua, "Linux"):
+		os = "Linux"
+	default:
+		os = "other"
+	}
+	return browser, os
+}
+
 func (r *viewRecorder) enqueue(row viewRow) {
 	select {
 	case r.queue <- row:
@@ -228,6 +284,7 @@ func (r *viewRecorder) runFlusher(ctx context.Context) {
 			buf = append(buf, PageView{
 				ID: row.id, Day: row.day, Path: row.path, RefHost: row.refHost,
 				RefKind: row.refKind, SessionKey: row.sessionKey,
+				Browser: row.browser, OS: row.os,
 				CreatedAt: row.createdAt, UpdatedAt: now,
 			})
 			if len(buf) >= flushAtSize {
@@ -264,16 +321,33 @@ type AnalyticsRef struct {
 	Sessions int64  `json:"sessions"`
 }
 
+// AnalyticsDevice 是设备画像的一行（browser 或 os 各一组）。
+type AnalyticsDevice struct {
+	Key      string `json:"key"`
+	Sessions int64  `json:"sessions"`
+}
+
+// AnalyticsPath 也可承载入口页（path = 会话首个浏览页，views = 会话数）。
+
 // AnalyticsOut 是 GET /plugins/website/analytics 的应答。
 type AnalyticsOut struct {
-	Days      int              `json:"days"`
-	Views     int64            `json:"views"`
-	Sessions  int64            `json:"sessions"`
-	Inquiries int64            `json:"inquiries"`
-	Realtime  int64            `json:"realtime"`
-	Trend     []AnalyticsPoint `json:"trend"`
-	TopPaths  []AnalyticsPath  `json:"topPaths"`
-	Referrers []AnalyticsRef   `json:"referrers"`
+	Days      int   `json:"days"`
+	Views     int64 `json:"views"`
+	Sessions  int64 `json:"sessions"`
+	Inquiries int64 `json:"inquiries"`
+	Realtime  int64 `json:"realtime"`
+	// BounceRate 是跳出率（0-100，一位小数由前端格式化）：只有一次浏览的会话占比，
+	// 与 Plausible 的 bounce 口径一致（会话没有心跳事件，多浏览≈未跳出）。
+	BounceRate float64 `json:"bounceRate"`
+	// AvgDuration 是平均访问时长（秒）：会话首末浏览的间隔均值；单浏览会话计 0。
+	AvgDuration  int64             `json:"avgDuration"`
+	Trend        []AnalyticsPoint  `json:"trend"`
+	TopPaths     []AnalyticsPath   `json:"topPaths"`
+	EntryPages   []AnalyticsPath   `json:"entryPages"`
+	Referrers    []AnalyticsRef    `json:"referrers"`
+	RefKindStats []AnalyticsDevice `json:"refKindStats"`
+	Browsers     []AnalyticsDevice `json:"browsers"`
+	OSes         []AnalyticsDevice `json:"oses"`
 }
 
 // analyticsData 聚合出统计窗口内的全部指标；tz 是站点时区（day 的归日口径）。
@@ -370,6 +444,92 @@ func (h *handler) analyticsData(c *gin.Context, tz *time.Location) (*AnalyticsOu
 	out.Trend = trend
 	out.TopPaths = paths
 	out.Referrers = refs
+
+	// 会话级指标（跳出率 / 平均时长）：窗口内按会话聚合首末浏览时间与浏览数，
+	// 在 Go 侧算均值——MIN/MAX 跨列运算各引擎方言不同（TIMESTAMPDIFF vs EXTRACT），
+	// 会话行数是千级，拉回内存聚合比写方言 SQL 稳。跳出口径对齐 Plausible：只有
+	// 一次浏览的会话记为跳出（无心跳事件，多浏览≈未跳出）。
+	var sessRows []struct {
+		SessionKey string
+		Views      int64
+		First      time.Time
+		Last       time.Time
+	}
+	if err := h.svc.db.WithContext(ctx).
+		Raw("SELECT session_key, COUNT(*) AS views, MIN(created_at) AS first, MAX(created_at) AS last FROM plg_website_page_view WHERE day >= ? GROUP BY session_key",
+			windowStart.Format("2006-01-02")).Scan(&sessRows).Error; err != nil {
+		return nil, err
+	}
+	if len(sessRows) > 0 {
+		var bounces, totalSec int64
+		for _, s := range sessRows {
+			if s.Views <= 1 {
+				bounces++
+				continue
+			}
+			totalSec += int64(s.Last.Sub(s.First).Seconds())
+		}
+		out.BounceRate = float64(bounces) / float64(len(sessRows)) * 100
+		// 时长分母是「多浏览会话」：单浏览会话没有时长概念，混进去会拉低均值
+		var multi int64 = int64(len(sessRows)) - bounces
+		if multi > 0 {
+			out.AvgDuration = totalSec / multi
+		}
+	}
+
+	// 设备画像：浏览器 / 操作系统各取 top5（按去重会话），与来源榜同口径。
+	// 列名直接映射中间结构（不 AS key：KEY 在 MySQL 是保留字别名要转义）。
+	var browserRows []struct {
+		Browser  string
+		Sessions int64
+	}
+	if err := h.svc.db.WithContext(ctx).
+		Raw("SELECT k, COUNT(DISTINCT session_key) AS sessions FROM (SELECT COALESCE(NULLIF(browser, ''), 'other') AS k, session_key FROM plg_website_page_view WHERE day >= ?) t GROUP BY k ORDER BY sessions DESC LIMIT 5",
+			windowStart.Format("2006-01-02")).Scan(&browserRows).Error; err != nil {
+		return nil, err
+	}
+	out.Browsers = make([]AnalyticsDevice, 0, len(browserRows))
+	for _, r := range browserRows {
+		out.Browsers = append(out.Browsers, AnalyticsDevice{Key: r.Browser, Sessions: r.Sessions})
+	}
+	var osRows []struct {
+		OS       string
+		Sessions int64
+	}
+	if err := h.svc.db.WithContext(ctx).
+		Raw("SELECT k, COUNT(DISTINCT session_key) AS sessions FROM (SELECT COALESCE(NULLIF(os, ''), 'other') AS k, session_key FROM plg_website_page_view WHERE day >= ?) t GROUP BY k ORDER BY sessions DESC LIMIT 5",
+			windowStart.Format("2006-01-02")).Scan(&osRows).Error; err != nil {
+		return nil, err
+	}
+	out.OSes = make([]AnalyticsDevice, 0, len(osRows))
+	for _, r := range osRows {
+		out.OSes = append(out.OSes, AnalyticsDevice{Key: r.OS, Sessions: r.Sessions})
+	}
+
+	// 入口页：每个会话的首个浏览页（ROW_NUMBER 窗口函数，MySQL 8/MariaDB/PG 通用）
+	var entries []AnalyticsPath
+	if err := h.svc.db.WithContext(ctx).
+		Raw("SELECT path, COUNT(*) AS views FROM (SELECT path, ROW_NUMBER() OVER (PARTITION BY session_key ORDER BY created_at, id) AS rn FROM plg_website_page_view WHERE day >= ?) t WHERE rn = 1 GROUP BY path ORDER BY views DESC LIMIT 8",
+			windowStart.Format("2006-01-02")).Scan(&entries).Error; err != nil {
+		return nil, err
+	}
+	out.EntryPages = entries
+
+	// 来源大类汇总：五类份额（与 referrers 的 kind+host 明细互补，跨 host 会话不可加，单独查）
+	var kindRows []struct {
+		RefKind  string
+		Sessions int64
+	}
+	if err := h.svc.db.WithContext(ctx).
+		Raw("SELECT ref_kind, COUNT(DISTINCT session_key) AS sessions FROM plg_website_page_view WHERE day >= ? GROUP BY ref_kind ORDER BY sessions DESC",
+			windowStart.Format("2006-01-02")).Scan(&kindRows).Error; err != nil {
+		return nil, err
+	}
+	out.RefKindStats = make([]AnalyticsDevice, 0, len(kindRows))
+	for _, r := range kindRows {
+		out.RefKindStats = append(out.RefKindStats, AnalyticsDevice{Key: r.RefKind, Sessions: r.Sessions})
+	}
+
 	return out, nil
 }
 

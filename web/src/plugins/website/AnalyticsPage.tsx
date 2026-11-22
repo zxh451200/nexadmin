@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Eye, Inbox, Radio, Users } from 'lucide-react'
+import { Eye, Inbox, Monitor, Radio, Timer, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { TrendArea } from '@/framework/modules/dashboard/cards/TrendArea'
 import { ChartCard, type ChartCardRange } from '@/framework/components/ChartCard'
@@ -8,11 +8,12 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Badge } from '@/framework/ui/badge'
 import { Skeleton } from '@/framework/ui/skeleton'
-import { useAnalytics, type AnalyticsDays, type AnalyticsRefRow } from './api'
+import { useAnalytics, type AnalyticsDays, type AnalyticsDeviceRow, type AnalyticsRefRow } from './api'
 
-// 访问统计：公开官网的第一方轻量盘——浏览 / 访客 / 询盘漏斗 + 实时在站。
-// 口径（后端 plugins/website/analytics.go）：匿名会话 cookie 去重访客，bot 不采集，
-// day 按站点时区归日；匿名统计不含 IP 与个人身份。
+// 访问统计：公开官网的第一方轻量盘——浏览 / 访客 / 跳出率 / 访问时长 / 询盘漏斗 +
+// 实时在站 + 设备画像 + 入口页。对标 Plausible/Umami 的核心指标；Geo/IP 与 UTM 归因
+// 有意不做：采集口径是匿名会话 cookie（不含 IP 与个人身份），见 plugins/website/analytics.go。
+// 口径：bot 不采集，day 按站点时区归日；跳出率 = 只有一次浏览的会话占比。
 
 const DAYS: AnalyticsDays[] = [7, 14, 30]
 const RANGE_KEYS = ['d7', 'd14', 'd30'] as const
@@ -33,6 +34,9 @@ export default function AnalyticsPage() {
   const [days, setDays] = useState<AnalyticsDays>(7)
   const { data, isLoading } = useAnalytics(days)
   const fmt = (n: number) => new Intl.NumberFormat(i18n.language).format(n)
+  // 设备/来源画像的 key 直接展示原文（Chrome/Windows/google.com 这类专名不翻译）；
+  // unknown → other 的兜底文案走 i18n。
+  const deviceKey = (key: string) => (key === 'other' ? t('plugin_website.analytics.deviceOther') : key)
 
   const ranges: ChartCardRange[] = DAYS.map((d, i) => ({
     value: String(d),
@@ -45,19 +49,69 @@ export default function AnalyticsPage() {
   const rate = views > 0 ? (inquiries / views) * 100 : 0
   const barW = (v: number) => (views > 0 ? Math.max((v / views) * 100, 4) : 0)
 
+  // 访问时长 mm:ss（窗口均值，秒）；1 小时以上极罕见，也兜得住
+  const dur = data?.avgDuration ?? 0
+  const durText = `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`
+
   const refRows = data?.referrers ?? []
   const refMax = Math.max(...refRows.map((r) => r.sessions), 1)
   const paths = data?.topPaths ?? []
   const pathMax = Math.max(...paths.map((p) => p.views), 1)
+  const entries = data?.entryPages ?? []
+  const entryMax = Math.max(...entries.map((e) => e.views), 1)
 
   const kindLabel = (kind: AnalyticsRefRow['kind']) => t(`plugin_website.analytics.refKind.${kind}`)
+
+  // 设备两块并列条形（浏览器 / 操作系统），复用份额条样式
+  const deviceRows = (rows: AnalyticsDeviceRow[]) => {
+    const max = Math.max(...rows.map((r) => r.sessions), 1)
+    return rows.map((r) => (
+      <div key={r.key} className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="num min-w-0 truncate text-sm" title={deviceKey(r.key)}>{deviceKey(r.key)}</span>
+          <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / max) * 100}%` }} />
+        </div>
+      </div>
+    ))
+  }
+
+  // 来源大类份额：一行一条（数量少，不做弹层），徽章复用明细卡的语义色
+  const kindRows = (data?.refKindStats ?? []).map((r) => (
+    <div key={r.key} className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Badge variant={refTone(r.key as AnalyticsRefRow['kind']) ? undefined : 'secondary'} tone={refTone(r.key as AnalyticsRefRow['kind'])}>
+          {kindLabel(r.key as AnalyticsRefRow['kind'])}
+        </Badge>
+        <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / Math.max(...(data?.refKindStats ?? []).map((k) => k.sessions), 1)) * 100}%` }} />
+      </div>
+    </div>
+  ))
+
+  const pathList = (rows: typeof paths, max: number, tone: string) =>
+    rows.map((p, i) => (
+      <div key={`${p.path}-${i}`} className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="num min-w-0 truncate text-sm" title={p.path}>{p.path}</span>
+          <span className="num shrink-0 text-sm font-medium">{fmt(p.views)}</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className={`h-full rounded-full ${tone}`} style={{ width: `${(p.views / max) * 100}%` }} />
+        </div>
+      </div>
+    ))
 
   return (
     <PageContainer>
       <PageHeader title={t('plugin_website.analytics.title')} description={t('plugin_website.analytics.description')} />
 
-      {/* KPI 行：浏览 / 访客 / 询盘带趋势 spark；实时访客单独一张（近 5 分钟窗口，60s 轮询） */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 md:gap-4">
+      {/* KPI 行：浏览 / 访客 / 跳出率 / 访问时长 / 询盘 / 实时在站（近 5 分钟窗口，60s 轮询） */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 md:gap-4">
         <StatCard
           title={t('plugin_website.analytics.kpi.views')}
           value={data?.views ?? 0}
@@ -71,6 +125,20 @@ export default function AnalyticsPage() {
           icon={<Users aria-hidden="true" />}
           spark={data?.trend.map((p) => p.sessions)}
           tone="chart-2"
+        />
+        <StatCard
+          title={t('plugin_website.analytics.kpi.bounce')}
+          value={`${(data?.bounceRate ?? 0).toFixed(1)}%`}
+          hint={t('plugin_website.analytics.kpi.bounceHint')}
+          icon={<Monitor aria-hidden="true" />}
+          tone="chart-3"
+        />
+        <StatCard
+          title={t('plugin_website.analytics.kpi.duration')}
+          value={durText}
+          hint={t('plugin_website.analytics.kpi.durationHint')}
+          icon={<Timer aria-hidden="true" />}
+          tone="chart-4"
         />
         <StatCard
           title={t('plugin_website.analytics.kpi.inquiries')}
@@ -119,7 +187,7 @@ export default function AnalyticsPage() {
         )}
       </ChartCard>
 
-      {/* 来源 / 热门页 / 漏斗：三列同排（窄屏折行），份额条给出「谁在贡献流量」的量感 */}
+      {/* 来源 / 设备 / 漏斗：三列同排（窄屏折行） */}
       <div className="grid grid-cols-1 gap-3 md:gap-4 xl:grid-cols-3">
         <Card className="flex flex-col transition-shadow hover:glow motion-reduce:transition-none">
           <CardHeader className="pb-2">
@@ -128,51 +196,56 @@ export default function AnalyticsPage() {
           <CardContent className="flex-1 space-y-3">
             {isLoading ? (
               <Skeleton className="h-40 w-full" />
-            ) : refRows.length === 0 ? (
+            ) : kindRows.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_website.analytics.empty')}</p>
             ) : (
-              refRows.map((r, i) => (
-                <div key={`${r.kind}-${r.host}-${i}`} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <Badge variant={refTone(r.kind) ? undefined : 'secondary'} tone={refTone(r.kind)}>
-                        {kindLabel(r.kind)}
-                      </Badge>
-                      {/* direct 无来源域：徽章即全部信息，不重复一遍分类名 */}
-                      {r.host ? <span className="num truncate text-sm">{r.host}</span> : null}
-                    </span>
-                    <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / refMax) * 100}%` }} />
-                  </div>
+              <>
+                {kindRows}
+                <div className="space-y-3 border-t border-border pt-3">
+                  <p className="text-xs font-medium text-muted-foreground">{t('plugin_website.analytics.sources.topDomains')}</p>
+                  {refRows.map((r, i) => (
+                    <div key={`${r.kind}-${r.host}-${i}`} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Badge variant={refTone(r.kind) ? undefined : 'secondary'} tone={refTone(r.kind)}>
+                            {kindLabel(r.kind)}
+                          </Badge>
+                          {/* direct 无来源域：徽章即全部信息，不重复一遍分类名 */}
+                          {r.host ? <span className="num truncate text-sm">{r.host}</span> : null}
+                        </span>
+                        <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / refMax) * 100}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))
+              </>
             )}
           </CardContent>
         </Card>
 
         <Card className="flex flex-col transition-shadow hover:glow motion-reduce:transition-none">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">{t('plugin_website.analytics.paths.title')}</CardTitle>
+            <CardTitle className="text-base font-medium">{t('plugin_website.analytics.devices.title')}</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 space-y-3">
+          <CardContent className="flex-1 space-y-4">
             {isLoading ? (
               <Skeleton className="h-40 w-full" />
-            ) : paths.length === 0 ? (
+            ) : (data?.browsers?.length ?? 0) === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_website.analytics.empty')}</p>
             ) : (
-              paths.map((p, i) => (
-                <div key={`${p.path}-${i}`} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="num min-w-0 truncate text-sm" title={p.path}>{p.path}</span>
-                    <span className="num shrink-0 text-sm font-medium">{fmt(p.views)}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-chart-1" style={{ width: `${(p.views / pathMax) * 100}%` }} />
-                  </div>
+              <>
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">{t('plugin_website.analytics.devices.browser')}</p>
+                  {deviceRows(data?.browsers ?? [])}
                 </div>
-              ))
+                <div className="space-y-3 border-t border-border pt-3">
+                  <p className="text-xs font-medium text-muted-foreground">{t('plugin_website.analytics.devices.os')}</p>
+                  {deviceRows(data?.oses ?? [])}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -209,6 +282,39 @@ export default function AnalyticsPage() {
                   <span className="num text-xl font-semibold text-foreground">{rate.toFixed(2)}%</span>
                 </p>
               </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 热门页 / 入口页：两列同排（窄屏折行） */}
+      <div className="grid grid-cols-1 gap-3 md:gap-4 xl:grid-cols-2">
+        <Card className="flex flex-col transition-shadow hover:glow motion-reduce:transition-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">{t('plugin_website.analytics.paths.title')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3">
+            {isLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : paths.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_website.analytics.empty')}</p>
+            ) : (
+              pathList(paths, pathMax, 'bg-chart-1')
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col transition-shadow hover:glow motion-reduce:transition-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">{t('plugin_website.analytics.entries.title')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3">
+            {isLoading ? (
+              <Skeleton className="h-40 w-full" />
+            ) : entries.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_website.analytics.empty')}</p>
+            ) : (
+              pathList(entries, entryMax, 'bg-chart-4')
             )}
           </CardContent>
         </Card>
