@@ -7,31 +7,21 @@ package aigateway
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"nexadmin/core/response"
 )
 
 // defaultSvc 在插件 Register 时设置；宿主模块的调用都发生在请求期，此时插件已挂载。
-var defaultSvc = make(chan *Service, 1)
+// atomic.Pointer 而不是 chan 单槽：chan「取出→判断→放回」在并发下有窗口，第二个
+// 调用方会拿到 nil——Resolve 偶发 503 plugin_inactive（插件明明活着）、RecordUsage
+// 偶发静默丢用量（计费漏记）。
+var defaultSvc atomic.Pointer[Service]
 
 // SetDefault 由插件装配层调用，注册进程级默认服务。
-func SetDefault(s *Service) {
-	select {
-	case <-defaultSvc: // 已有则替换
-	default:
-	}
-	defaultSvc <- s
-}
+func SetDefault(s *Service) { defaultSvc.Store(s) }
 
-func current() *Service {
-	select {
-	case s := <-defaultSvc:
-		defaultSvc <- s
-		return s
-	default:
-		return nil
-	}
-}
+func current() *Service { return defaultSvc.Load() }
 
 func responseUnavailable() error {
 	return response.Unavailable("aigateway.plugin_inactive")

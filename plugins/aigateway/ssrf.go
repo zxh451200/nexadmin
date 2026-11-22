@@ -24,6 +24,14 @@ import (
 // 暴露公网口，或在本插件后续版本引入显式内网白名单后再放开。
 var ErrBlockedAddress = errors.New("aigateway: target address is not allowed (internal/private network)")
 
+// 无论解析结果如何都拒绝的云元数据主机名（对齐 core/ai/netguard.go）：从 cron
+// 移植时丢了这层，只靠 DNS 解析兜底——云内解析出内网 IP 会被 checkIP 拦，纵深
+// 少一层。主机名黑名单在静态校验就掐掉，解析都不发起。
+var metadataHosts = map[string]bool{
+	"metadata": true, "metadata.google.internal": true, "instance-data": true,
+	"instance-data.ec2.internal": true, "metadata.tencentyun.com": true,
+}
+
 var blockedPrefixes = mustPrefixes(
 	"0.0.0.0/8",       // "this" network
 	"100.64.0.0/10",   // CGNAT
@@ -85,7 +93,7 @@ func validateURLStatic(raw string) (*url.URL, error) {
 	}
 	lower := strings.ToLower(strings.TrimSuffix(host, "."))
 	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") || strings.HasSuffix(lower, ".internal") ||
-		strings.HasSuffix(lower, ".local") {
+		strings.HasSuffix(lower, ".local") || metadataHosts[lower] {
 		return nil, fmt.Errorf("%w: %s", ErrBlockedAddress, host)
 	}
 	if ip := net.ParseIP(host); ip != nil {

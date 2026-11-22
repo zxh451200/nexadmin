@@ -155,22 +155,29 @@ func (s *Service) SaveModel(ctx context.Context, id idgen.ID, in ModelInput) (*M
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if id == 0 {
-			return tx.Create(&m).Error
-		}
-		return tx.Model(&Model{}).Where("id = ?", int64(id)).Updates(map[string]any{
+			if err := tx.Create(&m).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Model(&Model{}).Where("id = ?", int64(id)).Updates(map[string]any{
 			"kind": m.Kind, "name": m.Name, "provider": m.Provider, "base_url": m.BaseURL,
 			"model": m.Model, "api_key_enc": m.APIKeyEnc, "dimension": m.Dimension,
 			"enabled": m.Enabled, "is_default": m.IsDefault,
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		if m.IsDefault {
+			// 默认位互斥清位放进同一事务：放事务外时两个并发「设默认」可交错出
+			// 「两个都非默认」的中间态，Resolve 只能靠 id DESC 兜底。
+			if err := tx.Model(&Model{}).
+				Where("kind = ? AND is_default = ? AND id <> ?", m.Kind, true, int64(m.ID)).
+				Update("is_default", false).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
-	}
-	if m.IsDefault {
-		// 默认位互斥：同 kind 其余行清掉 is_default。
-		s.db.WithContext(ctx).Model(&Model{}).
-			Where("kind = ? AND is_default = ? AND id <> ?", m.Kind, true, int64(m.ID)).
-			Update("is_default", false)
 	}
 	v := modelView(&m)
 	return &v, nil
@@ -213,7 +220,11 @@ func (s *Service) Resolve(ctx context.Context, kind string) (*Config, error) {
 		return nil, response.BadRequest("aigateway.kind_invalid")
 	}
 	var m Model
-	err := s.db.WithContext(ctx).Where("kind = ? AND enabled = ?", kind, true).
+	q := s.db.WithContext(ctx)
+	if tid, ok := tenant.From(ctx); ok && !tenant.Skipped(ctx) {
+		q = q.Where("tenant_id = ?", int64(tid)) // 与 DeleteModels 同口径：租户隔离不全靠全局 scope 插件
+	}
+	err := q.Where("kind = ? AND enabled = ?", kind, true).
 		Order("is_default DESC, id DESC").First(&m).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrDisabled

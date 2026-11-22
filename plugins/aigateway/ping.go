@@ -2,6 +2,7 @@ package aigateway
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -41,7 +42,11 @@ func (s *Service) Ping(ctx context.Context, id idgen.ID) (*PingResult, error) {
 	resp, err := client.Do(req)
 	latency := time.Since(start).Milliseconds()
 	if err != nil {
-		return &PingResult{OK: false, LatencyMs: latency, Detail: err.Error()}, nil
+		// Detail 只回分类不回 err 原文：http 客户端错误会带目标 IP 与连接错误类型
+		// （refused/timeout），原样回显等于给持有 aigateway:edit 的用户一个内网探测
+		// 侧信道（公网域名指向内网 IP 的 DNS 记录 + ping 看失败细节）。完整错误进日志。
+		s.logWarn("aigateway: ping request failed", "model_id", int64(id), "err", err.Error())
+		return &PingResult{OK: false, LatencyMs: latency, Detail: pingErrKind(ctx, err)}, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
@@ -60,4 +65,19 @@ func probeEndpoint(u *url.URL) string {
 		return base + "/models"
 	}
 	return base + "/v1/models"
+}
+
+// pingErrKind 把传输层失败折成固定分类词：超时 / 不可达 / 被拒。
+func pingErrKind(ctx context.Context, err error) string {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return "timeout"
+	}
+	if errors.Is(err, ErrBlockedAddress) {
+		return "blocked"
+	}
+	return "unreachable"
 }

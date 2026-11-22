@@ -79,12 +79,15 @@ const (
 	MaxToolResultBytes = 64 << 10
 )
 
-// Run executes a bounded conversation. Each model round uses the existing
-// configuration, limiter, quota and audit. It never executes write tools.
-// A confirmation result is a handoff, not an approval or durable session.
-// Content is redacted only in the model-bound copy using each round's config.
-// Tool arguments and definitions retain their semantics; executors must limit
-// sensitive data in those fields and must not treat masks as resource IDs.
+// Run executes a bounded conversation. The limiter and tenant quota are consumed
+// once per Run (at entry), not per model round — a tool-chain task must not burn
+// the per-user window or the tenant's daily budget once per round and die mid-run
+// with ErrRateLimited. Each model call is audited individually. It never executes
+// write tools. A confirmation result is a handoff, not an approval or durable
+// session. Content is redacted in the model-bound copy using the config snapshot
+// taken at Run entry. Tool arguments and definitions retain their semantics;
+// executors must limit sensitive data in those fields and must not treat masks
+// as resource IDs.
 func (g *Gateway) Run(ctx context.Context, who Caller, in RunRequest, executor ToolExecutor) (*RunResult, error) {
 	if in.MaxRounds == 0 {
 		in.MaxRounds = DefaultRunRounds
@@ -169,6 +172,12 @@ func (g *Gateway) Run(ctx context.Context, who Caller, in RunRequest, executor T
 		}
 		return out, err
 	}
+	// begin once at entry: limiter and tenant quota are per-Run. The config is a
+	// snapshot — settings changed mid-run take effect on the next Run.
+	cfg, err := g.begin(ctx, who)
+	if err != nil {
+		return fail(err)
+	}
 	for out.Rounds < in.MaxRounds {
 		if err := ctx.Err(); err != nil {
 			return fail(err)
@@ -186,10 +195,6 @@ func (g *Gateway) Run(ctx context.Context, who Caller, in RunRequest, executor T
 		remaining := in.TokenBudget - out.Tokens - len(prompt)
 		if remaining <= 0 {
 			return fail(ErrBudget)
-		}
-		cfg, err := g.begin(ctx, who)
-		if err != nil {
-			return fail(err)
 		}
 		modelMessages, err := redactRunMessages(out.Messages, cfg.Redact)
 		if err != nil {
