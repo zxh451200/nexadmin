@@ -173,6 +173,9 @@ def main():
     gaps = []
     for c in countries:
         cc = c['c']
+        # cc 来自外部数据集，写盘前按 ISO 国家码白名单清洗，防止 ../ 之类逃出输出目录
+        if not re.fullmatch(r"[A-Za-z0-9]{2,3}", cc):
+            continue
         states = c.get('r') or []
         if not states or cc not in names:
             continue
