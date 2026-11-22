@@ -7,6 +7,7 @@ import (
 
 	"nexadmin/core/auth"
 	"nexadmin/core/event"
+	"nexadmin/modules/internal/password"
 	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
@@ -61,6 +62,12 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 	if err != nil {
 		return err
 	}
+	// 删除即下线：被删账号的会话全部吊销（软删还原后也要重新登录）。吊销失败不影响删除结果。
+	if s.sessions != nil {
+		for _, id := range ids {
+			_ = s.sessions.KickUser(ctx, id, "")
+		}
+	}
 	for _, id := range ids {
 		event.Publish(ctx, event.UserDeleted, event.UserData{ID: id, TenantID: tenantOf(ctx)})
 	}
@@ -89,6 +96,10 @@ func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me 
 		return err
 	}
 	u.Status = status
+	// 停用即下线：被停用账号的会话全部吊销，旧令牌立刻失效（重新启用不恢复会话，重新登录即可）。
+	if status == statusOff && s.sessions != nil {
+		_ = s.sessions.KickUser(ctx, id, "")
+	}
 	event.Publish(ctx, event.UserUpdated, userEvent(u))
 	return nil
 }
@@ -117,9 +128,10 @@ func (s *service) batchStatus(ctx context.Context, ids []idgen.ID, status string
 	return updated, skipped, nil
 }
 
-// resetPassword 重置密码。不设强度规则，只要求非空；bcrypt 只取前 72 字节，所以上限 72。
-func (s *service) resetPassword(ctx context.Context, id idgen.ID, password string, me actor) error {
-	if password == "" || len(password) > 72 {
+// resetPassword 重置密码：策略校验（最小长度 / 混合要求 / 不得等于初始口令）+ bcrypt 上限 72 字节。
+// 成功后吊销目标用户全部会话——旧令牌不能再带着旧凭据继续用（与个人中心改密同口径）。
+func (s *service) resetPassword(ctx context.Context, id idgen.ID, newPw string, me actor) error {
+	if newPw == "" || len(newPw) > 72 {
 		return bad("profile.password_length")
 	}
 	if err := s.ensureInScope(ctx, me, id); err != nil {
@@ -132,7 +144,10 @@ func (s *service) resetPassword(ctx context.Context, id idgen.ID, password strin
 	if err := s.guardTarget(ctx, me, u); err != nil {
 		return err
 	}
-	hash, err := auth.HashPassword(password)
+	if perr := password.Load(ctx, s.db).Validate(newPw, password.DefaultPassword(ctx, s.db)); perr != nil {
+		return perr
+	}
+	hash, err := auth.HashPassword(newPw)
 	if err != nil {
 		return err
 	}
@@ -140,6 +155,9 @@ func (s *service) resetPassword(ctx context.Context, id idgen.ID, password strin
 		return err
 	}
 	s.mailAccount(ctx, u, "reset")
+	if s.sessions != nil {
+		return s.sessions.KickUser(ctx, id, "")
+	}
 	return nil
 }
 

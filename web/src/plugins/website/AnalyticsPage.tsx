@@ -77,7 +77,7 @@ export default function AnalyticsPage() {
           value={data?.inquiries ?? 0}
           icon={<Inbox aria-hidden="true" />}
           spark={data?.trend.map((p) => p.inquiries)}
-          tone="chart-4"
+          tone="chart-5"
         />
         <StatCard
           title={t('plugin_website.analytics.kpi.realtime')}
@@ -113,7 +113,7 @@ export default function AnalyticsPage() {
             series={[
               { key: 'views', label: t('plugin_website.analytics.trend.series.views'), color: 'hsl(var(--chart-1))' },
               { key: 'sessions', label: t('plugin_website.analytics.trend.series.sessions'), color: 'hsl(var(--chart-2))' },
-              { key: 'inquiries', label: t('plugin_website.analytics.trend.series.inquiries'), color: 'hsl(var(--chart-4))' },
+              { key: 'inquiries', label: t('plugin_website.analytics.trend.series.inquiries'), color: 'hsl(var(--chart-5))' },
             ]}
           />
         )}
@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
                     <span className="num font-semibold">{fmt(inquiries)}</span>
                   </div>
                   <div className="h-3 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-chart-4" style={{ width: `${barW(inquiries)}%` }} />
+                    <div className="h-full rounded-full bg-chart-5" style={{ width: `${barW(inquiries)}%` }} />
                   </div>
                 </div>
                 <p className="text-center text-sm text-muted-foreground">

@@ -506,6 +506,19 @@ export function useSaveSettings() {
   })
 }
 
+/** 一键拉取汇率：只回填编辑器、不写库；管理员确认后随站点设置一起保存。 */
+export interface CurrencyRatesFetchResult {
+  rates: string
+  updated: number
+  source: string
+}
+
+export function useFetchCurrencyRates() {
+  return useMutation({
+    mutationFn: (rates: string) => api.post<CurrencyRatesFetchResult>(`${BASE}/currency-rates/fetch`, { rates }),
+  })
+}
+
 /** 主题清单条目：default 恒在最前；hasDemo = 主题插件带演示内容可一键导入。 */
 export interface ThemeInfo {
   id: string
@@ -1386,11 +1399,14 @@ export interface AnalyticsData {
   referrers: AnalyticsRefRow[]
 }
 
-/** 访问统计总览；60s 轮询让「实时访客」名实相符（其余指标顺带刷新） */
+/** 访问统计总览；60s 轮询让「实时访客」名实相符（其余指标顺带刷新）。
+ * 切换窗口（7/14/30 天）期间保留上一窗口数据原地显示（keepPreviousData）——
+ * 否则 key 一变 data 变 undefined，整页 KPI 归零 + 图表拆成骨架屏再弹回，肉眼可见闪一下。 */
 export function useAnalytics(days: AnalyticsDays) {
   return useQuery({
     queryKey: [...KEY, 'analytics', days],
     queryFn: () => api.get<AnalyticsData>(`${BASE}/analytics?days=${days}`),
+    placeholderData: keepPreviousData,
     refetchInterval: 60_000,
   })
 }

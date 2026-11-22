@@ -22,11 +22,14 @@ export interface StartValues {
 export function StartDialog({
   open,
   defs,
+  loading,
   onClose,
   onSubmit,
 }: {
   open: boolean
   defs: { id: string; name: string; key: string; status: string }[]
+  /** 定义列表还在加载时为 true：此时不能把空列表当成「没有已发布定义」报出去 */
+  loading?: boolean
   onClose: () => void
   onSubmit: (v: StartValues) => Promise<void> | void
 }) {
@@ -92,7 +95,9 @@ export function StartDialog({
         </>
       }
     >
-      {published.length === 0 ? (
+      {loading ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t('plugin_workflow.loading')}</p>
+      ) : published.length === 0 ? (
         <EmptyState title={t('plugin_workflow.startNoPublished')} className="py-6" />
       ) : (
         <div className="space-y-3">

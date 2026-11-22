@@ -2,13 +2,22 @@
 <section class="sl-section sl-pagehead">
   <div class="sl-wrap">
     <p class="sl-eyebrow">{{.T "news.fig"}}</p>
-    <h1 class="sl-page-title">{{if eq .NewsKind "category"}}{{.TF "news.categoryTitleTag" .NewsTermName}}{{else if eq .NewsKind "tag"}}{{.TF "news.tagTitleTag" .NewsTermName}}{{else}}{{.T "news.title"}}{{end}}</h1>
+    <h1 class="sl-page-title">{{if .NewsQuery}}{{.TF "news.searchTitleTag" .NewsQuery}}{{else if eq .NewsKind "category"}}{{.TF "news.categoryTitleTag" .NewsTermName}}{{else if eq .NewsKind "tag"}}{{.TF "news.tagTitleTag" .NewsTermName}}{{else}}{{.T "news.title"}}{{end}}</h1>
     {{if .NewsCategories}}
     <nav class="sl-chips term-nav" aria-label="{{.T "news.categoryNavAria"}}">
-      <a class="sl-chip{{if not .NewsTermName}} active{{end}}" href="{{.URL "/news"}}">{{.T "news.allPosts"}}</a>
+      <a class="sl-chip{{if and (not .NewsTermName) (not .NewsQuery)}} active{{end}}" href="{{.URL "/news"}}">{{.T "news.allPosts"}}</a>
       {{range .NewsCategories}}<a class="sl-chip{{if .Active}} active{{end}}" href="{{$.URL "/news"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
     </nav>
     {{end}}
+    {{if .NewsTags}}
+    <nav class="sl-chips term-nav" aria-label="{{.T "news.tagNavAria"}}">
+      {{range .NewsTags}}<a class="sl-chip{{if .Active}} active{{end}}" href="{{$.URL "/news"}}?tag={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
+    <form class="news-search" method="get" action="{{.URL "/news"}}" role="search">
+      <input type="search" name="q" value="{{.NewsQuery}}" placeholder="{{.T "news.searchPlaceholder"}}" aria-label="{{.T "news.searchAria"}}" autocomplete="off">
+      <button type="submit">{{.T "news.searchSubmit"}}</button>
+    </form>
   </div>
 </section>
 <section class="sl-section sl-listbody">
@@ -28,6 +37,8 @@
       </a>
       {{end}}
     </div>
+    {{else if .NewsQuery}}
+    <p class="sl-empty">{{.TF "news.searchEmpty" .NewsQuery}}</p>
     {{else}}
     <p class="sl-empty">{{.T "news.empty"}}</p>
     {{end}}

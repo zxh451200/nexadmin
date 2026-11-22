@@ -59,14 +59,16 @@ func routePath(c *gin.Context) string {
 
 // Limiter 是基于 cache 的固定窗口计数器：窗口从某个 key 的第一次计数开始，到期整体清零。
 // cache 实现了 cache.Counter（memory / redis 都有）时计数是原子的、多实例共享；
-// 否则退化为 Get+Set（非原子，只会少算，不会误杀）。cache 出错一律放行（fail-open）并限频告警。
+// 否则退化为 Get+Set（非原子，只会少算，不会误杀）。cache 出错默认放行（fail-open）并限频告警；
+// 安全敏感规则（failClosedRules）反其道行之：拒绝服务也不给暴力破解开窗。
 type Limiter struct {
-	cache  cache.Cache
-	log    *zap.Logger
-	scope  string
-	max    int
-	window time.Duration
-	warned atomic.Int64 // 上次告警的 unix 秒
+	cache      cache.Cache
+	log        *zap.Logger
+	scope      string
+	max        int
+	window     time.Duration
+	warned     atomic.Int64 // 上次告警的 unix 秒
+	failClosed bool         // true = cache 故障时拒绝请求（503）而不是放行
 }
 
 // NewLimiter 创建计数器。scope 用来隔离不同用途的计数（会进 cache key）；max <= 0 表示不限流。
@@ -94,18 +96,25 @@ func (l *Limiter) degraded(err error) {
 
 // Hit 记一次请求并返回是否放行；不放行时 retry 是建议的等待时间。
 func (l *Limiter) Hit(ctx context.Context, k string) (allowed bool, retry time.Duration) {
+	ok, retry, _ := l.HitDegrade(ctx, k)
+	return ok, retry
+}
+
+// HitDegrade 与 Hit 相同，但额外报告这次判定是否因 cache 故障而降级：
+// fail-closed 规则据此把响应写成 503（服务端不可用）而不是 429（客户端超限）。
+func (l *Limiter) HitDegrade(ctx context.Context, k string) (allowed bool, retry time.Duration, degraded bool) {
 	if l == nil || l.max <= 0 || k == "" {
-		return true, 0
+		return true, 0, false
 	}
 	n, left, err := l.incr(ctx, l.key(k))
 	if err != nil {
 		l.degraded(err)
-		return true, 0
+		return !l.failClosed, l.window, true
 	}
 	if n > int64(l.max) {
-		return false, left
+		return false, left, false
 	}
-	return true, 0
+	return true, 0, false
 }
 
 // Fail 记一次失败（不判断是否超限），配合 Blocked 做“失败达到上限后拒绝”。
@@ -155,31 +164,54 @@ func (l *Limiter) incr(ctx context.Context, key string) (int64, time.Duration, e
 	return n, l.window, nil
 }
 
+// failClosedRules 是安全敏感的限流规则：cache 故障时宁可 503 拒绝也不放行。
+// 这些端点的失败计数 / 验证码 / 锁定全部依赖 cache，放行等于把暴力破解的窗口打开
+// （ASVS 2.2.1：反自动化控制在依赖降级时应 fail-closed 或有补偿）。其余规则保持
+// fail-open：可用性优先，短时的 cache 抖动不该拖垮浏览与业务接口。
+var failClosedRules = map[string]bool{
+	"login":    true,
+	"refresh":  true,
+	"captcha":  true,
+	"sms_code": true,
+	"token":    true,
+	"setup":    true,
+}
+
 // RateLimit 固定窗口限流：同一 key 在 window 内最多 limit 次，超出返回 429 + Retry-After。
 // scope 区分不同路由的计数；limit <= 0 或 key 为空时放行；cache 不可用时放行并告警。
 func RateLimit(c cache.Cache, log *zap.Logger, scope string, key KeyFunc, limit int, window time.Duration) gin.HandlerFunc {
+	return rateLimit(c, log, scope, key, limit, window, false)
+}
+
+func rateLimit(c cache.Cache, log *zap.Logger, scope string, key KeyFunc, limit int, window time.Duration, failClosed bool) gin.HandlerFunc {
 	if limit <= 0 || c == nil {
 		return func(c *gin.Context) { c.Next() }
 	}
-	lim := NewLimiter(c, log, scope, limit, window)
+	lim := &Limiter{cache: c, log: log, scope: scope, max: limit, window: window, failClosed: failClosed}
 	return func(c *gin.Context) {
 		if c.Request.Method == http.MethodOptions { // CORS 预检不计数
 			c.Next()
 			return
 		}
-		ok, retry := lim.Hit(c.Request.Context(), key(c))
+		ok, retry, degraded := lim.HitDegrade(c.Request.Context(), key(c))
 		if ok {
 			c.Next()
+			return
+		}
+		if degraded && failClosed {
+			// cache 故障下的安全规则：这不是客户端超限（429），是限流器自己不可用（503）。
+			response.Fail(c, response.New(http.StatusServiceUnavailable, "error.unavailable"))
 			return
 		}
 		TooManyRequests(c, retry)
 	}
 }
 
-// RateLimitRule 按配置里的一条规则创建限流中间件（规则未启用时返回直通中间件）。
+// RateLimitRule 按配置里的一条规则创建限流中间件（规则未启用时返回直通中间件）；
+// 安全敏感规则（failClosedRules）在 cache 故障时 503 拒绝，其余 fail-open。
 func RateLimitRule(c cache.Cache, log *zap.Logger, cfg config.RateLimit, rule string, key KeyFunc) gin.HandlerFunc {
 	r := cfg.Rule(rule)
-	return RateLimit(c, log, rule, key, r.Limit, r.Window)
+	return rateLimit(c, log, rule, key, r.Limit, r.Window, failClosedRules[rule])
 }
 
 // TooManyRequests 写 429 + Retry-After（至少 1 秒）并中止请求。

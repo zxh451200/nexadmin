@@ -472,6 +472,7 @@ var pageTmpl = map[string]*template.Template{
 	"plugin":     mustPage("plugin"),
 	"news":       mustPage("news"),
 	"post":       mustPage("post"),
+	"faq":        mustPage("faq"),
 	"products":   mustPage("products"),
 	"product":    mustPage("product"),
 	"order":      mustPage("order"),
@@ -615,6 +616,10 @@ type siteView struct {
 	SitemapGroups []SitemapGroup
 	// NewsCategories 是新闻页的栏目导航（含当前高亮那一项）。
 	NewsCategories []termLink
+	// NewsTags 是新闻页侧栏的标签云（只含有新闻在用的标签，含当前高亮那一项）。
+	NewsTags []termLink
+	// NewsQuery 是新闻列表当前检索词（news.tmpl 搜索框回显）；空 = 未在搜索。
+	NewsQuery string
 	// NewsKind/NewsTermName 说明这一页是栏目还是标签归档：空 = 全部新闻。
 	NewsKind     string
 	NewsTermName string

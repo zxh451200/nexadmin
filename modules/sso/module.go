@@ -66,14 +66,17 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	auth.RegisterPerm("sso:portal")
 
 	r.GET("/sso/keys", core.Perm("sso:list"), h.keysList)
-	r.POST("/sso/keys/rotate", core.Perm("sso:edit"), h.keysRotate)
+	// rotate 的响应是 JWKS 公钥列表，进操作日志无泄密顾虑。
+	r.POST("/sso/keys/rotate", core.Perm("sso:edit"), d.OperLogMiddleware("sso", "rotate"), h.keysRotate)
 	r.GET("/sso/apps", core.Perm("sso:list"), h.list)
 	r.GET("/sso/apps/export", core.Perm("sso:list"), h.exportApps) // 导出口径与 list 完全一致，权限同为读码
+	// create / reset-secret 不进操作日志：响应带一次性明文 clientSecret，而操作日志中间件会把
+	// 响应原文入库（只对请求参数打码，见 modules/log/middleware.go），挂了反而把密钥泄进 sys_oper_log。
 	r.POST("/sso/apps", core.Perm("sso:edit"), h.create)
-	r.PUT("/sso/apps/:id", core.Perm("sso:edit"), h.update)
-	r.DELETE("/sso/apps/:id", core.Perm("sso:edit"), h.remove)
-	r.DELETE("/sso/apps", core.Perm("sso:edit"), h.removeMany) // 批量删：?ids=1,2,3，与单条删同一个权限码
-	r.PUT("/sso/apps/:id/enabled", core.Perm("sso:edit"), h.setEnabled)
+	r.PUT("/sso/apps/:id", core.Perm("sso:edit"), d.OperLogMiddleware("sso", "update"), h.update)
+	r.DELETE("/sso/apps/:id", core.Perm("sso:edit"), d.OperLogMiddleware("sso", "delete"), h.remove)
+	r.DELETE("/sso/apps", core.Perm("sso:edit"), d.OperLogMiddleware("sso", "delete"), h.removeMany) // 批量删：?ids=1,2,3，与单条删同一个权限码
+	r.PUT("/sso/apps/:id/enabled", core.Perm("sso:edit"), d.OperLogMiddleware("sso", "update"), h.setEnabled)
 	r.POST("/sso/apps/:id/reset-secret", core.Perm("sso:edit"), h.resetSecret)
 	r.GET("/sso/portal", h.portal)
 

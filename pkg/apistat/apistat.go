@@ -188,13 +188,23 @@ func (c *Collector) Days(n int) []Day {
 	return out
 }
 
+// skipPaths 是不计入业务接口统计的路由模板（FullPath，去掉 /api/v1 前缀之前）：探针、指标、
+// WebSocket 与关停接口不是业务接口，把探活流量与长连接握手算进 QPS / 错误率只会污染面板。
+// 关停接口的路径常量在 core/ctl（pkg 不反向依赖 core），由 InstallEngine 的 skip 参数传入。
+var skipPaths = map[string]bool{
+	"/metrics": true,
+	"/healthz": true,
+	"/readyz":  true,
+	"/ws":      true,
+}
+
 // Middleware 返回 Gin 中间件。路径用路由模板（如 /users/:id），并去掉 /api/v1 前缀。
 func Middleware(c *Collector) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		start := time.Now()
 		ctx.Next()
 		p := ctx.FullPath()
-		if p == "" {
+		if p == "" || skipPaths[p] { // 无模板（静态文件 / NoRoute 的 404）与排除入口不计
 			return
 		}
 		c.Record(ctx.Request.Method, strings.TrimPrefix(p, apiPrefix), ctx.Writer.Status(), time.Since(start))
@@ -202,15 +212,33 @@ func Middleware(c *Collector) gin.HandlerFunc {
 }
 
 var (
-	installMu sync.Mutex
-	installed = map[*gin.RouterGroup]bool{}
+	installMu     sync.Mutex
+	installed     = map[*gin.RouterGroup]bool{}
+	engineMounted bool
 )
 
-// Install 给路由组挂上默认统计器（同一个组只挂一次）。
-// 注意：Gin 的 Use 只对该组之后注册的路由生效，更早注册的路由（含 core 的 /auth/*）不在统计内。
+// InstallEngine 把统计中间件挂到 gin 引擎上：覆盖全部已注册路由，包括先于模块注册的
+// core /auth/* 等入口。skip 里的路由模板追加进排除清单（如本机关停接口）。
+// 引擎级挂载后 Install 变为 no-op：同一条请求不会因为模块侧仍调用 Install 而被统计两次。
+func InstallEngine(e *gin.Engine, skip ...string) {
+	installMu.Lock()
+	defer installMu.Unlock()
+	engineMounted = true
+	for _, p := range skip {
+		skipPaths[p] = true
+	}
+	e.Use(Middleware(Default))
+}
+
+// Install 给路由组挂上默认统计器（同一个组只挂一次）。引擎级已挂载（InstallEngine）时直接跳过。
+// 注意：Gin 的 Use 只对该组之后注册的路由生效，更早注册的路由（含 core 的 /auth/*）不在统计内；
+// 要全覆盖用 InstallEngine 在引擎上挂。
 func Install(groups ...*gin.RouterGroup) {
 	installMu.Lock()
 	defer installMu.Unlock()
+	if engineMounted {
+		return
+	}
 	for _, g := range groups {
 		if !installed[g] {
 			installed[g] = true

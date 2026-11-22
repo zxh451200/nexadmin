@@ -18,7 +18,6 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/job"
-	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/storage"
@@ -65,7 +64,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	h.tz = loc
 	// 访问统计采集器：公开路由组挂匿名浏览中间件，管理端出聚合查询。
-	m.rec = newViewRecorder(d.DB, loc, d.Log)
+	// 匿名 cookie 的 Secure 标记跟随 server.secure_cookies（反代终结 TLS 时请求侧 TLS 为空，判不出来）。
+	m.rec = newViewRecorder(d.DB, loc, d.Config.Server.SecureCookies, d.Log)
 	// 询盘附件存储：local / S3 跟随 config.storage，与 IM 附件同一套驱动。
 	// 装配失败只是附件不可用（上传接口回 503），留言本身照常入库。
 	if d.Config != nil {
@@ -105,6 +105,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.Use(core.RequirePlatformFeature())
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
+	g.POST("/currency-rates/fetch", core.Perm("website:setting"), core.Desc("拉取最新汇率"), h.fetchCurrencyRates)
 	// 访问统计：公开页浏览/访客/询盘漏斗的聚合查询（采集在 pub 组的中间件，权限独立于站点设置——
 	// 菜单键就是权限码，不能共用）。
 	g.GET("/analytics", core.Perm("website:analytics"), core.Desc("官网访问统计"), h.analytics)
@@ -234,17 +235,14 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 官网页面在授权导入后重启生效。
 	if d.RootGroup != nil {
 		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log), previewKey: previewKeyOf(d), gw: h.gw}
-		site.uploadLocal = newIPLimiter(20, time.Minute)
+		// 公开端限流统一走 ipGate：cache 装配时是共享桶（多实例同一计数），没装配退回进程内。
+		// 之前只有留言共享，其余入口进程内计数，多实例部署配额按实例数放大。
+		site.uploadGate = newIPGate(d.Cache, d.Log, "website-upload", 20, time.Minute)
 		// 在线购买的 IP 计数（每 IP 每分钟 10 次）：匿名资金入口，单独限流。
-		site.orderLocal = newIPLimiter(10, time.Minute)
+		site.orderGate = newIPGate(d.Cache, d.Log, "website-order", 10, time.Minute)
 		// 留言是匿名写入口：阈值比普通页面紧（每 IP 每分钟 5 条），和页面浏览分开计数。
-		// 计数走共享 cache，多实例部署时是同一个桶；cache 没装配才退回进程内滑动窗口。
-		if d.Cache != nil {
-			site.contactHits = middleware.NewLimiter(d.Cache, d.Log, "website-contact", contactRateMax, contactRateWindow)
-		} else {
-			site.contactLocal = newIPLimiter(contactRateMax, contactRateWindow)
-		}
-		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
+		site.contactGate = newIPGate(d.Cache, d.Log, "website-contact", contactRateMax, contactRateWindow)
+		pub := d.RootGroup.Group("", newIPGate(d.Cache, d.Log, "website-page", 600, time.Minute).Middleware())
 		// 访问统计采集：匿名会话 cookie + 异步批量落库（bot/静态资源/机器文件在中间件内排除）。
 		// 挂最外层才能覆盖语言分组与全部页面路由；写入有损（队列满丢弃），不影响页面响应。
 		pub.Use(m.rec.viewMiddleware())
@@ -253,13 +251,13 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		pub.Use(LanguageContext(SiteDefaultLanguage()), langNegotiate)
 		// 文本资源 gzip：放在最外层，语言页面与静态资源一起受益（zip 下载与图片/字体自动跳过）。
 		pub.Use(gzipFilter())
-		downloadLimit := newIPLimiter(30, time.Minute).Middleware()
-		rateLimit := newIPLimiter(20, time.Minute).Middleware()
+		downloadLimit := newIPGate(d.Cache, d.Log, "website-download", 30, time.Minute).Middleware()
+		rateLimit := newIPGate(d.Cache, d.Log, "website-rate", 20, time.Minute).Middleware()
 		// 访客聊天翻译会调模型，单独收紧（每 IP 每分钟 10 次）；AI 未配置由 handler 回 503。
-		translateLimit := newIPLimiter(10, time.Minute).Middleware()
+		translateLimit := newIPGate(d.Cache, d.Log, "website-translate", 10, time.Minute).Middleware()
 		pub.POST("/website/visitor/translate", translateLimit, site.visitorTranslate)
 		// 询盘附件：上传/下载都按 IP 计数（上传 20 次/分、下载 120 次/分）。
-		attLimit := newIPLimiter(120, time.Minute).Middleware()
+		attLimit := newIPGate(d.Cache, d.Log, "website-attachment", 120, time.Minute).Middleware()
 		pub.POST("/website/inquiry/attachments", site.inquiryUpload)
 		pub.GET("/website/inquiry/attachments/:token", attLimit, site.inquiryAttachment)
 		pub.HEAD("/website/inquiry/attachments/:token", attLimit, site.inquiryAttachment)
@@ -302,6 +300,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		pub.HEAD("/sitemap.xml", site.sitemap)
 		pub.GET("/rss.xml", site.rss)
 		pub.HEAD("/rss.xml", site.rss)
+		pub.GET("/atom.xml", site.atom)
+		pub.HEAD("/atom.xml", site.atom)
 	}
 }
 
@@ -323,6 +323,9 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.HEAD("/news", h.newsList)
 	g.GET("/news/:slug", h.postDetail)
 	g.HEAD("/news/:slug", h.postDetail)
+	// 常见问题独立页：首页 FAQ 板块的深链落点（板块里的「查看全部」链到这里）。
+	g.GET("/faq", h.faqPage)
+	g.HEAD("/faq", h.faqPage)
 	// 产品中心：列表 /products（?category=<slug> 归档），详情 /products/:slug。
 	g.GET("/products", h.productsList)
 	g.HEAD("/products", h.productsList)
@@ -342,7 +345,7 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	// 产品在线购买（站点开关 PurchaseEnabled gating 在 handler 内）：匿名资金入口，
 	// 每 IP 单独限流（限流器在站点装配处建，跨语言分组共享）。POST 建单并返回收银台
 	// 地址；GET 是订单状态页（轮询自己的 JSON）。
-	g.POST("/website/orders", h.orderLocal.Middleware(), h.purchaseCreate)
+	g.POST("/website/orders", h.orderGate.Middleware(), h.purchaseCreate)
 	g.GET("/website/orders/:no/status", h.purchaseStatus)
 	g.GET("/orders/:no", h.purchasePage)
 	g.HEAD("/orders/:no", h.purchasePage)

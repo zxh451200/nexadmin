@@ -15,6 +15,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
+	"nexadmin/modules/internal/password"
 	"nexadmin/pkg/idgen"
 )
 
@@ -61,7 +62,7 @@ func (m *module) registerSelf(d *core.Deps) {
 	})
 }
 
-func selfRegister(ctx context.Context, d *core.Deps, username, password, captchaID, captchaAnswer, ip, ua string) (*auth.LoginOutcome, error) {
+func selfRegister(ctx context.Context, d *core.Deps, username, pw, captchaID, captchaAnswer, ip, ua string) (*auth.LoginOutcome, error) {
 	// 验证码先校验：无论后续成败都已被一次性消费，脚本无法反复试。
 	// 总开关（设置页「登录安全」）关闭时注册不再要求验证码。
 	if auth.CaptchaEnabled(ctx) {
@@ -77,8 +78,12 @@ func selfRegister(ctx context.Context, d *core.Deps, username, password, captcha
 	if !registerNameRe.MatchString(username) {
 		return nil, bad("user.register_username_invalid")
 	}
-	if password == "" || len(password) > 72 { // 不设强度规则；bcrypt 只取前 72 字节，故限 72
+	if pw == "" || len(pw) > 72 { // bcrypt 只取前 72 字节，故限 72
 		return nil, bad("profile.password_length")
+	}
+	// 自助注册的初始密码同样要满足密码策略：注册页是公开入口，弱口令账号从这里产生。
+	if perr := password.Load(ctx, d.DB).Validate(pw, password.DefaultPassword(ctx, d.DB)); perr != nil {
+		return nil, perr
 	}
 
 	// 注册进当前请求解析到的租户；Public 组没解析到（理论不会）则按默认租户。
@@ -95,7 +100,7 @@ func selfRegister(ctx context.Context, d *core.Deps, username, password, captcha
 		return nil, bad("user.username_exists")
 	}
 
-	hash, err := auth.HashPassword(password)
+	hash, err := auth.HashPassword(pw)
 	if err != nil {
 		return nil, err
 	}

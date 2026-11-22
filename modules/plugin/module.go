@@ -75,9 +75,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	})
 
 	viaApp, dormant := m.Routes()
-	registerLicenseRoutes(r, d.Public, m, viaApp, dormant)
-	registerEnabled(r, m)
-	registerMarket(r, m)
+	registerLicenseRoutes(r, d.Public, m, viaApp, dormant, d)
+	registerEnabled(r, m, d)
+	registerMarket(r, m, d)
 }
 
 // registerEnabled 挂运行期启停开关：POST /plugins/:id/enabled，body {"enabled":true|false}。
@@ -87,8 +87,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 // 例外是休眠 pro 插件：它们的 /plugins/<id>/*rest 通配会盖住参数路由（gin 里静态子树优先，
 // 而且静态路径与通配兄弟会直接 panic），所以那部分在 registerLicenseRoutes 的转发端点里内部分派，
 // 与 /license 同一处理。
-func registerEnabled(r *gin.RouterGroup, m *plugin.Manager) {
-	r.POST("/plugins/:id/enabled", requirePlatformUser, core.Perm(PermEdit), toggleEnabled(m, ""))
+func registerEnabled(r *gin.RouterGroup, m *plugin.Manager, d *core.Deps) {
+	// 启停与 cron 的 /jobs/enabled 同款动作语义，操作日志记为 update。
+	r.POST("/plugins/:id/enabled", requirePlatformUser, core.Perm(PermEdit), d.OperLogMiddleware("plugin", "update"), toggleEnabled(m, ""))
 }
 
 // enabledInput 的 enabled 用指针：省略字段 ≠ false，不能让一个写坏的 body 把插件停了。
@@ -143,11 +144,11 @@ func requirePlatformUser(c *gin.Context) {
 	c.Next()
 }
 
-func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp, dormant []string) {
+func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp, dormant []string, d *core.Deps) {
 	licPerm := core.Perm(PermLicense)
 	editPerm := core.Perm(PermEdit)
 	for _, id := range viaApp {
-		r.POST("/plugins/"+id+"/license", requirePlatformUser, licPerm, importLicense(m, id))
+		r.POST("/plugins/"+id+"/license", requirePlatformUser, licPerm, d.OperLogMiddleware("plugin", "import"), importLicense(m, id))
 	}
 	if public == nil {
 		public = r
@@ -156,22 +157,11 @@ func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp
 		id := id
 		imp := importLicense(m, id)
 		tog := toggleEnabled(m, id)
-		public.Any("/plugins/"+id+"/*rest", func(c *gin.Context) {
+		public.Any("/plugins/"+id+"/*rest", dormGuard(d, licPerm, editPerm), func(c *gin.Context) {
 			// 休眠插件的 /plugins/<id>/*rest 会盖住 /plugins/:id/enabled（通配与静态兄弟不能共存，
 			// 见 registerEnabled），所以启停请求在这里内部分派，与 /license 同一处理。
 			if c.Request.Method == http.MethodPost && (c.Param("rest") == "/license" || c.Param("rest") == "/enabled") {
-				if requirePlatformUser(c); c.IsAborted() {
-					return
-				}
-				lic := c.Param("rest") == "/license"
-				perm := licPerm
-				if !lic {
-					perm = editPerm
-				}
-				if perm(c); c.IsAborted() {
-					return
-				}
-				if lic {
+				if c.Param("rest") == "/license" {
 					imp(c)
 				} else {
 					tog(c)
@@ -180,6 +170,30 @@ func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp
 			}
 			m.Dispatch(c, id)
 		})
+	}
+}
+
+// dormGuard 是休眠插件通配转发端点的首段：授权导入/启停这两类写请求在这里完成与显式路由一致的
+// 超管与权限校验，再借操作日志中间件包住后续链——它内部 c.Next() 会把分派闭包跑完再按结果落日志，
+// 与注册期挂在 perm 之后、handler 之前等价（闭包内直接调用拿不到这个先后关系，日志会先于业务落笔）。
+// 其余请求直通给插件自己的路由，鉴权由插件自理。
+func dormGuard(d *core.Deps, licPerm, editPerm gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method != http.MethodPost || (c.Param("rest") != "/license" && c.Param("rest") != "/enabled") {
+			c.Next()
+			return
+		}
+		if requirePlatformUser(c); c.IsAborted() {
+			return
+		}
+		perm, action := editPerm, "update"
+		if c.Param("rest") == "/license" {
+			perm, action = licPerm, "import"
+		}
+		if perm(c); c.IsAborted() {
+			return
+		}
+		d.OperLogMiddleware("plugin", action)(c)
 	}
 }
 
@@ -245,14 +259,14 @@ type marketActions struct {
 	environment func(string) market.Environment
 }
 
-func registerMarket(r *gin.RouterGroup, m *plugin.Manager) {
-	registerMarketWith(r, m, marketActions{
+func registerMarket(r *gin.RouterGroup, m *plugin.Manager, d *core.Deps) {
+	registerMarketWith(r, m, d, marketActions{
 		install: startInstall, upload: startUploadZip, remove: startRemove,
 		rebuild: startRebuild, environment: market.CheckEnvironment,
 	})
 }
 
-func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketActions) {
+func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, d *core.Deps, actions marketActions) {
 	r = r.Group("", requirePlatformUser)
 	list := core.Perm(PermList)
 	install := core.Perm(PermInstall)
@@ -267,6 +281,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 	r.GET("/plugins/market/environment", list, func(c *gin.Context) {
 		response.OK(c, actions.environment(m.Root()))
 	})
+	// check 只读探测更新状态（InspectUpdate 不落库），不进操作日志。
 	r.POST("/plugins/market/check", install, func(c *gin.Context) {
 		var in struct {
 			IDs []string `json:"ids"`
@@ -328,7 +343,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		response.OK(c, out)
 	})
 
-	r.POST("/plugins/market/install", install, func(c *gin.Context) {
+	r.POST("/plugins/market/install", install, d.OperLogMiddleware("plugin", "install"), func(c *gin.Context) {
 		var in struct {
 			ID            string `json:"id" binding:"required"`
 			Force         bool   `json:"force"`
@@ -354,7 +369,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		response.OK(c, gin.H{"jobId": actions.install(root, []market.Entry{entry}, market.InstallOptions{Overwrite: in.Force, AllowModified: in.AllowModified})})
 	})
 
-	r.POST("/plugins/market/install-batch", install, func(c *gin.Context) {
+	r.POST("/plugins/market/install-batch", install, d.OperLogMiddleware("plugin", "install"), func(c *gin.Context) {
 		var in struct {
 			IDs           []string `json:"ids"`
 			AllowModified bool     `json:"allowModified"`
@@ -387,7 +402,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		response.OK(c, gin.H{"jobId": actions.install(root, entries, market.InstallOptions{Overwrite: true, AllowModified: in.AllowModified})})
 	})
 
-	r.POST("/plugins/market/upload", install, func(c *gin.Context) {
+	r.POST("/plugins/market/upload", install, d.OperLogMiddleware("plugin", "upload"), func(c *gin.Context) {
 		if !environmentReady(c) {
 			return
 		}
@@ -430,7 +445,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		response.OK(c, gin.H{"jobId": jobID})
 	})
 
-	r.POST("/plugins/market/remove", install, func(c *gin.Context) {
+	r.POST("/plugins/market/remove", install, d.OperLogMiddleware("plugin", "remove"), func(c *gin.Context) {
 		var in struct {
 			ID    string `json:"id" binding:"required"`
 			Purge bool   `json:"purge"`
@@ -448,7 +463,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		response.OK(c, gin.H{"jobId": actions.remove(m.Root(), in.ID, in.Purge)})
 	})
 
-	r.POST("/plugins/market/rebuild", install, func(c *gin.Context) {
+	r.POST("/plugins/market/rebuild", install, d.OperLogMiddleware("plugin", "rebuild"), func(c *gin.Context) {
 		if !environmentReady(c) {
 			return
 		}

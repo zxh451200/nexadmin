@@ -14,13 +14,15 @@ import (
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
+	"nexadmin/modules/internal/session"
 	"nexadmin/pkg/idgen"
 )
 
 type service struct {
-	db     *gorm.DB
-	cache  cache.Cache
-	notify *notify.Service // 可为空：账号通知邮件（设置页开关，默认关）
+	db       *gorm.DB
+	cache    cache.Cache
+	notify   *notify.Service // 可为空：账号通知邮件（设置页开关，默认关）
+	sessions *session.Store  // 可为空：重置密码/停用/删除后吊销目标用户会话（测试手工构造可不填）
 }
 
 func bad(key string, args ...any) *response.Error { return response.BadRequest(key, args...) }

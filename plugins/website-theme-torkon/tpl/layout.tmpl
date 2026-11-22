@@ -13,6 +13,9 @@
 <meta name="theme-color" content="#111214">
 <link rel="icon" href="{{if .FaviconURL}}{{.FaviconURL}}{{else}}/website-assets/theme/torkon/favicon.svg{{end}}" type="image/svg+xml">
 <link rel="alternate" type="application/rss+xml" title="{{.SiteName}}" href="{{.BaseURL}}/rss.xml">
+<link rel="alternate" type="application/atom+xml" title="{{.SiteName}}" href="{{.BaseURL}}/atom.xml">
+{{/* sitemap 自动发现：robots.txt 的 Sitemap: 是主通道，这个标签供 Bing/Yandex 等抓取器兜底。 */}}
+<link rel="sitemap" type="application/xml" title="{{.SiteName}}" href="{{.BaseURL}}/sitemap.xml">
 <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else}}website{{end}}">
 <meta property="og:site_name" content="{{.SiteName}}">
 <meta property="og:title" content="{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}">

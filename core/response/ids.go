@@ -47,3 +47,13 @@ func ParseIDs(raw string) ([]idgen.ID, error) {
 func ParseIDsQuery(c *gin.Context) ([]idgen.ID, error) {
 	return ParseIDs(c.Query("ids"))
 }
+
+// CapBatchIDs 给自行解析 ?ids= 的调用方补数量上限：有些路由出于业务错误码的考虑
+// 手写解析（保留 file.ids_invalid / website.ids_invalid 这类 key），但上限必须与
+// ParseIDs 同一条线，否则那条路由就成了超大 IN (...) 的后门。nil = 未超限。
+func CapBatchIDs(ids []idgen.ID) *Error {
+	if len(ids) > MaxBatchIDs {
+		return BadRequest("error.batch_too_many", MaxBatchIDs)
+	}
+	return nil
+}

@@ -19,7 +19,7 @@ import { useTheme, type ThemeMode, type ThemePreset } from './ThemeProvider'
 const PRESET_SWATCH: Array<{ value: ThemePreset; label: string; light: string; dark: string }> = [
   { value: 'default', label: 'theme.presetDefault', light: 'hsl(238 82% 55%)', dark: 'hsl(0 0% 90%)' },
   { value: 'tangerine', label: 'theme.presetTangerine', light: 'hsl(24 74% 54%)', dark: 'hsl(24 74% 54%)' },
-  { value: 'soft-pop', label: 'theme.presetSoftPop', light: 'hsl(262 80% 54%)', dark: 'hsl(262 65% 62%)' },
+  { value: 'soft-pop', label: 'theme.presetSoftPop', light: 'hsl(262 80% 54%)', dark: 'hsl(262 83% 58%)' },
 ]
 
 export function ThemeToggle() {

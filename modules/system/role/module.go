@@ -27,13 +27,13 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/roles", core.Perm("role:list"), h.list)
 	r.GET("/roles/options", h.options) // 下拉选项：登录即可，只返回启用角色的 id 与名称
 	job.Register(jobTypeRoleExport, h.svc.ExportJob) // 导出统一走导出中心（异步任务）
-	r.POST("/roles/export-async", core.Perm("role:list"), h.ExportAsync)
-	r.PUT("/roles/sort", core.Perm("role:update"), h.sort)
-	r.DELETE("/roles", core.Perm("role:delete"), h.removeAll) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
+	r.POST("/roles/export-async", core.Perm("role:list"), d.OperLogMiddleware("role", "export"), h.ExportAsync)
+	r.PUT("/roles/sort", core.Perm("role:update"), d.OperLogMiddleware("role", "sort"), h.sort)
+	r.DELETE("/roles", core.Perm("role:delete"), d.OperLogMiddleware("role", "delete"), h.removeAll) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
 	r.GET("/roles/:id", core.Perm("role:list"), h.get)
-	r.POST("/roles", core.Perm("role:create"), h.create)
-	r.PUT("/roles/:id", core.Perm("role:update"), h.update)
-	r.DELETE("/roles/:id", core.Perm("role:delete"), h.remove)
+	r.POST("/roles", core.Perm("role:create"), d.OperLogMiddleware("role", "create"), h.create)
+	r.PUT("/roles/:id", core.Perm("role:update"), d.OperLogMiddleware("role", "update"), h.update)
+	r.DELETE("/roles/:id", core.Perm("role:delete"), d.OperLogMiddleware("role", "delete"), h.remove)
 	r.GET("/roles/:id/menus", core.Perm("role:list"), h.menus)
-	r.PUT("/roles/:id/menus", core.Perm("role:assign"), h.assignMenus)
+	r.PUT("/roles/:id/menus", core.Perm("role:assign"), d.OperLogMiddleware("role", "assign"), h.assignMenus)
 }

@@ -175,6 +175,10 @@ func (h *Handler) DeleteBatch(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		response.Fail(c, err)
+		return
+	}
 	if !h.guard(c, ids...) {
 		return
 	}

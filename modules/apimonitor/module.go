@@ -31,10 +31,10 @@ type snapshot struct {
 	APIs      []apistat.Stat `json:"apis"`
 }
 
-// Register 挂上统计中间件：Gin 的 Use 只对其后注册的路由生效，
-// 所以排在本模块之前注册的路由（含 core 的 /auth/*）不在统计内；要全覆盖需要 core 在引擎上挂 apistat.Middleware。
+// Register 只保留查询路由：apistat 的统计中间件由 core 在引擎级挂载（apistat.InstallEngine，
+// 见 core/router.go newEngine），覆盖全部入口，包括先于本模块注册的 core /auth/*；
+// 模块侧不再组级挂载（引擎级已挂，再挂会把同一条请求统计两次）。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
-	apistat.Install(r, d.Public)
 	store := monitorsnap.NewStore(d.DB)
 	stop := make(chan struct{})
 	if d.OnClose != nil {

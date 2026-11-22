@@ -201,6 +201,10 @@ func (h *Handler) DeleteMany(c *gin.Context) {
 		}
 		ids = append(ids, id)
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		response.Fail(c, err)
+		return
+	}
 	done(c, h.svc.Delete(c.Request.Context(), ids))
 }
 

@@ -28,26 +28,27 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	p.GET("/options", core.Perm("tenant:list"), h.PackageOptions) // 租户表单下拉，固定路径先于 /:id
 	p.GET("", core.Perm("tenantPkg:list"), h.ListPackages)
 	p.GET("/:id", core.Perm("tenantPkg:list"), h.GetPackage)
-	p.POST("", core.Perm("tenantPkg:create"), h.CreatePackage)
-	p.PUT("/:id", core.Perm("tenantPkg:update"), h.UpdatePackage)
-	p.DELETE("/:id", core.Perm("tenantPkg:delete"), h.DeletePackage)
-	p.DELETE("", core.Perm("tenantPkg:delete"), h.DeletePackages)
+	p.POST("", core.Perm("tenantPkg:create"), d.OperLogMiddleware("tenant", "create"), h.CreatePackage)
+	p.PUT("/:id", core.Perm("tenantPkg:update"), d.OperLogMiddleware("tenant", "update"), h.UpdatePackage)
+	p.DELETE("/:id", core.Perm("tenantPkg:delete"), d.OperLogMiddleware("tenant", "delete"), h.DeletePackage)
+	p.DELETE("", core.Perm("tenantPkg:delete"), d.OperLogMiddleware("tenant", "delete"), h.DeletePackages)
 
 	t := r.Group("/tenants", middleware.RequireSuper())
 	t.GET("", core.Perm("tenant:list"), h.ListTenants)
 	t.GET("/:id/usage", core.Perm("tenant:list"), h.Usage)
 	t.GET("/:id", core.Perm("tenant:list"), h.GetTenant)
-	t.POST("", core.Perm("tenant:create"), h.CreateTenant)
-	t.PUT("/:id/renew", core.Perm("tenant:update"), h.Renew)
-	t.PUT("/:id/status", core.Perm("tenant:update"), h.SetStatus)
-	t.PUT("/:id", core.Perm("tenant:update"), h.UpdateTenant)
-	t.DELETE("/:id", core.Perm("tenant:delete"), h.DeleteTenant)
-	t.DELETE("", core.Perm("tenant:delete"), h.DeleteTenants)
+	t.POST("", core.Perm("tenant:create"), d.OperLogMiddleware("tenant", "create"), h.CreateTenant)
+	t.PUT("/:id/renew", core.Perm("tenant:update"), d.OperLogMiddleware("tenant", "renew"), h.Renew)
+	t.PUT("/:id/status", core.Perm("tenant:update"), d.OperLogMiddleware("tenant", "update"), h.SetStatus)
+	t.PUT("/:id", core.Perm("tenant:update"), d.OperLogMiddleware("tenant", "update"), h.UpdateTenant)
+	t.DELETE("/:id", core.Perm("tenant:delete"), d.OperLogMiddleware("tenant", "delete"), h.DeleteTenant)
+	t.DELETE("", core.Perm("tenant:delete"), d.OperLogMiddleware("tenant", "delete"), h.DeleteTenants)
 
 	// 租户自助：登录即可访问，只暴露调用者自己租户的资料与用量。
+	// 改自助资料也是写操作（改的是租户这一行共享数据），照挂审计。
 	self := r.Group("/tenant-self")
 	self.GET("", core.Perm("tenantSelf:view"), h.Self)
-	self.PUT("", core.Perm("tenantSelf:update"), h.UpdateSelf)
+	self.PUT("", core.Perm("tenantSelf:update"), d.OperLogMiddleware("tenant", "update"), h.UpdateSelf)
 }
 
 // 种子 ID 与前端 mock 一致：套餐 7400000000010000000+序号，租户 7500000000010000000+序号。

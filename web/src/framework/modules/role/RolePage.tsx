@@ -95,7 +95,7 @@ export default function RolePage() {
       ),
     },
     { key: 'code', title: t('role.col.code'), mobile: 'sub', render: (r) => <span className="num">{r.code}</span> },
-    { key: 'sort', title: t('role.col.sort'), width: 80, render: (r) => <span className="num">{r.sort}</span> },
+    { key: 'sort', title: t('role.col.sort'), width: 80, align: 'end', render: (r) => <span className="num">{r.sort}</span> },
     { key: 'dataScope', title: t('role.col.dataScope'), render: (r) => <DictTag dict="data_scope" value={r.dataScope} /> },
     { key: 'status', title: t('role.col.status'), render: (r) => <DictTag dict="sys_status" value={r.status} /> },
     {

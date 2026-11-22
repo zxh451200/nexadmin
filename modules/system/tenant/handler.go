@@ -35,6 +35,10 @@ func queryIDs(c *gin.Context) ([]idgen.ID, bool) {
 		}
 		ids = append(ids, id)
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		response.Fail(c, err)
+		return nil, false
+	}
 	return ids, true
 }
 

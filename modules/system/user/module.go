@@ -11,6 +11,7 @@ import (
 	"nexadmin/core/apidoc"
 	"nexadmin/core/auth"
 	"nexadmin/core/job"
+	"nexadmin/modules/internal/session"
 )
 
 func init() { core.RegisterBuiltin(Module()) }
@@ -33,7 +34,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	m.registerOAuth(d.Public, d) // /auth/providers、/auth/oauth/*（第三方快捷登录）
 	m.registerLoginVerify(d)     // POST /auth/login/verify（二次验证换令牌；无 LoginGate 注册时没有挑战，端点恒返回统一错误）
-	h := &handler{svc: &service{db: d.DB, cache: d.Cache, notify: d.Notify}, log: d.Log}
+	h := &handler{svc: &service{db: d.DB, cache: d.Cache, notify: d.Notify, sessions: session.Shared(d.Cache, d.Config.Auth.RefreshTTL)}, log: d.Log}
 	svc := h.svc
 	m.provisioner(svc)
 	d.Notify.SetDirectory(directory{svc: h.svc}) // 邮件 / 短信渠道按用户资料里的邮箱 / 手机号发送
@@ -42,18 +43,18 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/users", core.Perm("user:list"), h.list)
 	ah := &asyncHandler{svc: h.svc}
 	job.Register(jobTypeUserExport, h.svc.exportJob) // 异步导出：处理器注册只需这一行
-	r.POST("/users/export-async", core.Perm("user:export"), ah.create)
+	r.POST("/users/export-async", core.Perm("user:export"), d.OperLogMiddleware("user", "export"), ah.create)
 	r.GET("/users/import-template", core.Perm("user:import"), h.importTemplate)
-	r.POST("/users/import", core.Perm("user:import"), h.importFile)
-	r.DELETE("/users", core.Perm("user:delete"), h.removeMany)
+	r.POST("/users/import", core.Perm("user:import"), d.OperLogMiddleware("user", "import"), h.importFile)
+	r.DELETE("/users", core.Perm("user:delete"), d.OperLogMiddleware("user", "delete"), h.removeMany)
 	r.GET("/users/:id", core.Perm("user:list"), h.get)
-	r.POST("/users", core.Perm("user:create"), h.create)
-	r.PUT("/users/:id", core.Perm("user:update"), h.update)
-	r.DELETE("/users/:id", core.Perm("user:delete"), h.remove)
-	r.PUT("/users/:id/status", core.Perm("user:update"), h.setStatus)
-	r.PUT("/users/status", core.Perm("user:update"), h.batchStatus)
-	r.POST("/users/:id/reset-password", core.Perm("user:resetPwd"), h.resetPassword)
-	r.POST("/users/:id/unlock", core.Perm("user:unlock"), h.unlock)
+	r.POST("/users", core.Perm("user:create"), d.OperLogMiddleware("user", "create"), h.create)
+	r.PUT("/users/:id", core.Perm("user:update"), d.OperLogMiddleware("user", "update"), h.update)
+	r.DELETE("/users/:id", core.Perm("user:delete"), d.OperLogMiddleware("user", "delete"), h.remove)
+	r.PUT("/users/:id/status", core.Perm("user:update"), d.OperLogMiddleware("user", "update"), h.setStatus)
+	r.PUT("/users/status", core.Perm("user:update"), d.OperLogMiddleware("user", "update"), h.batchStatus)
+	r.POST("/users/:id/reset-password", core.Perm("user:resetPwd"), d.OperLogMiddleware("user", "reset-password"), h.resetPassword)
+	r.POST("/users/:id/unlock", core.Perm("user:unlock"), d.OperLogMiddleware("user", "unlock"), h.unlock)
 }
 
 func (m *module) provisioner(s *service) {

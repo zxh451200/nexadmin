@@ -206,7 +206,7 @@ export default function ExportCenterPage() {
         </div>
       ),
     },
-    { key: 'duration', title: t('jobs.col.duration'), render: (j) => <span className="num">{duration(j)}</span> },
+    { key: 'duration', title: t('jobs.col.duration'), align: 'end', render: (j) => <span className="num">{duration(j)}</span> },
   ]
 
   return (

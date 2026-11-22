@@ -13,6 +13,14 @@ server:
   # 只有对端地址在此列表内才会采信转发头，并取其中最右一个不在列表内的地址；代理必须覆盖/追加而不是透传客户端自带的转发头。
   # /metrics、关停接口、初始化向导的“本机”判定不受此项影响，永远只看对端地址。
   trusted_proxies: []
+  # HSTS：响应头输出 Strict-Transport-Security（max-age=31536000; includeSubDomains）。
+  # 浏览器对纯 HTTP 响应会忽略该头，开发环境不受影响；反代终结 TLS 的生产部署保持 true，
+  # 由它通知浏览器后续访问全站走 HTTPS。网关不终结 TLS（对外纯 HTTP）时改 false。
+  hsts_enabled: true
+  # 服务端下发的 cookie 带 Secure 标记（当前消费方：官网匿名统计 cookie nex-vid）。
+  # Secure cookie 只会被 HTTPS 页面接受，纯 HTTP 直连部署开启后 cookie 发不出去；
+  # 反代终结 TLS（全站 HTTPS）的生产部署改 true。
+  secure_cookies: false
 database:
   type: mysql         # mysql | mariadb | postgres
   host: 127.0.0.1

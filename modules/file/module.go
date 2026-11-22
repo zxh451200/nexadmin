@@ -47,19 +47,20 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	SetDefault(svc)
 
 	r.GET("/file-groups", core.Perm(PermList), h.ListGroups)
-	r.POST("/file-groups", core.Perm(PermUpload), h.CreateGroup)
-	r.PUT("/file-groups/:id", core.Perm(PermUpload), h.RenameGroup)
-	r.DELETE("/file-groups/:id", core.Perm(PermDelete), h.DeleteGroup)
+	r.POST("/file-groups", core.Perm(PermUpload), d.OperLogMiddleware("file", "create"), h.CreateGroup)
+	r.PUT("/file-groups/:id", core.Perm(PermUpload), d.OperLogMiddleware("file", "update"), h.RenameGroup)
+	r.DELETE("/file-groups/:id", core.Perm(PermDelete), d.OperLogMiddleware("file", "delete"), h.DeleteGroup)
 
 	r.GET("/files", core.Perm(PermList), h.List)
 	// 静态段注册在 /files/:id 之前（与 pay /orders/stats 同一套匹配约定）。
 	r.GET("/files/usage", core.Perm(PermList), h.Usage)
-	r.POST("/files", core.Perm(PermUpload), h.Register)
-	r.PUT("/files/move", core.Perm(PermUpload), h.Move)
+	// 管理写操作进操作日志；download-zip 是只读导出，tus 会话的创建/追加/取消是上传生命周期动作，都不记。
+	r.POST("/files", core.Perm(PermUpload), d.OperLogMiddleware("file", "create"), h.Register)
+	r.PUT("/files/move", core.Perm(PermUpload), d.OperLogMiddleware("file", "move"), h.Move)
 	r.POST("/files/download-zip", core.Perm(PermList), h.DownloadZip)
-	r.PUT("/files/:id", core.Perm(PermUpload), h.Update)
-	r.DELETE("/files/:id", core.Perm(PermDelete), h.DeleteOne)
-	r.DELETE("/files", core.Perm(PermDelete), h.DeleteMany)
+	r.PUT("/files/:id", core.Perm(PermUpload), d.OperLogMiddleware("file", "update"), h.Update)
+	r.DELETE("/files/:id", core.Perm(PermDelete), d.OperLogMiddleware("file", "delete"), h.DeleteOne)
+	r.DELETE("/files", core.Perm(PermDelete), d.OperLogMiddleware("file", "delete"), h.DeleteMany)
 
 	// tus 断点续传：POST 创建，HEAD 查进度，PATCH 追加，DELETE 取消。上传按用户限流（规则 upload）。
 	up := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "upload", middleware.ByUser())

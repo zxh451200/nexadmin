@@ -1427,7 +1427,7 @@ function ChatPane({
           const recallable =
             mine && !m.recalledAt && m.senderId && m.senderId === userId &&
             Date.now() - new Date(m.createdAt).getTime() < 120_000
-          // 同一人连发只在一组的第一条露头像与姓名，否则气泡上方全是重复信息
+          // 同一人连发只在一组的第一条露头像，否则气泡上方全是重复信息
           const groupStart =
             newDay || !prev || prev.kind === 'system' || prev.senderType !== m.senderType || prev.senderId !== m.senderId
           // 组尾（下一条换了人/换天/是系统事件）：时间只落在连发组的最后一条上，
@@ -1435,7 +1435,8 @@ function ChatPane({
           const groupEnd =
             !next || next.kind === 'system' || next.senderType !== m.senderType || next.senderId !== m.senderId ||
             dayOf(next.createdAt) !== dayOf(m.createdAt)
-          const showMeta = groupStart || groupEnd || recallable
+          // 姓名不再上牌：1 对 1 会话靠左右对齐 + 组首头像 + AI 徽标已能分辨身份
+          const showMeta = groupEnd || recallable || (m.senderType === 'bot' && groupStart)
           const who =
             m.senderType === 'bot'
               ? m.senderName || t('plugin_im.senders.bot')
@@ -1450,7 +1451,7 @@ function ChatPane({
                   {formatClock(m.createdAt, i18n.language)}
                 </div>
               ) : null}
-              <div className={cn('flex items-end gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
+              <div className={cn('flex items-start gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
                 {groupStart ? (
                   <Avatar className="mb-0.5 size-7 shrink-0" aria-hidden="true">
                     <AvatarFallback className="text-[10px]">{initials(who)}</AvatarFallback>
@@ -1462,20 +1463,17 @@ function ChatPane({
                   <ChatBubble
                     side={mine ? 'end' : 'start'}
                     tone={mine ? 'primary' : 'default'}
-                    // meta 行做减法：姓名只在组首露一次，时间只落在组尾，回执只挂我方最后一条；
-                    // 三个条件都不沾的组中气泡干脆不出 meta 行，气泡更干净
+                    // 结构化卡片即气泡：去掉外层灰盒与内边距，只留卡片自己的边框，不再双层盒子
+                    className={card ? 'bg-transparent p-0' : undefined}
+                    // meta 行做减法：姓名不再上牌（左右对齐+头像已表明身份），时间只落在组尾，
+                    // 回执只挂我方最后一条；三个条件都不沾的组中气泡干脆不出 meta 行
                     meta={
                       showMeta ? (
                         <>
-                          {groupStart ? (
-                            <>
-                              {m.senderType === 'bot' ? (
-                                <Badge variant="secondary" className="px-1 py-0 text-[10px]">
-                                  AI
-                                </Badge>
-                              ) : null}
-                              <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span>
-                            </>
+                          {m.senderType === 'bot' && groupStart ? (
+                            <Badge variant="secondary" className="px-1 py-0 text-[10px]">
+                              AI
+                            </Badge>
                           ) : null}
                           {groupEnd ? (
                             <span title={formatTime(m.createdAt, i18n.language)}>{formatClock(m.createdAt, i18n.language)}</span>
@@ -1488,7 +1486,7 @@ function ChatPane({
                             <button
                               type="button"
                               onClick={() => onRecall(conv, m)}
-                              className="inline-flex items-center gap-0.5 hover:text-primary-foreground hover:underline underline-offset-2"
+                              className="inline-flex items-center gap-0.5 hover:text-primary hover:underline underline-offset-2"
                             >
                               <Undo2 aria-hidden="true" className="size-3" />
                               {t('plugin_im.recall.action')}

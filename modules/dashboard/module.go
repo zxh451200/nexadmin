@@ -40,7 +40,7 @@ func (module) Name() string { return "dashboard" }
 
 // 工作台只要求登录（页面本身不挂权限点），各区块的数据在下面按需降级。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
-	apistat.Install(r, d.Public)
+	// apistat 已由 core 在引擎级挂载（core/router.go InstallEngine），这里不再重复安装。
 	loc := time.UTC
 	if l, err := time.LoadLocation(d.Config.App.Timezone); err == nil && d.Config.App.Timezone != "" {
 		loc = l

@@ -13,6 +13,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/auth"
 	tn "nexadmin/core/tenant"
+	"nexadmin/modules/internal/password"
 	"nexadmin/pkg/idgen"
 )
 
@@ -85,20 +86,20 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/config/upload", h.GetUpload) // 上传组件读取限制，登录即可
 	g := r.Group("/configs")
 	g.GET("/upload", core.Perm("config:list"), h.GetUpload) // 固定路径先于 /:id
-	g.PUT("/upload", core.Perm("config:update"), core.RequirePlatform(), h.SaveUpload)
+	g.PUT("/upload", core.Perm("config:update"), core.RequirePlatform(), d.OperLogMiddleware("config", "update"), h.SaveUpload)
 	g.GET("/upload-types", core.Perm("config:list"), h.UploadTypes)
-	g.POST("/refresh-cache", core.Perm("config:update"), core.RequirePlatform(), h.RefreshCache)
+	g.POST("/refresh-cache", core.Perm("config:update"), core.RequirePlatform(), d.OperLogMiddleware("config", "refresh"), h.RefreshCache)
 	g.GET("", core.Perm("config:list"), h.List)
 	g.GET("/:id", core.Perm("config:list"), h.Get)
-	g.POST("", core.Perm("config:create"), core.RequirePlatform(), h.Create)
-	g.PUT("/:id", core.Perm("config:update"), core.RequirePlatform(), h.Update)
-	g.DELETE("/:id", core.Perm("config:delete"), core.RequirePlatform(), h.DeleteOne)
-	g.DELETE("", core.Perm("config:delete"), core.RequirePlatform(), h.DeleteMany)
+	g.POST("", core.Perm("config:create"), core.RequirePlatform(), d.OperLogMiddleware("config", "create"), h.Create)
+	g.PUT("/:id", core.Perm("config:update"), core.RequirePlatform(), d.OperLogMiddleware("config", "update"), h.Update)
+	g.DELETE("/:id", core.Perm("config:delete"), core.RequirePlatform(), d.OperLogMiddleware("config", "delete"), h.DeleteOne)
+	g.DELETE("", core.Perm("config:delete"), core.RequirePlatform(), d.OperLogMiddleware("config", "delete"), h.DeleteMany)
 
 	d.Public.GET("/settings/public", h.PublicSettings) // 匿名：登录页展示站点名称/Logo
 	s := r.Group("/settings")
 	s.GET("", core.Perm("settings:list"), h.Settings)
-	s.PUT("/:section", core.Perm("settings:update"), core.RequirePlatform(), h.SaveSection)
+	s.PUT("/:section", core.Perm("settings:update"), core.RequirePlatform(), d.OperLogMiddleware("config", "update"), h.SaveSection)
 	s.POST("/:section/test", core.Perm("settings:update"), core.RequirePlatform(), h.TestSection)
 }
 
@@ -137,6 +138,9 @@ var factoryRows = []struct {
 	{12, "视频上传大小上限(MB)", KeyUploadVideo, "0", TypeNumber, true, "0 或留空表示不限制"},
 	{13, "普通文件上传大小上限(MB)", KeyUploadFile, "0", TypeNumber, true, "0 或留空表示不限制"},
 	{14, "允许上传的文件类型", KeyUploadTypes, strings.Join(defaultUploadTypes, ","), TypeString, true, "逗号分隔的 MIME 或扩展名"},
+	// 密码策略：改密 / 新建用户 / 管理员重置三条链路共用（校验实现在 modules/internal/password）。
+	{16, "密码最小长度", password.KeyMinLength, "8", TypeNumber, true, "1-72，改密、新建、重置密码统一校验"},
+	{17, "密码需含字母和数字", password.KeyRequireMixed, "false", TypeBoolean, true, "开启后三类密码入口统一校验"},
 }
 
 // WriteSiteName 实现 setup.SiteWriter：初始化向导 / init --config 把站点名写入设置页「站点」分区。

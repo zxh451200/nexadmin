@@ -20,7 +20,6 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/ai"
-	"nexadmin/core/middleware"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -42,38 +41,30 @@ type siteHandler struct {
 	signKey ed25519.PrivateKey
 	// previewKey 是草稿预览令牌的签名密钥（复用框架 JWT 密钥）；nil = 预览关闭。
 	previewKey []byte
-	// contactHits 是在线留言的 IP 投稿计数（共享 cache，多实例一致）。
-	contactHits *middleware.Limiter
-	// contactLocal 是 cache 未装配时的进程内兜底计数器。
-	contactLocal *ipLimiter
-	// uploadLocal 是询盘附件的 IP 计数（每 IP 每分钟 20 次）：上传比投稿重，
+	// contactGate 是在线留言的 IP 投稿计数（共享 cache 优先，多实例一致；未装配回退进程内）。
+	contactGate *ipGate
+	// uploadGate 是询盘附件的 IP 计数（每 IP 每分钟 20 次）：上传比投稿重，
 	// 但一条询盘可能带几个文件，不能沿用留言的 5 次窗口。
-	uploadLocal *ipLimiter
-	// orderLocal 是在线购买的 IP 计数（每 IP 每分钟 10 次）：匿名资金入口，
+	uploadGate *ipGate
+	// orderGate 是在线购买的 IP 计数（每 IP 每分钟 10 次）：匿名资金入口，
 	// 比留言重得多——一次购买要建支付单并拉起渠道，滥用即刷单。
-	orderLocal *ipLimiter
+	orderGate *ipGate
 	// gw 是 AI 网关（未配置时为 nil）：访客聊天翻译与管理端内容机翻共用同一个实例。
 	gw *ai.Gateway
 }
 
 // contactAllowed 报告这个 IP 还能不能投稿；超限已经写好 Retry-After。
 func (h *siteHandler) contactAllowed(c *gin.Context) bool {
-	if h.contactHits != nil {
-		ok, retry := h.contactHits.Hit(c.Request.Context(), "ip:"+c.ClientIP())
-		if ok {
-			return true
-		}
-		secs := int(retry.Seconds())
-		if secs < 1 {
-			secs = 1
-		}
-		c.Header("Retry-After", strconv.Itoa(secs))
-		return false
+	ok, retry := h.contactGate.check(c.Request.Context(), c.ClientIP())
+	if ok {
+		return true
 	}
-	if h.contactLocal != nil {
-		return h.contactLocal.allow(c.ClientIP())
+	secs := int(retry.Seconds())
+	if secs < 1 {
+		secs = 1
 	}
-	return true
+	c.Header("Retry-After", strconv.Itoa(secs))
+	return false
 }
 
 // baseView 装配站点级数据（设置、导航、特性、最新新闻）与页脚年份。
@@ -246,7 +237,7 @@ func (h *siteHandler) home(c *gin.Context) {
 		}
 		// 首页新闻区只展示 3 条（模板自己截），案例区还要从最新新闻里按栏目筛案例，
 		// 所以主题首页把窗口放宽到 6 条。
-		if posts, _, perr := h.svc.PublishedPostsPage(c.Request.Context(), lang.Code, termFilter{}, 1, 6); perr == nil {
+		if posts, _, perr := h.svc.PublishedPostsPage(c.Request.Context(), lang.Code, termFilter{}, "", 1, 6); perr == nil {
 			v.Posts = posts
 		}
 	}
@@ -274,7 +265,7 @@ func homePageTitle(siteName, homeTitle, siteDesc string) string {
 // newsPageSize 是公开新闻列表每页条数。
 const newsPageSize = 20
 
-// GET /news —— 新闻列表：?category=栏目 / ?tag=标签 收窄，?page=N 翻页。
+// GET /news —— 新闻列表：?category=栏目 / ?tag=标签 收窄，?q=关键词 检索，?page=N 翻页。
 // 归档与全部共用这一条路由：查询式归档不占 /news/:slug 的下一段，
 // 不会和文章的 slug 抢路由（Gin 在同一层同时挂静态段和通配段会直接 panic）。
 func (h *siteHandler) newsList(c *gin.Context) {
@@ -286,6 +277,15 @@ func (h *siteHandler) newsList(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.Query("page"))
+	// 检索词限长，避免超长 query 打到 LIKE 和标题上；超长直接截断而不是报错（口径同产品列表）。
+	q := strings.TrimSpace(c.Query("q"))
+	if r := []rune(q); len(r) > 80 {
+		q = string(r[:80])
+	}
+	vals := url.Values{}
+	if q != "" {
+		vals.Set("q", q)
+	}
 	term := termFilter{}
 	// 栏目/标签不存在就是 404，而不是「这个筛选下暂时没内容」：前者是链接写错了，
 	// 后者是编辑部还没发，两者给访客的信息完全不同。
@@ -298,7 +298,7 @@ func (h *siteHandler) newsList(c *gin.Context) {
 		row.localize(lang.Code)
 		term = termFilter{Kind: "category", Slug: row.Slug}
 		v.NewsKind, v.NewsTermName = "category", row.Title
-		v.NewsTermQuery = url.Values{"category": {row.Slug}}.Encode()
+		vals.Set("category", row.Slug)
 		v.Title = v.composeTitle(v.TF("news.categoryTitleTag", row.Title))
 	} else if slug := strings.TrimSpace(c.Query("tag")); slug != "" {
 		row, terr := h.svc.TagBySlug(ctx, slug)
@@ -308,10 +308,13 @@ func (h *siteHandler) newsList(c *gin.Context) {
 		}
 		term = termFilter{Kind: "tag", Slug: row.Slug}
 		v.NewsKind, v.NewsTermName = "tag", row.Name
-		v.NewsTermQuery = url.Values{"tag": {row.Slug}}.Encode()
+		vals.Set("tag", row.Slug)
 		v.Title = v.composeTitle(v.TF("news.tagTitleTag", row.Name))
 	}
-	posts, total, err := h.svc.PublishedPostsPage(ctx, lang.Code, term, page, newsPageSize)
+	// 筛选串（栏目/标签 + 检索词）一起进 canonical 与翻页链接，语义同产品列表的 ProductTermQuery。
+	v.NewsTermQuery = vals.Encode()
+	v.NewsQuery = q
+	posts, total, err := h.svc.PublishedPostsPage(ctx, lang.Code, term, q, page, newsPageSize)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
@@ -329,11 +332,22 @@ func (h *siteHandler) newsList(c *gin.Context) {
 		active = term.Slug
 	}
 	v.NewsCategories = CategoryLinks(cats, active)
+	// 侧栏标签云：ListPublicTags 只下发有新闻在用的标签（按用量排序限流）；取数失败静默缺席。
+	if tags, terr := h.svc.ListPublicTags(ctx); terr == nil {
+		tagActive := ""
+		if term.Kind == "tag" {
+			tagActive = term.Slug
+		}
+		v.NewsTags = TagLinks(tags, tagActive)
+	}
 	v.Posts = posts
 	v.NewsPage, v.NewsTotalPages = pageOf(page), pagesOf(total, newsPageSize)
-	// 第 1 页才是规范地址：?page=2 不进 canonical，避免搜索引擎把每页当独立页面收录。
-	v.Noindex = v.NewsPage > 1
-	if v.NewsTermName == "" {
+	// 第 1 页才是规范地址：?page=2 不进 canonical，避免搜索引擎把每页当独立页面收录；
+	// 搜索结果页也不收录，否则任意关键词都能生成一条可索引的站内 URL（与产品列表同口径）。
+	v.Noindex = v.NewsPage > 1 || q != ""
+	if q != "" {
+		v.Title = v.composeTitle(v.TF("news.searchTitleTag", q))
+	} else if v.NewsTermName == "" {
 		v.Title = v.composeTitle(v.T("news.pageTitleTag"))
 	}
 	v.Desc = v.TF("news.pageDesc", v.SiteName)
@@ -617,6 +631,20 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 	h.render(c, "product", http.StatusOK, v)
 }
 
+// GET /faq —— 常见问题独立页：首页 FAQ 板块的完整版（板块多时首页放不下，深链到这里）。
+// 数据复用 baseView 装配的 Faqs（PublicFaqs 按语言过滤过译文），页面本体不再查库。
+func (h *siteHandler) faqPage(c *gin.Context) {
+	lang := langOf(c)
+	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v.Title = v.composeTitle(v.T("faq.pageTitleTag"))
+	v.Desc = v.TF("faq.pageDesc", v.SiteName)
+	h.render(c, "faq", http.StatusOK, v)
+}
+
 // GET /sitemap —— 给访客看的站点地图（HTML）。爬虫用的 XML 在 /sitemap.xml，
 // 两者口径一致：未发布、noindex、该语言没发的都不进，避免索引把人送进 404。
 func (h *siteHandler) sitemapPage(c *gin.Context) {
@@ -655,6 +683,10 @@ func (h *siteHandler) sitemapPage(c *gin.Context) {
 		if g := newSitemapGroup("docs", links, "/docs"); len(g.Links) > 0 {
 			groups = append(groups, g)
 		}
+	}
+	// 常见问题独立页：有启用条目才进站点地图，空页列出来只会点进去一片空。
+	if len(v.Faqs) > 0 {
+		groups = append(groups, newSitemapGroup("faq", []SitemapLink{{Label: v.T("faq.title"), Href: "/faq"}}, ""))
 	}
 	for i := range groups {
 		groups[i].Title = v.T("sitemap." + groups[i].Key)

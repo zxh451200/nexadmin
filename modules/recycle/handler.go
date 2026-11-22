@@ -99,6 +99,10 @@ func (h *Handler) PurgeBatch(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		response.Fail(c, err)
+		return
+	}
 	res, err := h.svc.PurgeBatch(c.Request.Context(), ids, core.IsPlatformCaller(c))
 	if err != nil {
 		response.Fail(c, err)

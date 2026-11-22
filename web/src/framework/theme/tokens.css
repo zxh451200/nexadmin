@@ -73,7 +73,9 @@
       图表点缀/登录页品牌面板里出现；
    3. 边框是模板 white/10%、white/15% 半透明线在 #0a0a0a 底上的不透明折算
       （14% / 21%），避免每个消费点都要改 alpha 写法。
-   图表色深色下照抄模板灰阶（明度梯度 82/45/32/25/15%），系列区分靠明度；
+   图表色深色下与亮色同色相、提亮一档——模板原版的灰阶方案（82/45/32/25/15%）
+   会把 StatCard 图标、徽章这类 chart-tone 装饰一并变死灰（一页里只剩状态色有颜色），
+   也与 tangerine / soft-pop 深色的彩色图表口径不一致；改后系列区分靠色相。
    状态色（success/warning/info）保持彩色——模板的状态徽章（绿/黄）本身就是彩的。 */
 .dark {
   --background: 0 0% 4%;
@@ -114,16 +116,16 @@
   --sidebar-accent-foreground: 0 0% 98%;
   --sidebar-border: 0 0% 14%;
 
-  --chart-1: 0 0% 82%;
-  --chart-2: 0 0% 45%;
-  --chart-3: 0 0% 32%;
-  --chart-4: 0 0% 25%;
-  --chart-5: 0 0% 15%;
-  --chart-1-foreground: 0 0% 9%;
-  --chart-2-foreground: 0 0% 98%;
-  --chart-3-foreground: 0 0% 98%;
-  --chart-4-foreground: 0 0% 98%;
-  --chart-5-foreground: 0 0% 98%;
+  --chart-1: 238 85% 67%;
+  --chart-2: 192 90% 56%;
+  --chart-3: 268 80% 66%;
+  --chart-4: 152 60% 50%;
+  --chart-5: 32 95% 58%;
+  --chart-1-foreground: 228 16% 9%;
+  --chart-2-foreground: 228 16% 9%;
+  --chart-3-foreground: 228 16% 9%;
+  --chart-4-foreground: 228 16% 9%;
+  --chart-5-foreground: 228 16% 9%;
 
   color-scheme: dark;
 }
@@ -199,71 +201,83 @@
   --chart-5: 235 22% 33%;
 }
 
+/* soft-pop：紫色系。画布/卡片/悬停层走同一紫调灰阶，点缀只用紫→品红；
+   旧版的 teal secondary + 柠檬 accent + 近黑粗边框跟紫主色撞色，是「整体古怪」的根源。 */
 [data-preset='soft-pop'] {
   --radius: 1rem;
-  --background: 120 12% 97%;
-  --foreground: 0 0% 7%;
+  --background: 262 30% 97%;
+  --foreground: 262 35% 10%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 7%;
+  --card-foreground: 262 35% 10%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 7%;
+  --popover-foreground: 262 35% 10%;
   --primary: 262 80% 54%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 175 40% 55%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 0 0% 95%;
-  --muted-foreground: 0 0% 34%;
-  --accent: 70 65% 60%;
-  --accent-foreground: 0 0% 10%;
+  --secondary: 262 30% 94%;
+  --secondary-foreground: 262 55% 32%;
+  --muted: 262 22% 95%;
+  --muted-foreground: 262 10% 40%;
+  --accent: 262 40% 93%;
+  --accent-foreground: 262 60% 38%;
   --destructive: 0 70% 55%;
-  --border: 0 0% 12%;
-  --input: 0 0% 42%;
+  --border: 262 18% 88%;
+  --input: 262 16% 80%;
   --ring: 262 80% 54%;
-  --brand-from: 262 80% 56%;
-  --brand-to: 175 55% 45%;
-  --sidebar: 120 12% 97%;
-  --sidebar-foreground: 0 0% 7%;
-  --sidebar-accent: 70 65% 60%;
-  --sidebar-accent-foreground: 0 0% 10%;
-  --sidebar-border: 0 0% 14%;
+  --brand-from: 262 82% 56%;
+  --brand-to: 320 80% 55%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 262 25% 30%;
+  --sidebar-accent: 262 40% 93%;
+  --sidebar-accent-foreground: 262 60% 38%;
+  --sidebar-border: 262 18% 90%;
   --chart-1: 262 80% 54%;
-  --chart-2: 175 45% 52%;
-  --chart-3: 70 65% 58%;
-  --chart-4: 350 75% 60%;
-  --chart-5: 150 60% 55%;
+  --chart-2: 192 85% 38%;
+  --chart-3: 320 70% 52%;
+  --chart-4: 152 60% 34%;
+  --chart-5: 30 95% 45%;
 }
 
 .dark[data-preset='soft-pop'] {
-  --background: 0 0% 4%;
-  --foreground: 0 0% 98%;
-  --card: 230 15% 17%;
-  --card-foreground: 0 0% 98%;
-  --popover: 230 15% 17%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 262 65% 62%;
-  --primary-foreground: 0 0% 7%;
-  --secondary: 175 45% 60%;
-  --secondary-foreground: 0 0% 7%;
-  --muted: 0 0% 21%;
-  --muted-foreground: 0 0% 78%;
-  --accent: 75 70% 68%;
-  --accent-foreground: 0 0% 10%;
+  /* 紫调灰阶（H≈258、低饱和）替代「纯黑画布 + 蓝灰卡片」的两套色系；
+     主按钮改饱和紫白字（约 violet-600，对白字 5.7:1）；悬停层用紫调而不是柠檬绿；
+     输入框边框回到 22% 灰（旧版 92% 近白是筛选框亮边的来源）；
+     图表改紫为首的彩色组，明度都在 50% 以上，前景统一深字。 */
+  --radius: 1rem;
+  --background: 258 14% 5%;
+  --foreground: 258 25% 96%;
+  --card: 258 14% 10%;
+  --card-foreground: 258 25% 96%;
+  --popover: 258 14% 10%;
+  --popover-foreground: 258 25% 96%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 258 14% 15%;
+  --secondary-foreground: 258 25% 96%;
+  --muted: 258 14% 15%;
+  --muted-foreground: 258 8% 64%;
+  --accent: 262 32% 18%;
+  --accent-foreground: 262 70% 87%;
   --destructive: 0 70% 62%;
-  --border: 0 0% 30%;
-  --input: 0 0% 92%;
-  --ring: 262 65% 62%;
-  --brand-from: 262 70% 64%;
-  --brand-to: 175 60% 52%;
-  --sidebar: 0 0% 4%;
-  --sidebar-foreground: 0 0% 98%;
-  --sidebar-accent: 75 70% 68%;
-  --sidebar-accent-foreground: 0 0% 10%;
-  --sidebar-border: 0 0% 30%;
-  --chart-1: 262 65% 62%;
-  --chart-2: 175 55% 62%;
-  --chart-3: 75 70% 68%;
-  --chart-4: 350 70% 66%;
-  --chart-5: 150 60% 62%;
+  --border: 258 14% 16%;
+  --input: 258 12% 22%;
+  --ring: 262 83% 58%;
+  --brand-from: 262 85% 64%;
+  --brand-to: 320 80% 60%;
+  --sidebar: 258 14% 10%;
+  --sidebar-foreground: 258 25% 96%;
+  --sidebar-accent: 262 32% 18%;
+  --sidebar-accent-foreground: 262 70% 87%;
+  --sidebar-border: 258 14% 16%;
+  --chart-1: 262 83% 66%;
+  --chart-2: 192 85% 55%;
+  --chart-3: 320 75% 62%;
+  --chart-4: 152 60% 50%;
+  --chart-5: 38 92% 58%;
+  --chart-1-foreground: 258 25% 9%;
+  --chart-2-foreground: 258 25% 9%;
+  --chart-3-foreground: 258 25% 9%;
+  --chart-4-foreground: 258 25% 9%;
+  --chart-5-foreground: 258 25% 9%;
 }
 
 @layer utilities {

@@ -26,7 +26,7 @@ export interface ImageUrlFieldProps {
   /** 传了才走「弹窗 → 选图 → 裁剪」；不传则点上传直接开系统选图框 */
   crop?: CropConfig
   disabled?: boolean
-  /** 预览框尺寸类，默认正方形——logo 一律完整显示，不裁切 */
+  /** 预览框尺寸类；未传时：配了裁剪比例跟随比例（高 96px、宽自适应），否则 96px 正方形 */
   previewClassName?: string
   /** true = 输入行在上、预览/上传卡在下（长表单里先看到输入再看到图）；默认横排（卡在左、输入在右） */
   previewBelow?: boolean
@@ -48,7 +48,7 @@ export function ImageUrlField({
   placeholder,
   crop,
   disabled,
-  previewClassName = 'size-24',
+  previewClassName,
   previewBelow = false,
   'aria-label': ariaLabel,
   'aria-invalid': ariaInvalid,
@@ -96,6 +96,9 @@ export function ImageUrlField({
     }
   }
 
+  // 裁剪规格折算成长宽比（1200×630 → ≈1.9；free/方形为 undefined）——预览框跟随比例，不再在正方形里上下露大片棋盘格留白
+  const cropRatio =
+    crop && crop !== 'free' ? (crop.width && crop.height ? crop.width / crop.height : crop.aspect) : undefined
   // 卡片：有值=预览（点开放大，悬停浮现清除）。无值时不再渲染独立的虚线/按钮块——上传入口并入输入行行首
   const cardEl = value ? (
     <div className={cn('group relative shrink-0', previewBelow && 'self-start')}>
@@ -111,8 +114,14 @@ export function ImageUrlField({
           src={value}
           alt=""
           loading="lazy"
-          className={cn('rounded-md border border-border bg-muted object-contain p-1', previewClassName)}
+          className={cn(
+            'rounded-md border border-border bg-muted object-contain p-1',
+            cropRatio ? 'h-24 w-auto' : 'size-24',
+            previewClassName,
+          )}
           style={{
+            // 跟随裁剪比例时由 aspect-ratio 撑宽度（h-24 + w-auto）
+            aspectRatio: cropRatio,
             // 细棋盘格垫底：透明 PNG/SVG、暗色 logo 在深色主题下不再与底色融成一块
             backgroundImage:
               'repeating-conic-gradient(hsl(var(--muted-foreground) / 0.14) 0% 25%, transparent 0% 50%)',

@@ -18,6 +18,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/password"
 	"nexadmin/modules/internal/session"
 	"nexadmin/modules/internal/smscode"
 	"nexadmin/pkg/idgen"
@@ -98,8 +99,11 @@ func (f *forgotService) resetEmail(ctx context.Context, rawEmail, code, newPassw
 	if err != nil {
 		return err
 	}
-	if newPassword == "" || len(newPassword) > 72 { // 不设强度规则；bcrypt 只取前 72 字节，故限 72
+	if newPassword == "" || len(newPassword) > 72 { // bcrypt 只取前 72 字节，故限 72
 		return bad("profile.password_length")
+	}
+	if perr := password.Load(ctx, f.db).Validate(newPassword, password.DefaultPassword(ctx, f.db)); perr != nil {
+		return perr
 	}
 	if len(code) != 6 {
 		return badCode()
@@ -140,6 +144,9 @@ func (f *forgotService) resetPhone(ctx context.Context, rawPhone, code, newPassw
 	}
 	if newPassword == "" || len(newPassword) > 72 {
 		return bad("profile.password_length")
+	}
+	if perr := password.Load(ctx, f.db).Validate(newPassword, password.DefaultPassword(ctx, f.db)); perr != nil {
+		return perr
 	}
 	if len(code) != 6 {
 		return badCode()

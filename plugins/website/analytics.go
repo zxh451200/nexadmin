@@ -92,10 +92,13 @@ type viewRecorder struct {
 	loc   *time.Location
 	queue chan viewRow
 	log   *zap.Logger
+	// secureCookies 是匿名 cookie nex-vid 的 Secure 标记，来自 server.secure_cookies：
+	// 反代终结 TLS 时请求侧 TLS 为空，按 c.Request.TLS 判断会漏标，改由配置显式声明。
+	secureCookies bool
 }
 
-func newViewRecorder(db *gorm.DB, loc *time.Location, log *zap.Logger) *viewRecorder {
-	return &viewRecorder{db: db, loc: loc, queue: make(chan viewRow, queueCap), log: log}
+func newViewRecorder(db *gorm.DB, loc *time.Location, secureCookies bool, log *zap.Logger) *viewRecorder {
+	return &viewRecorder{db: db, loc: loc, queue: make(chan viewRow, queueCap), log: log, secureCookies: secureCookies}
 }
 
 // viewMiddleware 挂在官网公开路由组上：命中页面 GET 时发一枚匿名会话 cookie 并排队一条浏览。
@@ -132,7 +135,7 @@ func (r *viewRecorder) viewMiddleware() gin.HandlerFunc {
 				MaxAge:   int(vidMaxAge.Seconds()),
 				HttpOnly: true,
 				SameSite: http.SameSiteLaxMode,
-				Secure:   c.Request.TLS != nil,
+				Secure:   r.secureCookies,
 			})
 		}
 		now := time.Now().In(r.loc)

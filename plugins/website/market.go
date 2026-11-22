@@ -460,7 +460,9 @@ func (h *siteHandler) marketList(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
-	if !v.MarketEnabled {
+	// 品牌主题（站点设置选了 Theme）下导航与 sitemap 都已剔除市场（sitemapPage 同口径），
+	// 直链也一并 404，避免「索引里没有、直链却能进」的口径分裂。
+	if !v.MarketEnabled || v.ThemeID != "" {
 		h.notFound(c, v)
 		return
 	}
@@ -492,7 +494,8 @@ func (h *siteHandler) marketDetail(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
-	if !v.MarketEnabled {
+	// 与 marketList 同口径：品牌主题下市场页直链 404。
+	if !v.MarketEnabled || v.ThemeID != "" {
 		h.notFound(c, v)
 		return
 	}

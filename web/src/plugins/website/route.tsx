@@ -53,6 +53,15 @@ export const routes: ModuleRoute[] = [
     menu: { title: 'plugin_website.menu.posts', icon: 'Newspaper', order: 69, group: 'system' },
   },
   {
+    // 留言收件箱：plugin.yaml 声明了菜单、MessagePage 也实现了，但 routes 漏了这条导致
+    // 菜单/直链都不可达（框架按 path 匹配前端路由，sys_menu.component 不解析）。
+    path: 'website/messages',
+    component: lazy(() => import('./MessagePage')),
+    perm: 'website:message',
+    platform: true,
+    menu: { title: 'plugin_website.menu.messages', icon: 'Inbox', order: 70, group: 'system' },
+  },
+  {
     path: 'website/products',
     component: lazy(() => import('./ProductPage')),
     perm: 'website:product',

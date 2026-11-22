@@ -155,6 +155,10 @@ func idsParam(c *gin.Context) ([]idgen.ID, bool) {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return nil, false
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		response.Fail(c, err)
+		return nil, false
+	}
 	return ids, true
 }
 

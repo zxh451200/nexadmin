@@ -15,6 +15,7 @@ import (
 	_ "nexadmin/plugins/i18n-editor"
 	_ "nexadmin/plugins/kb"
 	_ "nexadmin/plugins/identity"
+	_ "nexadmin/plugins/ldap"
 	_ "nexadmin/plugins/im"
 	_ "nexadmin/plugins/imports"
 	_ "nexadmin/plugins/maps"

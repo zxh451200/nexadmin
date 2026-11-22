@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
+	"nexadmin/modules/internal/password"
 	"nexadmin/core/event"
 	"nexadmin/pkg/idgen"
 )
@@ -177,7 +178,11 @@ func (s *service) create(ctx context.Context, in userInput, me actor) (*userDTO,
 		}
 	} else {
 		var pw string
-		if err := s.db.WithContext(ctx).Table("sys_config").Select("config_value").Where("config_key = ?", "user.default_password").Limit(1).Scan(&pw).Error; err == nil && pw != "" {
+		if err := s.db.WithContext(ctx).Table("sys_config").Select("config_value").Where("config_key = ?", password.KeyDefault).Limit(1).Scan(&pw).Error; err == nil && pw != "" {
+			// 初始口令同样要满足密码策略：弱默认口令等于出厂弱账号，这里拒绝建号并提示先调参数。
+			if perr := password.Load(ctx, s.db).ValidateInitial(pw); perr != nil {
+				return nil, perr
+			}
 			if hash, err = auth.HashPassword(pw); err != nil {
 				return nil, err
 			}

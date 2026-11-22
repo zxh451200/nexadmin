@@ -39,16 +39,22 @@ func NoStore() gin.HandlerFunc {
 }
 
 // Logger 记录每个请求；handler 通过 c.Error 附带的错误一并记录（不返回给调用方）。
+// request_id 来自 RequestID 中间件（未经过该中间件时记 "-"），用于把一条请求的多处日志串起来。
 func Logger(log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
+		rid := c.GetString(RequestIDKey)
+		if rid == "" {
+			rid = "-"
+		}
 		fields := []zap.Field{
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.Int("status", c.Writer.Status()),
 			zap.Duration("latency", time.Since(start)),
 			zap.String("ip", c.ClientIP()),
+			zap.String("request_id", rid),
 		}
 		if len(c.Errors) > 0 {
 			fields = append(fields, zap.String("errors", c.Errors.String()))
@@ -107,12 +113,17 @@ func CORS(dev bool, allowed ...string) gin.HandlerFunc {
 
 // SecurityHeaders 为所有响应设置基线安全头（在业务 handler 之前执行，handler 可覆盖同名头，
 // 如文件预览的 CSP sandbox）。X-Frame-Options 用 SAMEORIGIN 而不是 DENY，保留本站自查预览的合法内嵌。
-func SecurityHeaders() gin.HandlerFunc {
+// hsts=true 时加 Strict-Transport-Security：浏览器对纯 HTTP 响应会忽略该头，开发环境不受影响；
+// 反代终结 TLS 的生产部署由它通知浏览器后续访问全站走 HTTPS（server.hsts_enabled）。
+func SecurityHeaders(hsts bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		h := c.Writer.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		if hsts {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		c.Next()
 	}
 }

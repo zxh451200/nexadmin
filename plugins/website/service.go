@@ -1601,8 +1601,8 @@ const newsPageCap = 2000
 
 // PublishedPostsPage 是公开新闻列表的分页查询：返回该语言已上线的新闻与总数。
 // 窗口内先按语言与发布时间筛出真实集合再切片取页，总数是筛完的准确值。
-// term 非空时先按栏目/标签收窄，归档页与全部新闻共用这一条查询。
-func (s *Service) PublishedPostsPage(ctx context.Context, lang string, term termFilter, page, pageSize int) ([]Post, int64, error) {
+// term 非空时先按栏目/标签收窄，keyword 是站内检索词（空 = 不检索），两者可叠加且都在分页前生效。
+func (s *Service) PublishedPostsPage(ctx context.Context, lang string, term termFilter, keyword string, page, pageSize int) ([]Post, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -1615,6 +1615,14 @@ func (s *Service) PublishedPostsPage(ctx context.Context, lang string, term term
 		windowTx = windowTx.Where("id IN (SELECT pc.post_id FROM plg_website_post_category pc JOIN plg_website_category wc ON wc.id = pc.category_id WHERE wc.slug = ?)", term.Slug)
 	case "tag":
 		windowTx = windowTx.Where("id IN (SELECT pt.post_id FROM plg_website_post_tag pt JOIN plg_website_tag wt ON wt.id = pt.tag_id WHERE wt.slug = ?)", term.Slug)
+	}
+	// 检索范围覆盖标题 / 摘要 / 译文（i18n_json 一并 LIKE，与产品检索 PublishedProductsPage 同口径）：
+	// 两侧 LOWER 折叠大小写，PG 上大写词也能命中；全部走占位参数，不拼用户输入进 SQL。
+	if kw := strings.TrimSpace(keyword); kw != "" {
+		like := "%" + kw + "%"
+		windowTx = windowTx.Where(
+			"LOWER(title) LIKE LOWER(?) OR LOWER(summary) LIKE LOWER(?) OR LOWER(i18n_json) LIKE LOWER(?)",
+			like, like, like)
 	}
 	var window []Post
 	if err := windowTx.
@@ -1817,11 +1825,14 @@ func publishedLocales(published bool, publishedJSON string) []string {
 
 // SitemapEntries 汇总官网全部已发布页面（首页、新闻列表、新闻、产品列表、产品、自定义页）。
 func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
-	out := []SitemapEntry{{Loc: "/"}, {Loc: "/news"}, {Loc: "/products"}}
+	out := []SitemapEntry{{Loc: "/"}, {Loc: "/news"}, {Loc: "/products"}, {Loc: "/faq"}}
 	var posts []Post
 	// noindex 的新闻不进 sitemap（<meta robots> 已拒绝收录，list 里再给条目只会浪费抓取配额）。
+	// published 是 publishedLocales 判定语言可见性的整行开关，必须随 Select 取出：
+	// 漏掉它会让 p.Published 为零值 false，内容页的所有语言都被判未发布，
+	// sitemap 只剩 x-default，与详情页 HTML 的 hreflang 标注冲突（Google 会忽略）。
 	if err := livePostTx(s.db.WithContext(ctx)).Where("noindex = ?", false).
-		Select("slug", "published_at", "updated_at", "published_json").Order("published_at DESC").Limit(1000).Find(&posts).Error; err != nil {
+		Select("slug", "published", "published_at", "updated_at", "published_json").Order("published_at DESC").Limit(1000).Find(&posts).Error; err != nil {
 		return nil, err
 	}
 	for _, p := range posts {
@@ -1833,8 +1844,9 @@ func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 	}
 	var pages []Page
 	// noindex 的页面同理：不进 sitemap，避免与 meta robots 打架。
+	// published 同新闻：publishedLocales 要用它判定语言可见性，Select 漏取会导致内容页只剩 x-default。
 	if err := s.db.WithContext(ctx).Where("published = ? AND noindex = ?", true, false).
-		Select("slug", "updated_at", "published_json").Order("updated_at DESC").Limit(1000).Find(&pages).Error; err != nil {
+		Select("slug", "published", "updated_at", "published_json").Order("updated_at DESC").Limit(1000).Find(&pages).Error; err != nil {
 		return nil, err
 	}
 	for _, p := range pages {

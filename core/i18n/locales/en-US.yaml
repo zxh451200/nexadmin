@@ -31,6 +31,11 @@ error:
   stale_list: "The list has changed. Please refresh."
   rate_limited: "Too many requests. Please try again later."
   locked: "Account locked. Try again in %d seconds."
+password:
+  too_short: "Password must be at least %d characters."
+  require_mixed: "Password must contain both letters and digits."
+  same_as_default: "The new password must differ from the initial password."
+  default_weak: "The initial password does not satisfy the password policy (at least %d characters, letters and digits); adjust the minimum length or the initial password in system parameters first."
 auth:
   oauth_failed: Third-party login failed. Try again later or use another method
   provider_missing: Sign-in service is not enabled
@@ -803,6 +808,8 @@ website:
   default_lang_invalid: "The default site language is not in the language list; pick an enabled language."
   currency_rates_invalid: "Invalid currency rates: expected JSON like {\"USD\":1,\"EUR\":0.92} with 3-letter uppercase codes, positive rates, at most 24 currencies, and USD fixed at 1."
   currency_default_invalid: "The default display currency must be one of the currencies in the rates table."
+  currency_fetch_empty: "The rates table is empty. Add a currency before fetching the latest rates."
+  currency_fetch_failed: "Could not fetch the latest rates. Check the server network and retry, or enter the rates manually."
   notify_inquiry_title: "Website enquiry from %s"
   notify_content_empty: "(empty)"
   joins_too_many: "A dataset can declare at most 2 joined tables."

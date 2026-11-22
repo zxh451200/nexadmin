@@ -379,8 +379,9 @@ export function LanguageSection() {
         </SortableContext>
       </DndContext>
 
-      {/* 底部重复一组操作：卡片多时改到底部不用滚回顶部找保存；与顶部同一套 disabled 口径 */}
-      {rows.length > 0 ? (
+      {/* 底部那组只在有未保存修改时出现：卡片多时改到底部不用滚回顶部找保存。
+          平时不渲染——常驻两套「添加语言/保存」看着像重复缺陷（实测有人问「为啥两套」）。 */}
+      {dirty && rows.length > 0 ? (
         <Can perm="language:update">
           <div className="flex items-center justify-end gap-2">
             <Button type="button" variant="outline" onClick={addRow}>

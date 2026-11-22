@@ -290,7 +290,10 @@
         <p class="sl-eyebrow">{{.T "contact.offices"}}</p>
         <h2>{{.T "home.faq.title"}}</h2>
       </div>
-      <a class="sl-more" href="{{.URL "/contact"}}">{{.T "home.faq.more"}} <span aria-hidden="true">→</span></a>
+      <span class="sl-more-group" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <a class="sl-more" href="{{.URL "/faq"}}">{{.T "home.faq.all"}} <span aria-hidden="true">→</span></a>
+        <a class="sl-more" href="{{.URL "/contact"}}">{{.T "home.faq.more"}} <span aria-hidden="true">→</span></a>
+      </span>
     </header>
     <div class="sl-faq">
       {{range .Faqs}}

@@ -24,6 +24,9 @@
 </script>
 <link rel="icon" href="{{if .FaviconURL}}{{.FaviconURL}}{{else}}/website-assets/favicon.svg{{end}}" type="image/svg+xml">
 <link rel="alternate" type="application/rss+xml" title="{{.SiteName}}" href="{{.BaseURL}}/rss.xml">
+<link rel="alternate" type="application/atom+xml" title="{{.SiteName}}" href="{{.BaseURL}}/atom.xml">
+{{/* sitemap 自动发现：robots.txt 的 Sitemap: 是主通道，这个标签供 Bing/Yandex 等抓取器兜底。 */}}
+<link rel="sitemap" type="application/xml" title="{{.SiteName}}" href="{{.BaseURL}}/sitemap.xml">
 <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else}}website{{end}}">
 <meta property="og:site_name" content="{{.SiteName}}">
 <meta property="og:title" content="{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}">
@@ -214,25 +217,24 @@
     <nav class="footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
+      <a href="{{.URL "/docs/features"}}">{{.T "layout.docsFeatures"}}</a>
       <a href="/admin/login">{{.T "layout.admin"}}</a>
     </nav>
     <nav class="footer-col" aria-label="{{.T "layout.docs"}}">
       <h4>{{.T "layout.docs"}}</h4>
-      <a href="{{.URL "/docs/quickstart"}}">{{.T "layout.quickstart"}}</a>
       <a href="{{.URL "/docs"}}">{{.T "layout.docsCenter"}}</a>
-      <a href="{{.URL "/docs/features"}}">{{.T "layout.docsFeatures"}}</a>
+      <a href="{{.URL "/docs/quickstart"}}">{{.T "layout.quickstart"}}</a>
       <a href="{{.URL "/docs/config"}}">{{.T "layout.docsConfig"}}</a>
       <a href="{{.URL "/docs/deploy"}}">{{.T "layout.docsDeploy"}}</a>
       <a href="{{.URL "/docs/plugin-dev"}}">{{.T "layout.docsPlugin"}}</a>
       <a href="{{.URL "/docs/dev-guide"}}">{{.T "layout.docsDev"}}</a>
     </nav>
-    <nav class="footer-col" aria-label="{{.T "layout.resources"}}">
-      <h4>{{.T "layout.resources"}}</h4>
+    <nav class="footer-col" aria-label="{{.T "layout.company"}}">
+      <h4>{{.T "layout.company"}}</h4>
       {{/* 新闻与 RSS 按需显示：一篇新闻都没有时入口指向空列表页，不如不出现。 */}}
       {{if .Posts}}<a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
       <a href="/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>{{end}}
       <a href="{{.URL "/p/about"}}">{{.T "layout.about"}}</a>
-      <a href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
     </nav>
     {{if .FriendLinks}}
     <nav class="footer-col" aria-label="{{.T "layout.friends"}}">
@@ -262,6 +264,7 @@
   <div class="container footer-bottom">
     <span>© {{.Year}} {{.SiteName}}</span>
     {{if .FooterNote}}<span class="footer-note">{{.FooterNote}}</span>{{end}}
+    <a class="footer-sitemap" href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
   </div>
 </footer>
 <!-- 在线客服挂件：默认隐藏，由 site.js 探测 /api/v1/plugins/im/visitor/status 后再显示（没装 im 插件时整组 404）。 -->

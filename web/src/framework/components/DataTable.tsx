@@ -262,9 +262,11 @@ export function DataTable<T>({
                         )
                       ) : (
                         // 未激活的提示箭头改为绝对定位、不占布局宽度：否则窄列（如「状态」）
-                        // 会被这枚 shrink-0 图标挤出空间，标题被 truncate 成「状」，像掉了字
+                        // 会被这枚 shrink-0 图标挤出空间，标题被 truncate 成「状」，像掉了字。
+                        // 悬停亮度 0.7：0.4 的灰在深色卡面上（163 灰 × 0.4 ≈ 65 vs 背景 10）
+                        // 对比度只有 ~1.6:1，用户看着像「箭头被挡住」，其实是根本没看见。
                         <ArrowUp
-                          className="pointer-events-none absolute end-0 top-1/2 size-3.5 -translate-y-1/2 opacity-0 transition-opacity group-hover/th:opacity-40"
+                          className="pointer-events-none absolute end-0 top-1/2 size-3.5 -translate-y-1/2 opacity-0 transition-opacity group-hover/th:opacity-70"
                           aria-hidden="true"
                         />
                       )}

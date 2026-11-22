@@ -25,15 +25,15 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &Handler{svc: NewService(d.DB)}
 	g := r.Group("/posts")
 	g.GET("/options", h.Options) // 固定路径先于 /:id
-	g.PUT("/sort", core.Perm("post:update"), h.Sort)
-	g.DELETE("", core.Perm("post:delete"), h.DeleteBatch) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
+	g.PUT("/sort", core.Perm("post:update"), d.OperLogMiddleware("post", "sort"), h.Sort)
+	g.DELETE("", core.Perm("post:delete"), d.OperLogMiddleware("post", "delete"), h.DeleteBatch) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
 	g.GET("", core.Perm("post:list"), h.List)
 	job.Register(jobTypePostExport, h.svc.ExportJob) // 导出统一走导出中心（异步任务）
-	g.POST("/export-async", core.Perm("post:list"), h.ExportAsync)
+	g.POST("/export-async", core.Perm("post:list"), d.OperLogMiddleware("post", "export"), h.ExportAsync)
 	g.GET("/:id", core.Perm("post:list"), h.Get)
-	g.POST("", core.Perm("post:create"), h.Create)
-	g.PUT("/:id", core.Perm("post:update"), h.Update)
-	g.DELETE("/:id", core.Perm("post:delete"), h.Delete)
+	g.POST("", core.Perm("post:create"), d.OperLogMiddleware("post", "create"), h.Create)
+	g.PUT("/:id", core.Perm("post:update"), d.OperLogMiddleware("post", "update"), h.Update)
+	g.DELETE("/:id", core.Perm("post:delete"), d.OperLogMiddleware("post", "delete"), h.Delete)
 }
 
 // 种子 ID 与前端 mock 一致：岗位 187000000000000+序号，部门 186000000000000+序号。

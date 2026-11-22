@@ -424,7 +424,7 @@ export function ChannelsTab() {
       title: t('plugin_pay.capabilities.title'),
       render: (c) => <CapabilityCell provider={c.provider} caps={capabilitiesOfProvider(index, c.provider)} />,
     },
-    { key: 'feeRateBp', title: t('plugin_pay.fields.feeRateBp'), render: (c) => (c.feeRateBp > 0 ? <span className="num">{formatBp(c.feeRateBp)}</span> : <span className="text-muted-foreground">-</span>) },
+    { key: 'feeRateBp', title: t('plugin_pay.fields.feeRateBp'), align: 'end', render: (c) => (c.feeRateBp > 0 ? <span className="num">{formatBp(c.feeRateBp)}</span> : <span className="text-muted-foreground">-</span>) },
     { key: 'enabled', title: t('plugin_pay.fields.enabled'), render: (c) => (c.enabled ? <Badge variant="success">{t('plugin_pay.enabledOn')}</Badge> : <Badge variant="outline">{t('plugin_pay.enabledOff')}</Badge>) },
     { key: 'hasConfig', title: t('plugin_pay.fields.config'), render: (c) => (c.hasConfig ? t('plugin_pay.configSet') : <span className="text-muted-foreground">-</span>) },
     {

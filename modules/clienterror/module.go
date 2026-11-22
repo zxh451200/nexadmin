@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
@@ -29,7 +30,7 @@ func (module) Name() string { return "client-error" }
 // 列表接口需要 serverMonitor:list。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := NewService(d.DB, d.Log)
-	h := &Handler{svc: svc}
+	h := &Handler{svc: svc, log: d.Log}
 	rl := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "client_error", middleware.ByIP())
 	d.Public.POST("/client-errors", rl, h.Report)
 	r.GET("/monitor/client-errors", core.Perm(PermList), h.List)
@@ -41,8 +42,12 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	go svc.purgeLoop(stop)
 }
 
-// Handler 是 HTTP 层。
-type Handler struct{ svc *Service }
+// Handler 是 HTTP 层。log 用于入库成功后带 request-id 打一条服务端日志，把前端错误上报
+// 与该请求的服务端日志串起来（上报内容里前端拿不到自己的请求头，日志关联不进库）。
+type Handler struct {
+	svc *Service
+	log *zap.Logger
+}
 
 func tooLarge() *response.Error {
 	return response.New(http.StatusRequestEntityTooLarge, "error.payload_too_large")
@@ -77,6 +82,11 @@ func (h *Handler) Report(c *gin.Context) {
 	}
 	switch err := h.svc.Ingest(c.Request.Context(), uid, username, rep, c.GetHeader("User-Agent")); {
 	case err == nil:
+		if h.log != nil {
+			h.log.Info("clienterror: report ingested",
+				zap.String("request_id", c.GetString(middleware.RequestIDKey)),
+				zap.String("route", Sanitize(rep).Route))
+		}
 		response.OK(c, nil)
 	case errors.Is(err, ErrEmpty):
 		response.Fail(c, response.BadRequest("error.bad_request"))

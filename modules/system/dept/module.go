@@ -23,13 +23,13 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &Handler{svc: NewService(d.DB)}
 	g := r.Group("/depts")
 	g.GET("/tree", core.Perm("dept:list"), h.Tree)
-	g.PUT("/sort", core.Perm("dept:update"), h.Sort)     // 固定路径先于 /:id
-	g.PUT("/:id/move", core.Perm("dept:update"), h.Move) // 跨父级移动（拖拽）
+	g.PUT("/sort", core.Perm("dept:update"), d.OperLogMiddleware("dept", "sort"), h.Sort)     // 固定路径先于 /:id
+	g.PUT("/:id/move", core.Perm("dept:update"), d.OperLogMiddleware("dept", "move"), h.Move) // 跨父级移动（拖拽）
 	g.GET("/:id", core.Perm("dept:list"), h.Get)
-	g.POST("", core.Perm("dept:create"), h.Create)
-	g.PUT("/:id", core.Perm("dept:update"), h.Update)
-	g.DELETE("/:id", core.Perm("dept:delete"), h.Delete)
-	g.DELETE("", core.Perm("dept:delete"), h.DeleteMany) // ?ids= 批量，与单条同一个权限码
+	g.POST("", core.Perm("dept:create"), d.OperLogMiddleware("dept", "create"), h.Create)
+	g.PUT("/:id", core.Perm("dept:update"), d.OperLogMiddleware("dept", "update"), h.Update)
+	g.DELETE("/:id", core.Perm("dept:delete"), d.OperLogMiddleware("dept", "delete"), h.Delete)
+	g.DELETE("", core.Perm("dept:delete"), d.OperLogMiddleware("dept", "delete"), h.DeleteMany) // ?ids= 批量，与单条同一个权限码
 }
 
 // seedID 与前端 mock 的部门 ID 一致（186000000000000 + 4 位序号）。

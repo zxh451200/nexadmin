@@ -795,3 +795,10 @@ p { margin: 0; }
    居中用 left + translateX，不随书写方向翻转；z-index 高于微信分享弹层。 */
 .site-toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(10px); opacity: 0; z-index: 10000; padding: 9px 16px; border: 1px solid var(--pc-line); border-radius: 6px; background: var(--pc-card); color: var(--pc-ink); font-size: 13px; box-shadow: 0 18px 40px -20px rgba(0, 0, 0, .45); pointer-events: none; transition: opacity .2s, transform .2s; }
 .site-toast.show { opacity: 1; transform: translateX(-50%); }
+
+/* 新闻列表搜索：与 default 主题同功能的检索框，配色走 torkon token（胶囊圆角、发丝线、墨色聚焦）。 */
+.news-search { display: flex; flex-wrap: wrap; gap: 8px; max-width: 460px; margin-top: 16px; }
+.news-search input { flex: 1; min-width: 0; height: 36px; padding: 0 14px; border: 1px solid var(--tk-line); border-radius: 999px; background: #fff; color: var(--tk-text); font: inherit; font-size: 13.5px; }
+.news-search input:focus { outline: none; border-color: var(--tk-ink); }
+.news-search button { height: 36px; padding: 0 18px; border: 1px solid var(--tk-line); border-radius: 999px; background: #fff; color: var(--tk-muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: color .15s, border-color .15s; }
+.news-search button:hover { color: var(--tk-ink); border-color: var(--tk-ink); }

@@ -181,7 +181,7 @@ func rssPlain(s string) string { return strings.ReplaceAll(s, "`", "") }
 func (h *siteHandler) rss(c *gin.Context) {
 	ctx := c.Request.Context()
 	lang := SiteDefaultLanguage()
-	posts, _, err := h.svc.PublishedPostsPage(ctx, lang.Code, termFilter{}, 1, 20)
+	posts, _, err := h.svc.PublishedPostsPage(ctx, lang.Code, termFilter{}, "", 1, 20)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "rss unavailable")
 		return

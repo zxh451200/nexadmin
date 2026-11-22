@@ -11,6 +11,7 @@ import (
 	"nexadmin/core/config"
 	"nexadmin/core/i18n"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/password"
 	"nexadmin/pkg/idgen"
 )
 
@@ -57,10 +58,9 @@ func (s *Service) Update(ctx context.Context, uid idgen.ID, in ProfileInput) (*P
 	return s.Get(ctx, uid)
 }
 
-// 不设密码强度规则：新密码只要求非空；bcrypt 只取前 72 字节，所以上限 72 字节（超出会被截断，必须拒绝）。
-func validNewPassword(pw string) bool { return pw != "" && len(pw) <= 72 }
-
 // ChangePassword 校验旧密码后改密。旧密码错误与新密码不合规返回 400。
+// 新密码走全站统一的密码策略（modules/internal/password：最小长度 / 混合要求 /
+// 不得与初始口令相同）；bcrypt 只取前 72 字节，所以上限 72 字节（超出会被截断，必须拒绝）。
 func (s *Service) ChangePassword(ctx context.Context, uid idgen.ID, oldPw, newPw string) error {
 	u, err := s.me(ctx, uid)
 	if err != nil {
@@ -72,8 +72,11 @@ func (s *Service) ChangePassword(ctx context.Context, uid idgen.ID, oldPw, newPw
 	if oldPw == newPw {
 		return response.BadRequest("profile.password_same")
 	}
-	if !validNewPassword(newPw) {
+	if newPw == "" || len(newPw) > 72 {
 		return response.BadRequest("profile.password_length")
+	}
+	if perr := password.Load(ctx, s.db).Validate(newPw, password.DefaultPassword(ctx, s.db)); perr != nil {
+		return perr
 	}
 	hash, err := auth.HashPassword(newPw)
 	if err != nil {

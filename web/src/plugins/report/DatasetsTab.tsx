@@ -62,8 +62,8 @@ export function DatasetsTab() {
   const columns: Column<Dataset>[] = [
     { key: 'name', title: t('common.name'), sortKey: 'name', mobile: 'title', render: (d) => <span className="font-medium text-foreground">{builtinText(t, d.name)}</span> },
     { key: 'source', title: t('plugin_report.dataset.source'), mobile: 'sub', render: (d) => <Badge variant="outline">{sourceLabel(d.source)}</Badge> },
-    { key: 'columns', title: t('plugin_report.dataset.columns'), render: (d) => <span className="num">{d.columns.length}</span> },
-    { key: 'filters', title: t('plugin_report.dataset.fixedFilters'), render: (d) => <span className="num">{d.filters.length}</span> },
+    { key: 'columns', title: t('plugin_report.dataset.columns'), align: 'end', render: (d) => <span className="num">{d.columns.length}</span> },
+    { key: 'filters', title: t('plugin_report.dataset.fixedFilters'), align: 'end', render: (d) => <span className="num">{d.filters.length}</span> },
     { key: 'remark', title: t('common.remark'), render: (d) => (d.remark ? <span className="block max-w-64 truncate text-muted-foreground" title={d.remark}>{d.remark}</span> : <span className="text-muted-foreground">-</span>) },
   ]
 

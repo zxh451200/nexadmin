@@ -65,6 +65,8 @@ const seed: ConfigRow[] = [
   row(13, '普通文件上传大小上限(MB)', KEY_FILE, '0', 'number', true, '0 或留空表示不限制'),
   row(14, '允许上传的文件类型', KEY_TYPES, DEFAULT_TYPES.join(','), 'string', true, '逗号分隔的 MIME 或扩展名'),
   row(15, '为图片生成 WebP 副本', KEY_WEBP, 'false', 'boolean', true, '原图保留，按 Accept 优先下发 WebP'),
+  row(16, '密码最小长度', 'user.password_min_length', '8', 'number', true, '1-72，改密、新建、重置密码统一校验'),
+  row(17, '密码需含字母和数字', 'user.password_require_mixed', 'false', 'boolean', true, '开启后三类密码入口统一校验'),
 ]
 
 // eslint-disable-next-line prefer-const

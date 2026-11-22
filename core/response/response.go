@@ -83,9 +83,14 @@ func Fail(c *gin.Context, err error) {
 	})
 }
 
-// BindJSON 绑定并校验 JSON 请求体；失败时已写入 400 响应，返回 false。
+// BindJSON 绑定并校验 JSON 请求体；失败时已写入 400 响应（请求体超出 MaxBody 上限是 413），返回 false。
 func BindJSON(c *gin.Context, obj any) bool {
 	if err := c.ShouldBindJSON(obj); err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			Fail(c, New(http.StatusRequestEntityTooLarge, "error.payload_too_large").Wrap(err))
+			return false
+		}
 		Fail(c, BadRequest("error.bad_request").Wrap(err))
 		return false
 	}

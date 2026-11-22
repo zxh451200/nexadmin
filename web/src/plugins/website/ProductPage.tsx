@@ -1147,6 +1147,7 @@ export default function ProductPage() {
     {
       key: 'price',
       title: t('plugin_website.product.priceColumn'),
+      align: 'end',
       sortKey: 'price',
       mobile: 'hidden',
       render: (r) => {

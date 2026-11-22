@@ -34,14 +34,14 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/notices/:id/read", h.MarkRead)
 	r.POST("/notices/mine/read-all", h.ReadAll)
 
-	// 管理端
+	// 管理端（写操作进操作日志；个人侧的弹窗/已读上报只写 sys_notice_read，不记）。
 	r.GET("/notices", core.Perm("notice:list"), h.List)
 	r.GET("/notices/:id", core.Perm("notice:list"), h.Get)
 	r.GET("/notices/:id/read-stats", core.Perm("notice:list"), h.ReadStats)
-	r.POST("/notices", core.Perm("notice:create"), h.Create)
-	r.PUT("/notices/:id", core.Perm("notice:update"), h.Update)
-	r.POST("/notices/:id/publish", core.Perm("notice:publish"), h.Publish)
-	r.POST("/notices/:id/revoke", core.Perm("notice:publish"), h.Revoke)
-	r.DELETE("/notices/:id", core.Perm("notice:delete"), h.Delete)
-	r.DELETE("/notices", core.Perm("notice:delete"), h.DeleteBatch)
+	r.POST("/notices", core.Perm("notice:create"), d.OperLogMiddleware("notice", "create"), h.Create)
+	r.PUT("/notices/:id", core.Perm("notice:update"), d.OperLogMiddleware("notice", "update"), h.Update)
+	r.POST("/notices/:id/publish", core.Perm("notice:publish"), d.OperLogMiddleware("notice", "publish"), h.Publish)
+	r.POST("/notices/:id/revoke", core.Perm("notice:publish"), d.OperLogMiddleware("notice", "revoke"), h.Revoke)
+	r.DELETE("/notices/:id", core.Perm("notice:delete"), d.OperLogMiddleware("notice", "delete"), h.Delete)
+	r.DELETE("/notices", core.Perm("notice:delete"), d.OperLogMiddleware("notice", "delete"), h.DeleteBatch)
 }

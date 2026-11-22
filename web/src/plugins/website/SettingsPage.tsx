@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { GripVertical, Plus, Trash2 } from 'lucide-react'
+import { GripVertical, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -40,6 +40,7 @@ import {
   useSeedThemeDemo,
   useWebsiteLimits,
   useSaveSettings,
+  useFetchCurrencyRates,
   useSettings,
   type FriendLink,
   type WebsiteLimits,
@@ -154,6 +155,7 @@ const MAIN_MARKET_OPTIONS = ['欧洲', '北美', '南美', '东南亚', '中东'
     本地最近一次序列化结果时才重同步——每敲一键都拿 value 重挂载会把未填完的行清掉。 */
 function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   const { t } = useTranslation()
+  const fetchRates = useFetchCurrencyRates()
   const [rows, setRows] = useState<RateRow[]>(() => parseRateRows(value))
   const lastSerialized = useRef(serializeRateRows(parseRateRows(value)))
   useEffect(() => {
@@ -171,6 +173,16 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
   }
   const edit = (i: number, patch: Partial<RateRow>) => {
     commit(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  }
+  // 一键拉取：只回填编辑器（走 commit 保证 value 同步），不写库——管理员确认后随设置一起保存。
+  const handleFetch = () => {
+    fetchRates.mutate(value, {
+      onSuccess: (res) => {
+        commit(parseRateRows(res.rates))
+        toast.success(t('plugin_website.rates.fetchSuccess', { count: res.updated, source: res.source }))
+      },
+      onError: () => toast.error(t('plugin_website.rates.fetchFailed')),
+    })
   }
   const codeInvalid = (r: RateRow) => r.code.trim() !== '' && !/^[A-Z]{3}$/.test(r.code.trim().toUpperCase())
   const rateInvalid = (r: RateRow) => r.code.trim() !== '' && r.code.trim().toUpperCase() !== 'USD' && (r.rate.trim() === '' || !(Number(r.rate) > 0))
@@ -219,17 +231,30 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
           )
         })}
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-fit"
-        disabled={disabled || rows.length >= RATES_MAX}
-        onClick={() => setRows((rs) => [...rs, { code: '', rate: '' }])}
-      >
-        <Plus aria-hidden="true" />
-        {t('plugin_website.rates.add')}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-fit"
+          disabled={disabled || fetchRates.isPending || rows.length === 0}
+          onClick={handleFetch}
+        >
+          <RefreshCw aria-hidden="true" className={cn(fetchRates.isPending && 'animate-spin')} />
+          {fetchRates.isPending ? t('plugin_website.rates.fetching') : t('plugin_website.rates.fetch')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-fit"
+          disabled={disabled || rows.length >= RATES_MAX}
+          onClick={() => setRows((rs) => [...rs, { code: '', rate: '' }])}
+        >
+          <Plus aria-hidden="true" />
+          {t('plugin_website.rates.add')}
+        </Button>
+      </div>
       <p className="text-xs text-muted-foreground">{t('plugin_website.rates.hint', { max: RATES_MAX })}</p>
     </div>
   )

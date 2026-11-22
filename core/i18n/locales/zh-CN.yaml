@@ -31,6 +31,11 @@ error:
   stale_list: "列表已变化，请刷新"
   rate_limited: "请求过于频繁，请稍后再试"
   locked: "账号已锁定，请 %d 秒后再试"
+password:
+  too_short: "密码长度至少 %d 位"
+  require_mixed: "密码需同时包含字母和数字"
+  same_as_default: "新密码不能与初始密码相同"
+  default_weak: "用户初始密码不满足密码策略（至少 %d 位、含字母和数字），请先在参数设置里调整「密码最小长度」或「用户初始密码」"
 auth:
   oauth_failed: 第三方登录失败，请稍后重试或改用其他登录方式
   provider_missing: 登录服务未启用
@@ -802,6 +807,8 @@ website:
   default_lang_invalid: "官网默认语言不在语言清单里，请从已启用语言中选择"
   currency_rates_invalid: "汇率表格式不对：需要 {\"USD\":1,\"EUR\":0.92} 形态的 JSON，币种码 3 位大写字母、汇率大于 0、最多 24 个币种，USD 恒为 1"
   currency_default_invalid: "默认展示币种必须在汇率表里"
+  currency_fetch_empty: "汇率表为空，请先添加币种再拉取最新汇率"
+  currency_fetch_failed: "拉取最新汇率失败，请检查服务器网络后重试，或手动填写汇率"
   notify_inquiry_title: "官网留言：%s 发来新询盘"
   notify_content_empty: "（空）"
   joins_too_many: "一张数据集最多声明 2 张关联表"

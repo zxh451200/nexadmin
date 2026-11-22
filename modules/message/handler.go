@@ -94,6 +94,9 @@ func parseIDs(raw string) ([]idgen.ID, error) {
 	if len(ids) == 0 {
 		return nil, response.BadRequest("error.bad_request")
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		return nil, err
+	}
 	return ids, nil
 }
 

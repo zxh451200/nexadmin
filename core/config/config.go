@@ -31,6 +31,14 @@ type Config struct {
 		// 只有对端地址落在此列表里，才会采信 X-Forwarded-For / X-Real-IP，并取其中最右一个不在列表内的地址作为真实客户端 IP。
 		// 反向代理部署必须配置，否则所有 IP 限流、登录日志、IP 白名单看到的都是代理地址。
 		TrustedProxies []string `mapstructure:"trusted_proxies"`
+		// HSTS 在所有响应头输出 Strict-Transport-Security（max-age=31536000; includeSubDomains）。默认 true：
+		// 浏览器对纯 HTTP 响应会忽略该头，开发环境不受影响；反代终结 TLS 的生产部署由它通知浏览器
+		// 后续访问全站走 HTTPS。网关不终结 TLS（对外纯 HTTP）的部署可关掉。
+		HSTS bool `mapstructure:"hsts_enabled"`
+		// SecureCookies 给服务端下发的 cookie 加 Secure 标记（当前消费方：官网匿名统计 cookie nex-vid）。
+		// 默认 false 保持兼容：Secure cookie 只会被 HTTPS 页面接受，纯 HTTP 直连部署开启后 cookie 发不出去；
+		// 反代终结 TLS（全站 HTTPS）的生产部署开启。
+		SecureCookies bool `mapstructure:"secure_cookies"`
 	} `mapstructure:"server"`
 	Database  Database   `mapstructure:"database"`
 	Cache     Cache      `mapstructure:"cache"`

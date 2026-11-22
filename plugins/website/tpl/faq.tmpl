@@ -1,0 +1,21 @@
+{{define "content"}}
+<section class="section page-head">
+  <div class="container">
+    <p class="fig">{{.T "faq.fig"}}</p>
+    <h1 class="page-title">{{.T "faq.title"}}</h1>
+    {{if .Faqs}}
+    <div class="hp-faq faq-page-list">
+      {{range .Faqs}}
+      <details class="hp-faq-item">
+        <summary>{{.Question}}</summary>
+        <div class="hp-faq-answer">{{.Answer}}</div>
+      </details>
+      {{end}}
+    </div>
+    <p class="faq-contact">{{.T "faq.contactHint"}} <a href="{{.URL "/contact"}}">{{.T "faq.contactLink"}}<span aria-hidden="true">→</span></a></p>
+    {{else}}
+    <p class="empty">{{.T "faq.empty"}}</p>
+    {{end}}
+  </div>
+</section>
+{{end}}

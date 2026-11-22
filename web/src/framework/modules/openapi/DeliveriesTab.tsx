@@ -107,7 +107,7 @@ export function DeliveriesTab() {
       title: t('openapi.deliveries.fields.status'),
       render: (d) => <Badge variant={STATUS_VARIANT[d.status]}>{t(`openapi.deliveries.status.${d.status}`)}</Badge>,
     },
-    { key: 'attempts', title: t('openapi.deliveries.fields.attempts'), render: (d) => <span className="num">{d.attempts}</span> },
+    { key: 'attempts', title: t('openapi.deliveries.fields.attempts'), align: 'end', render: (d) => <span className="num">{d.attempts}</span> },
     {
       key: 'responseCode',
       title: t('openapi.deliveries.fields.responseCode'),

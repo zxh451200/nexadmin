@@ -16,6 +16,7 @@ import (
 	"nexadmin/core/cache"
 	"nexadmin/core/cluster"
 	"nexadmin/core/config"
+	"nexadmin/core/ctl"
 	"nexadmin/core/database"
 	"nexadmin/core/i18n"
 	"nexadmin/core/mcp"
@@ -28,6 +29,7 @@ import (
 	"nexadmin/core/setup"
 	"nexadmin/core/tenant"
 	"nexadmin/core/ws"
+	"nexadmin/pkg/apistat"
 	"nexadmin/pkg/idgen"
 )
 
@@ -92,6 +94,10 @@ func Desc(summary string) gin.HandlerFunc {
 	return h
 }
 
+// apiBodyLimit 是 /api/v1 JSON 请求体的默认上限：富文本公告、BPMN 建模 XML 等合法负载
+// 距它还有数量级余量；上传类端点走 multipart 或 tus，不在此限内。
+const apiBodyLimit = 2 << 20
+
 func (a *App) newEngine() *gin.Engine {
 	e := gin.New()
 	ConfigureClientIP(e, a.cfg.Server.TrustedProxies, a.log)
@@ -99,8 +105,12 @@ func (a *App) newEngine() *gin.Engine {
 		a.log.Warn("dev mode: CORS reflects any Origin and dev conveniences are on; set app.env=production for deployments",
 			zap.Strings("cors_origins", a.cfg.Server.CORSOrigins))
 	}
-	e.Use(metrics.Middleware(), middleware.Recovery(a.log), middleware.Logger(a.log),
-		middleware.SecurityHeaders(), middleware.CORS(!a.cfg.IsProduction(), a.cfg.Server.CORSOrigins...), middleware.I18n(i18n.Default()))
+	// RequestID 挂最前：/healthz、官网公开页、静态资源都带 X-Request-ID，Logger 与后续链路都取得到。
+	e.Use(middleware.RequestID(), metrics.Middleware(), middleware.Recovery(a.log), middleware.Logger(a.log),
+		middleware.SecurityHeaders(a.cfg.Server.HSTS), middleware.CORS(!a.cfg.IsProduction(), a.cfg.Server.CORSOrigins...), middleware.I18n(i18n.Default()))
+	// 接口统计挂引擎级（apistat.InstallEngine）：覆盖全部入口，包括先于模块注册的 core /auth/* 等；
+	// 探针、/metrics、/ws 与本机关停接口不计入业务接口统计（关停接口路径常量在 ctl，由这里传入）。
+	apistat.InstallEngine(e, ctl.ShutdownPath)
 	return e
 }
 
@@ -154,6 +164,8 @@ func (a *App) commonRoutes(e *gin.Engine, api *gin.RouterGroup, probes []*health
 func (a *App) buildSetup(r *setup.Runner) *gin.Engine {
 	e := a.newEngine()
 	api := e.Group(contractAPIPrefix)
+	// 向导阶段的 JSON 负载同样封顶（此时没有 /files 等上传端点，无需豁免）。
+	api.Use(middleware.MaxBody(apiBodyLimit))
 	a.commonRoutes(e, api, nil)
 	// 向导阶段没有正式缓存，限流计数放一个进程内的 memory cache。
 	if sc, err := cache.New(config.Cache{Driver: "memory"}); err == nil {
@@ -261,9 +273,14 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	demoReg := middleware.NewDemoRegistry(middleware.DemoBuiltinAllow(contractAPIPrefix)...)
 	demoReg.Allow(cfg.Demo.Allow...)
 	if cfg.Demo.Enabled {
+		if a.cfg.IsProduction() { // 演示模式会在匿名 GET /api/v1/system/status 下发演示账号口令，生产开启几乎总是误配，这里点名提醒
+			a.log.Warn("demo mode is enabled in production: anonymous GET /api/v1/system/status exposes the demo account credentials; confirm this is intentional")
+		}
 		api.Use(middleware.DemoMode(demoReg))
 	}
-	api.Use(middleware.NoStore(), middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
+	// JSON 写接口统一封顶请求体（tus 上传路径豁免，multipart 由各 handler 按上传限制自校验）；
+	// 单个巨型字符串字段也能把内存吃满，不能只靠 handler 自觉。
+	api.Use(middleware.NoStore(), middleware.MaxBody(apiBodyLimit, "/files/upload"), middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
 		Store: openapi.GormStore{DB: db}, Cache: ch, Log: a.log,
 		Limiter: middleware.NewLimiter(ch, a.log, "openapi-sign", cfg.RateLimit.Rule("openapi_sign").Limit, cfg.RateLimit.Rule("openapi_sign").Window),
 	}), middleware.Tenant(resolver), middleware.RuntimeTenant(), mcp.EnforceDispatchIdentity())

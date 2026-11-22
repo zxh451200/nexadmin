@@ -1,11 +1,16 @@
 package website
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"nexadmin/core/cache"
+	"nexadmin/core/middleware"
 )
 
 // 在线留言投稿阈值：匿名写入口，比页面浏览紧得多。
@@ -57,6 +62,55 @@ func (l *ipLimiter) allow(ip string) bool {
 func (l *ipLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !l.allow(c.ClientIP()) {
+			c.Header("Retry-After", "60")
+			c.String(http.StatusTooManyRequests, "too many requests")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// ipGate 统一公开端限流的两种实现：cache 装配时走 middleware.Limiter（redis 共享桶，
+// 多实例部署时全实例同一计数），没装配退回进程内滑动窗口。阈值语义两种实现一致：
+// 每 IP 每 window 最多 max 次。之前只有留言走共享桶，附件上传/下单/下载/翻译/评分
+// 都是进程内计数——多实例部署下配额按实例数线性放大，限流形同虚设。
+type ipGate struct {
+	shared *middleware.Limiter
+	local  *ipLimiter
+}
+
+func newIPGate(c cache.Cache, log *zap.Logger, scope string, max int, window time.Duration) *ipGate {
+	if c != nil {
+		return &ipGate{shared: middleware.NewLimiter(c, log, scope, max, window)}
+	}
+	return &ipGate{local: newIPLimiter(max, window)}
+}
+
+// check 记一次计数并报告是否放行；拒绝时 retry 是建议等待时长（本地实现给整个窗口）。
+func (g *ipGate) check(ctx context.Context, ip string) (bool, time.Duration) {
+	if g == nil {
+		return true, 0
+	}
+	if g.shared != nil {
+		return g.shared.Hit(ctx, "ip:"+ip)
+	}
+	if !g.local.allow(ip) {
+		return false, g.local.window
+	}
+	return true, 0
+}
+
+// allow 是 check 的布尔形态（调用方不需要 Retry-After 时用）。
+func (g *ipGate) allow(ctx context.Context, ip string) bool {
+	ok, _ := g.check(ctx, ip)
+	return ok
+}
+
+// Middleware 包装成 gin 中间件，语义与 ipLimiter.Middleware 相同。
+func (g *ipGate) Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if ok, _ := g.check(c.Request.Context(), c.ClientIP()); !ok {
 			c.Header("Retry-After", "60")
 			c.String(http.StatusTooManyRequests, "too many requests")
 			c.Abort()

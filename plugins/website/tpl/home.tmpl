@@ -1,6 +1,6 @@
 {{define "content"}}
 {{/* 首页 v3：linear.app 式编辑版式，但按「信息优先」重排——
-     1) 首屏：定位句 + 真实界面 + 四个硬数字，先回答「它是什么」；
+     1) 首屏：定位句 + 真实界面，先回答「它是什么」；
      2) 陈述 + Fig 0.1~0.3 + 设计准则引语合成一个分区；
      3) 两块产品界面（核心平台 / 扩展体系）；
      4) 出厂能力与集成合并成一个分区；
@@ -46,38 +46,6 @@
         <p class="hp-hero-caption"><span class="hp-dot" aria-hidden="true"></span>{{.T "home.heroShotNote"}}</p>
       </div>
 
-    </div>
-  </section>
-
-  <section class="hp-band" aria-label="{{.T "home.tech.title"}}">
-    {{/* 一条规格条：左边四个硬数字（来自仓库本身：30 = modules 下 module.go 的数量；
-         4 = /setup 步数；3 = 三份数据库迁移；1 = 内嵌前端后的单一二进制），
-         右边竖线隔开的技术跑马灯。原来是「数字一行 + 一条横线 + 标签一行 + 跑马灯」，
-         标签那句「同一套代码，三种数据库」与左边的「3 种数据库方言」重复，中间那层
-         横线又把一条带子切成两块广告位，所以合成单行。 */}}
-    <div class="container hp-band-in">
-      <ul class="hp-facts" data-reveal>
-        <li><b>30</b><span>{{.T "home.facts.m1"}}</span></li>
-        <li><b>4</b><span>{{.T "home.facts.m2"}}</span></li>
-        <li><b>3</b><span>{{.T "home.facts.m3"}}</span></li>
-        <li><b>1</b><span>{{.T "home.facts.m4"}}</span></li>
-      </ul>
-      <div class="hp-band-tech">
-        <div class="hp-marquee">
-          <div class="hp-marquee-track">
-            <ul class="hp-marquee-list">
-              <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
-              <li>Tailwind CSS</li><li>Vite</li><li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li>
-              <li>Redis / Valkey</li><li>OAuth2</li><li>OIDC</li><li>SAML</li><li>Webhook</li><li>OpenAPI</li>
-            </ul>
-            <ul class="hp-marquee-list" aria-hidden="true">
-              <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
-              <li>Tailwind CSS</li><li>Vite</li><li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li>
-              <li>Redis / Valkey</li><li>OAuth2</li><li>OIDC</li><li>SAML</li><li>Webhook</li><li>OpenAPI</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -306,7 +274,10 @@
       <div class="hp-faq-block" id="faq">
         <div class="hp-faq-intro" data-reveal>
           <h2 class="hp-h3">{{.T "home.faq.title"}}</h2>
-          <a class="hp-more" href="{{.URL "/contact"}}">{{.T "home.faq.more"}}<span aria-hidden="true">→</span></a>
+          <div class="hp-faq-links">
+            <a class="hp-more" href="{{.URL "/faq"}}">{{.T "home.faq.all"}}<span aria-hidden="true">→</span></a>
+            <a class="hp-more" href="{{.URL "/contact"}}">{{.T "home.faq.more"}}<span aria-hidden="true">→</span></a>
+          </div>
         </div>
         <div class="hp-faq" data-reveal>
           {{range .Faqs}}

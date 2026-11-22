@@ -56,6 +56,9 @@ export default function WorkflowPage() {
   const [selected, setSelected] = useState<string | undefined>()
   const [starting, setStarting] = useState(false)
   const { data: stats } = useWorkflowStats()
+  // 定义列表提到页面级：发起按钮要据此禁用（没有已发布定义时点了也只是弹一个空态弹窗）
+  const { data: defsData, isLoading: defsLoading } = useDefs({ page: 1, pageSize: 200 })
+  const startable = (defsData?.list ?? []).some((d) => d.status === 'published')
 
   const cards = [
     { label: t('plugin_workflow.tabs.todo'), value: stats?.todo ?? 0, tone: 'warning' as const },
@@ -86,10 +89,13 @@ export default function WorkflowPage() {
             </Can>
           </TabsList>
           <Can perm="workflow:start">
-            <Button onClick={() => setStarting(true)}>
-              <Plus aria-hidden="true" />
-              {t('plugin_workflow.startAction')}
-            </Button>
+            {/* disabled 时 title 不触发 tooltip（浏览器不给禁用元素派发鼠标事件），包一层 span 把原因带出来 */}
+            <span title={startable || defsLoading ? undefined : t('plugin_workflow.startNoPublished')}>
+              <Button onClick={() => setStarting(true)} disabled={!startable && !defsLoading}>
+                <Plus aria-hidden="true" />
+                {t('plugin_workflow.startAction')}
+              </Button>
+            </span>
           </Can>
         </div>
         <TabsContent value="todo" className="m-0">
@@ -111,22 +117,37 @@ export default function WorkflowPage() {
         </Can>
       </Tabs>
       <InstanceDrawer id={selected} onClose={() => setSelected(undefined)} />
-      <StartFlow open={starting} onClose={() => setStarting(false)} />
+      <StartFlow
+        open={starting}
+        onClose={() => setStarting(false)}
+        defs={(defsData?.list ?? []).map((d) => ({ id: d.id, name: d.name, key: d.key, status: d.status }))}
+        defsLoading={defsLoading}
+      />
     </PageContainer>
   )
 }
 
 // ---- 发起 ----
 
-function StartFlow({ open, onClose }: { open: boolean; onClose: () => void }) {
+function StartFlow({
+  open,
+  onClose,
+  defs,
+  defsLoading,
+}: {
+  open: boolean
+  onClose: () => void
+  defs: { id: string; name: string; key: string; status: string }[]
+  defsLoading: boolean
+}) {
   const { t } = useTranslation()
-  const defs = useDefs({ page: 1, pageSize: 200 })
   const start = useStartInstance()
 
   return (
     <StartDialog
       open={open}
-      defs={(defs.data?.list ?? []).map((d) => ({ id: d.id, name: d.name, key: d.key, status: d.status }))}
+      defs={defs}
+      loading={defsLoading}
       onClose={onClose}
       onSubmit={async (v) => {
         try {

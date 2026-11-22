@@ -136,6 +136,10 @@ func (h *handler) removeMany(c *gin.Context) {
 		}
 		ids = append(ids, id)
 	}
+	if err := response.CapBatchIDs(ids); err != nil {
+		response.Fail(c, err)
+		return
+	}
 	if err := h.svc.remove(c.Request.Context(), ids, me(c)); err != nil {
 		response.Fail(c, err)
 		return

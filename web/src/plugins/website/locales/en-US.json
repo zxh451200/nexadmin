@@ -619,7 +619,11 @@
       "ratePlaceholder": "e.g. 0.92",
       "baseNote": "base (always 1)",
       "add": "Add currency",
-      "hint": "Up to {{max}} currencies; rate = 1 USD in that currency. USD is the base and locked; prices are converted to the visitor’s chosen currency."
+      "fetch": "Fetch latest rates",
+      "fetching": "Fetching…",
+      "fetchSuccess": "Updated {{count}} currencies (source: {{source}}). Click Save to apply.",
+      "fetchFailed": "Could not fetch rates. Check the server network and retry, or enter them manually.",
+      "hint": "Up to {{max}} currencies; rate = 1 USD in that currency. USD is the base and locked; prices are converted to the visitor’s chosen currency. Use “Fetch latest rates” to refresh from a public source (updates existing currencies only; click Save to apply)."
     },
     "orders": {
       "title": "Site orders",

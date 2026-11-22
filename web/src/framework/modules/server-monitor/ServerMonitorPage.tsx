@@ -51,8 +51,8 @@ export default function ServerMonitorPage() {
 
   const diskColumns: Column<DiskInfo>[] = [
     { key: 'mount', title: t('serverMonitor.disk.mount'), mobile: 'title', render: (d) => <span className="num">{d.mount}</span> },
-    { key: 'total', title: t('serverMonitor.disk.total'), render: (d) => <span className="num">{d.totalGb} GB</span> },
-    { key: 'used', title: t('serverMonitor.disk.used'), render: (d) => <span className="num">{d.usedGb.toFixed(1)} GB</span> },
+    { key: 'total', title: t('serverMonitor.disk.total'), align: 'end', render: (d) => <span className="num">{d.totalGb} GB</span> },
+    { key: 'used', title: t('serverMonitor.disk.used'), align: 'end', render: (d) => <span className="num">{d.usedGb.toFixed(1)} GB</span> },
     {
       key: 'usage',
       title: t('serverMonitor.disk.usage'),

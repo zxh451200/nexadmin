@@ -308,7 +308,12 @@ export default function TicketPage() {
   const confirm = useConfirm()
   const { start: startExportJob } = useAsyncJob()
   const [params, setParams] = useSearchParams()
-  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
+  // 视图页签用本地 state 做真源、URL 仅挂载时读一次作深链、之后尽力同步：
+  // 之前完全从 URL 派生，但这页的 setParams 在某些环境下静默失效（详情开着而地址栏
+  // 没有 ?ticket= 是同一症状），点「统计」就永远切不过去。深链 ?view=stats 仍生效。
+  const [view, setViewState] = useState<'logs' | 'stats'>(() =>
+    params.get('view') === 'stats' ? 'stats' : 'logs',
+  )
   // WS hub 连接状态：决定列表/详情是帧直达还是轮询兜底，徽标照实说
   const { status: wsStatus } = useWs()
   const wsLive = wsStatus === 'open'
@@ -476,6 +481,7 @@ export default function TicketPage() {
   })
 
   const setView = (v: string) => {
+    setViewState(v === 'stats' ? 'stats' : 'logs')
     const next = new URLSearchParams(params)
     if (v === 'stats') next.set('view', 'stats')
     else next.delete('view')

@@ -498,8 +498,11 @@ func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term t
 // publishedProductSitemapEntries 取已上架且未关闭收录的商品（sitemap 用）：只取渲染条目需要的列。
 func (s *Service) publishedProductSitemapEntries(ctx context.Context) ([]Product, error) {
 	var rows []Product
+	// status 是 Product.Published() 的取值来源（publishedLocales 判定语言可见性要靠它）：
+	// Select 漏取会让 p.Published() 为 false，商品页在 sitemap 里只剩 x-default，
+	// 与详情页 HTML 的 hreflang 标注冲突。
 	err := liveProductTx(s.db.WithContext(ctx)).Where("noindex = ?", false).
-		Select("slug", "updated_at", "published_json").Order("updated_at DESC").Limit(1000).Find(&rows).Error
+		Select("slug", "status", "updated_at", "published_json").Order("updated_at DESC").Limit(1000).Find(&rows).Error
 	return rows, err
 }
 

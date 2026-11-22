@@ -68,6 +68,19 @@ func (h *handler) saveSettings(c *gin.Context) {
 	response.OK(c, newSettingView(row))
 }
 
+// POST /plugins/website/currency-rates/fetch —— 从公开源拉取当前表内币种的最新汇率。
+// 只返回给编辑器回填，不写库；管理员确认后随站点设置一起保存。
+func (h *handler) fetchCurrencyRates(c *gin.Context) {
+	var body struct {
+		Rates string `json:"rates"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	view, err := fetchCurrencyRates(c.Request.Context(), body.Rates, codesFromRates(body.Rates))
+	respond(c, view, err)
+}
+
 // ---- 主题 ----
 
 // themeView 是主题清单条目：设置页下拉 + 「导入演示内容」按钮的可用性都从这里来。
@@ -190,6 +203,10 @@ func parseIDs(raw string) ([]idgen.ID, error) {
 			return nil, response.BadRequest("website.ids_invalid")
 		}
 		ids = append(ids, id)
+	}
+	// 与 response.ParseIDs 同一条上限线：超大 IN (...) 不能从这条自解析旁路绕过去。
+	if err := response.CapBatchIDs(ids); err != nil {
+		return nil, err
 	}
 	return ids, nil
 }

@@ -166,7 +166,7 @@ func (h *siteHandler) inquiryUpload(c *gin.Context) {
 		fail(http.StatusServiceUnavailable, "unavailable")
 		return
 	}
-	if h.uploadLocal != nil && !h.uploadLocal.allow(c.ClientIP()) {
+	if !h.uploadGate.allow(c.Request.Context(), c.ClientIP()) {
 		c.Header("Retry-After", "60")
 		fail(http.StatusTooManyRequests, "rate")
 		return
