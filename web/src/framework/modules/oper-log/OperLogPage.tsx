@@ -69,10 +69,14 @@ export default function OperLogPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<OperLog | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
-  // 视图写进 URL：?view=stats 可直接分享
+  // 视图页签用本地 state 做真源（与 TicketPage/LoginLogPage 同一模式）：URL 仅挂载读一次
+  // 作深链（?view=stats 可直接分享）、之后尽力同步——完全从 URL 派生时点击会静默失效
   const [params, setParams] = useSearchParams()
-  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
-  const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
+  const [view, setViewState] = useState<'logs' | 'stats'>(() => (params.get('view') === 'stats' ? 'stats' : 'logs'))
+  const setView = (v: string) => {
+    setViewState(v === 'stats' ? 'stats' : 'logs')
+    setParams(v === 'stats' ? { view: v } : {}, { replace: true })
+  }
   const [cleanDays, setCleanDays] = useState<string>('30')
   const { start: startExportJob } = useAsyncJob()
 

@@ -14,6 +14,7 @@ import { DetailAction } from '@/framework/components/DetailAction'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { usePageActive } from '@/framework/hooks/use-page-active'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
@@ -914,6 +915,8 @@ export function CustomersTab() {
   const nameOf = useCountryNames()
   const confirm = useConfirm()
   const isMobile = useIsMobile()
+  // 页签 keep-alive 下本页可能处于隐藏态：隐藏时不写 URL（见下方同步 effect 的注释）
+  const pageActive = usePageActive()
   // 字段定义是平台级表：写入口按平台调用方收口（与分组/规则/SLA 同一判据）。
   const { isPlatform } = usePermission()
   const [params, setParams] = useSearchParams()
@@ -1010,8 +1013,12 @@ export function CustomersTab() {
   // 待跟进弹窗：站内信的深链是 /crm/customers?todo=1，落地即弹（之后 URL 清掉、状态接管）。
   const [todosOpen, setTodosOpen] = useState(() => params.get('todo') === '1')
 
-  // 状态 → URL（replace 不压历史栈）：分享/刷新/切页回来都是同一份视图
+  // 状态 → URL（replace 不压历史栈）：分享/刷新/切页回来都是同一份视图。
+  // 依赖里的 setParams 引用随每次导航变化——本页处于 keep-alive 隐藏态时，别的页面的
+  // 导航也会让本 effect 重触发，把这里的筛选写回 URL、覆盖对方刚写的参数（工单中心的
+  // ?view=stats 被吃掉实见过）。所以隐藏态（!pageActive）不写；激活回来自动补一次同步。
   useEffect(() => {
+    if (!pageActive) return
     const p = new URLSearchParams()
     for (const key of ['keyword', 'type', 'status', 'source', 'level', 'tag', 'createdFrom', 'createdTo'] as const) {
       const v = filters[key]
@@ -1023,7 +1030,7 @@ export function CustomersTab() {
     if (ownerFilter === POOL) p.set('pool', '1')
     if (page > 1) p.set('page', String(page))
     setParams(p, { replace: true })
-  }, [filters, ownerFilter, page, sort, desc, setParams])
+  }, [filters, ownerFilter, page, sort, desc, setParams, pageActive])
 
   // 批量改动作共用一个提交壳：成功提示实改数（范围外的 id 后端静默跳过，不是全成功）。
   const runBatch = async (run: () => Promise<{ updated: number }>) => {

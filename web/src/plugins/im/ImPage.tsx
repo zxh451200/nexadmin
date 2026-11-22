@@ -138,9 +138,14 @@ export default function ImPage() {
   const [params, setParams] = useSearchParams()
   // 站内信深链：/im/conversations?conv=IMxxx 直接打开对应会话。
   const linkedConv = params.get('conv') || undefined
-  // 列表与统计分屏：与工单中心同款——处理会话的人先看到队列，做复盘的人不被双栏挤走
-  const view = params.get('view') === 'stats' ? 'stats' : 'workbench'
+  // 列表与统计分屏：与工单中心同款——处理会话的人先看到队列，做复盘的人不被双栏挤走。
+  // 视图页签用本地 state 做真源（与 TicketPage 同一模式）：URL 仅挂载读一次作深链、
+  // 之后尽力同步——完全从 URL 派生时点击会静默失效（keep-alive 隐藏页的参数竞争写入）。
+  const [view, setViewState] = useState<'workbench' | 'stats'>(() =>
+    params.get('view') === 'stats' ? 'stats' : 'workbench',
+  )
   const setView = (v: string) => {
+    setViewState(v === 'stats' ? 'stats' : 'workbench')
     const next = new URLSearchParams(params)
     if (v === 'stats') next.set('view', 'stats')
     else next.delete('view')

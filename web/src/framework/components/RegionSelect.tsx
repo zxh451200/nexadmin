@@ -22,6 +22,9 @@ export interface RegionSelectProps {
 
 const KEYS = ['province', 'city', 'district', 'street'] as const
 
+// 列宽下限：中文区划名多是 3–5 字，低于这个宽度点了不好按，高于内容的空白则纯属浪费
+const COL_MIN = '6.5rem'
+
 // 直辖市、港澳与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现；
 // 台湾省只到省级（没有公开的下级区划），选完就该收在省级这一列。
 function widthFor(path: RegionNode[], level: number): number {
@@ -128,10 +131,9 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       onOpenChange={onOpen}
       disabled={disabled}
       title={placeholder ?? t('picker.selectRegion')}
-      contentClassName={cn(
-        'w-auto',
-        columns.length === 1 ? 'w-64' : columns.length === 2 ? 'w-[28rem]' : columns.length === 3 ? 'min-w-xl' : 'min-w-[44rem]',
-      )}
+      // 宽度跟着内容走：早期按列数钉死 min-w（4 列 44rem），列被均分成 11rem 的等宽大列，
+      // 而街道名只有 4 个字，最后一列右侧会空出一大块，看着像少了一列数据。
+      contentClassName={cn('w-auto', columns.length === 1 ? 'w-64' : 'min-w-56')}
       trigger={
         <PickerTrigger
           id={id}
@@ -193,7 +195,10 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
           {list(step)}
         </div>
       ) : (
-        <div className="grid divide-x divide-border rtl:divide-x-reverse" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
+        <div
+          className="grid divide-x divide-border rtl:divide-x-reverse"
+          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(${COL_MIN}, auto))` }}
+        >
           {columns.map((_, i) => (
             <div key={KEYS[i]}>{list(i)}</div>
           ))}

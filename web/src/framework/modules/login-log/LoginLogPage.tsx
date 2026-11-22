@@ -80,10 +80,15 @@ export default function LoginLogPage() {
   const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  // 视图写进 URL：?view=stats 可以直接分享给同事
+  // 视图页签用本地 state 做真源：点击必定切换；URL 仅挂载读一次作深链、之后尽力同步
+  // （?view=stats 可以直接分享给同事）。与 TicketPage 同一模式——完全从 URL 派生时，
+  // setParams 一旦静默失效（keep-alive 多标签环境），「统计」页签就永远点不进去。
   const [params, setParams] = useSearchParams()
-  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
-  const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
+  const [view, setViewState] = useState<'logs' | 'stats'>(() => (params.get('view') === 'stats' ? 'stats' : 'logs'))
+  const setView = (v: string) => {
+    setViewState(v === 'stats' ? 'stats' : 'logs')
+    setParams(v === 'stats' ? { view: v } : {}, { replace: true })
+  }
   const [selected, setSelected] = useState<string[]>([])
   // 表头排序：默认时间倒序，点列头切换
   const [sort, setSort] = useState('created_at')
