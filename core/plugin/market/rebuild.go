@@ -114,12 +114,8 @@ func runCmd(ctx context.Context, root string, log func(string), title string, na
 	log("$ " + title)
 	ctx, cancel := context.WithTimeout(ctx, buildTimeout)
 	defer cancel()
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" && name == "cmd" {
-		cmd = exec.CommandContext(ctx, name, args...)
-	} else {
-		cmd = exec.CommandContext(ctx, name, args...)
-	}
+	// exec.CommandContext 不经 shell；Windows 上 npm 走 cmd /c 由 npmArgs 拼参数（见 npmCmd/npmArgs）。
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	for _, line := range splitLines(string(out)) {
