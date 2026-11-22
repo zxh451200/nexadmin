@@ -48,7 +48,8 @@ export function TreeSelect({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // null = 尚未手动操作，跟随默认展开；手动折叠/展开过一次后以用户状态为准
+  const [expanded, setExpanded] = useState<Set<string> | null>(null)
   const remote = useQuery({
     queryKey: ['tree-select', url],
     queryFn: () => api.get<Node[]>(url as string),
@@ -58,6 +59,22 @@ export function TreeSelect({
   const tree = useMemo(() => data ?? remote.data ?? [], [data, remote.data])
   const selected = toArray(value)
   const kw = search.trim().toLowerCase()
+
+  // 默认展开：所有含子节点的节点都算展开
+  const expandableIds = useMemo(() => {
+    const ids = new Set<string>()
+    const walk = (nodes: Node[]) =>
+      nodes.forEach((n) => {
+        const kids = get(n, childrenKey) as Node[] | undefined
+        if (kids?.length) {
+          ids.add(String(get(n, valueKey)))
+          walk(kids)
+        }
+      })
+    walk(tree)
+    return ids
+  }, [tree, valueKey, childrenKey])
+  const openIds = expanded ?? expandableIds
 
   const labelMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -92,7 +109,7 @@ export function TreeSelect({
   }
   const toggle = (v: string) =>
     setExpanded((s) => {
-      const n = new Set(s)
+      const n = new Set(s ?? expandableIds)
       if (n.has(v)) n.delete(v)
       else n.add(v)
       return n
@@ -102,7 +119,7 @@ export function TreeSelect({
     nodes.map((n) => {
       const v = String(get(n, valueKey))
       const kids = (get(n, childrenKey) as Node[] | undefined) ?? []
-      const isOpen = !!kw || expanded.has(v)
+      const isOpen = !!kw || openIds.has(v)
       const isSel = selected.includes(v)
       return (
         <li key={v} role="treeitem" aria-expanded={kids.length ? isOpen : undefined} aria-selected={isSel}>
