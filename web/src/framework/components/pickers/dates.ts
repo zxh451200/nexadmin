@@ -16,3 +16,11 @@ export function toDate(v: string | Date | null | undefined): Date | undefined {
 
 export const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
 export const fmtDateTime = (d: Date) => format(d, 'yyyy-MM-dd HH:mm')
+
+/** 把「日 + 'HH:mm'」合成同一天的 Date（秒/毫秒清零）；缺失部分按 0 处理 */
+export function atTime(day: Date, hm: string): Date {
+  const [h, m] = hm.split(':').map(Number)
+  const d = new Date(day)
+  d.setHours(h || 0, m || 0, 0, 0)
+  return d
+}

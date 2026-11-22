@@ -3,7 +3,7 @@ import { Download, File as FileIcon, FileArchive, FileAudio, FileText, FileVideo
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Lightbox } from '@/framework/upload/Lightbox'
-import { formatSize } from '@/framework/upload/precheck'
+import { formatSizeOrDash } from '@/framework/upload/precheck'
 import type { UploadedFile } from '@/framework/upload/types'
 
 export function fileCategory(f: Pick<UploadedFile, 'type' | 'name'>): 'image' | 'video' | 'file' {
@@ -64,7 +64,7 @@ export function FilePreview({ file, className, children }: FilePreviewProps) {
       <IconFor f={file} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{file.name}</p>
-        <p className="num text-xs text-muted-foreground">{formatSize(file.size)}</p>
+        <p className="num text-xs text-muted-foreground">{formatSizeOrDash(file.size)}</p>
       </div>
       <a
         href={file.url}

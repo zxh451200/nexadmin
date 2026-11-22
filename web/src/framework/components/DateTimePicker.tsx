@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
@@ -7,7 +6,8 @@ import { Calendar } from '@/framework/ui/calendar'
 import { PickerShell } from './pickers/PickerShell'
 import { PickerTrigger } from './pickers/PickerTrigger'
 import { TimeField } from './pickers/TimeField'
-import { dateLocale, fmtDateTime, toDate } from './pickers/dates'
+import { atTime, dateLocale, fmtDateTime, toDate } from './pickers/dates'
+import { usePickerDraft } from './pickers/usePickerDraft'
 
 export interface DateTimePickerProps {
   /** ISO 字符串或 Date */
@@ -23,32 +23,32 @@ export interface DateTimePickerProps {
   ariaLabel?: string
 }
 
+/** 弹层内草稿：日期与时刻一起改、确认时合成一个值，避免半选状态落到表单 */
+interface Draft {
+  day?: Date
+  /** 'HH:mm' */
+  time: string
+}
+
 export function DateTimePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id, ariaLabel }: DateTimePickerProps) {
   const { t, i18n } = useTranslation()
-  const [open, setOpen] = useState(false)
   const date = toDate(value)
-  const [draftDay, setDraftDay] = useState<Date | undefined>(date)
-  const [time, setTime] = useState('00:00')
+  const { open, setOpen, draft, setDraft } = usePickerDraft<Draft>(() =>
+    date ? { day: date, time: format(date, 'HH:mm') } : { time: '00:00' },
+  )
 
   const confirm = () => {
-    if (!draftDay) return
-    const [h, m] = time.split(':').map(Number)
-    const d = new Date(draftDay)
-    d.setHours(h || 0, m || 0, 0, 0)
-    onChange?.(d.toISOString())
+    if (!draft?.day) return
+    onChange?.(atTime(draft.day, draft.time).toISOString())
     setOpen(false)
   }
+
+  const patch = (p: Partial<Draft>) => setDraft({ day: draft?.day, time: draft?.time ?? '00:00', ...p })
 
   return (
     <PickerShell
       open={open}
-      onOpenChange={(o) => {
-        setOpen(o)
-        if (o) {
-          setDraftDay(date)
-          setTime(date ? format(date, 'HH:mm') : '00:00')
-        }
-      }}
+      onOpenChange={setOpen}
       disabled={disabled}
       title={placeholder ?? t('picker.selectDateTime')}
       contentClassName="w-auto min-w-0"
@@ -68,12 +68,20 @@ export function DateTimePicker({ value, onChange, allowClear = true, placeholder
       }
     >
       <div className="flex justify-center">
-        <Calendar mode="single" selected={draftDay} defaultMonth={draftDay} onSelect={setDraftDay} locale={dateLocale(i18n.language)} initialFocus />
+        <Calendar
+          mode="single"
+          selected={draft?.day}
+          defaultMonth={draft?.day}
+          onSelect={(day) => patch({ day: day ?? undefined })}
+          locale={dateLocale(i18n.language)}
+          fixedWeeks
+          initialFocus
+        />
       </div>
       <div className="flex items-center gap-2 border-t border-border p-3">
         <span className="shrink-0 text-sm text-muted-foreground">{t('picker.time')}</span>
-        <TimeField value={time} onChange={setTime} />
-        <Button type="button" size="sm" className="ms-auto" disabled={!draftDay} onClick={confirm}>
+        <TimeField value={draft?.time ?? '00:00'} onChange={(time) => patch({ time })} />
+        <Button type="button" size="sm" className="ms-auto" disabled={!draft?.day} onClick={confirm}>
           {t('common.confirm')}
         </Button>
       </div>

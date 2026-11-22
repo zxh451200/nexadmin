@@ -293,9 +293,20 @@ func (s *Service) Register(ctx context.Context, username string, req registerReq
 		return nil, response.BadRequest("file.group_not_found")
 	}
 	vis := normVisibility(req.Visibility)
+	// 外链登记（URL 导入）：浏览器拿不到远端体积与真实类型，前端只能传 size=0 和按扩展名
+	// 猜的 mime。进库前在服务端补一次轻量探测把这两项补齐；探测失败（死链/防盗链/慢站）
+	// 保持 0/原猜测落库，前端把 0 展示成「未知」。放事务外：慢站不该拖着一个开着的
+	// 数据库事务等它。
+	metas := make([]urlMeta, len(req.Files))
+	for i, rf := range req.Files {
+		if rf.Size > 0 || !externalURLOK(rf.URL) || strings.Contains(rf.URL, "/files/upload/") {
+			continue // 已知体积、非法地址、站内 tus 上传，都不用探测
+		}
+		metas[i] = probeExternalURL(ctx, rf.URL)
+	}
 	var out []File
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, rf := range req.Files {
+		for i, rf := range req.Files {
 			name := cleanName(rf.Name)
 			if id, ok := uploadIDFromURL(rf.URL); ok {
 				var f File
@@ -331,9 +342,16 @@ func (s *Service) Register(ctx context.Context, username string, req registerReq
 				(rf.PosterURL != "" && !externalURLOK(rf.PosterURL)) {
 				return response.BadRequest("file.url_invalid")
 			}
+			size, mime := max(rf.Size, 0), rf.Type
+			if m := metas[i]; m.size > 0 {
+				size = m.size
+			}
+			if m := metas[i]; m.mime != "" {
+				mime = m.mime
+			}
 			f := File{
-				GroupID: req.GroupID, Name: name, URL: rf.URL, PosterURL: rf.PosterURL, MimeType: rf.Type,
-				Category: classify(rf.Type, name), Size: max(rf.Size, 0), Visibility: vis, Token: randomToken(), Uploader: username,
+				GroupID: req.GroupID, Name: name, URL: rf.URL, PosterURL: rf.PosterURL, MimeType: mime,
+				Category: classify(mime, name), Size: size, Visibility: vis, Token: randomToken(), Uploader: username,
 			}
 			if err := tx.Create(&f).Error; err != nil {
 				return err

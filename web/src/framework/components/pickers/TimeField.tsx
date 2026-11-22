@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { forwardRef, useState, type ComponentPropsWithoutRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
@@ -15,10 +15,16 @@ export interface TimeFieldProps {
   className?: string
 }
 
-/** 触发按钮：对齐 SelectTrigger 的规格，让它在表单里像同一个构件 */
-function TimeTrigger({ label, text, open, disabled }: { label: string; text: string; open: boolean; disabled?: boolean }) {
+/** 触发按钮：对齐 SelectTrigger 的规格，让它在表单里像同一个构件。
+    作为 PopoverTrigger asChild 的子组件，必须转发 ref 并透传其余 props——
+    Radix 把打开/关闭的 onClick 合并在透传 props 里，吞掉它时/分网格就永远弹不出来（点击「时间点不动」）。 */
+const TimeTrigger = forwardRef<
+  HTMLButtonElement,
+  ComponentPropsWithoutRef<'button'> & { label: string; text: string; open: boolean }
+>(function TimeTrigger({ label, text, open, disabled, className, ...props }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       role="combobox"
       aria-expanded={open}
@@ -27,15 +33,19 @@ function TimeTrigger({ label, text, open, disabled }: { label: string; text: str
       className={cn(
         'num flex h-10 w-20 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 shadow-xs transition-[color,box-shadow,border-color] duration-(--motion-fast) ease-(--ease-standard) focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:text-sm',
         open && 'ring-2 ring-ring/40',
+        className,
       )}
+      {...props}
     >
       <span>{text}</span>
       <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50" />
     </button>
   )
-}
+})
 
-/** 6 列数字网格：全部候选一屏平铺，没有滚动列表，选中即关闭 */
+/** 6 列数字网格：全部候选一屏平铺，没有滚动列表，选中即关闭。
+    格子规格对齐上方日历的日期格（h-10 w-10 / md:h-9 md:w-9、同字号同圆角），
+    否则日历精致、时间网格像一坨裸文本，同一个弹层里两种质感。 */
 function TimeGrid({
   values,
   current,
@@ -57,7 +67,8 @@ function TimeGrid({
           aria-selected={v === current}
           onClick={() => onPick(v)}
           className={cn(
-            'num h-7 rounded-md text-xs leading-4 tabular-nums transition-colors',
+            'num flex h-10 w-10 items-center justify-center rounded-md text-sm tabular-nums transition-colors md:h-9 md:w-9',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40',
             v === current
               ? 'bg-primary text-primary-foreground'
               : 'text-foreground hover:bg-accent hover:text-accent-foreground',
@@ -86,7 +97,7 @@ export function TimeField({ value, onChange, disabled, className }: TimeFieldPro
           <TimeTrigger label={t('picker.hour')} text={hh} open={hourOpen} disabled={disabled} />
         </PopoverTrigger>
         {/* portal=false：本组件总在日期弹层内嵌套使用，portal 到 body 会被外层判 outside 而整体关闭 */}
-        <PopoverContent portal={false} align="start" className="w-auto p-1">
+        <PopoverContent portal={false} align="start" className="w-auto p-1.5">
           <TimeGrid
             values={HOURS}
             current={hh}
@@ -105,7 +116,7 @@ export function TimeField({ value, onChange, disabled, className }: TimeFieldPro
         <PopoverTrigger asChild>
           <TimeTrigger label={t('picker.minute')} text={mm} open={minuteOpen} disabled={disabled} />
         </PopoverTrigger>
-        <PopoverContent portal={false} align="start" className="w-auto p-1">
+        <PopoverContent portal={false} align="start" className="w-auto p-1.5">
           <TimeGrid
             values={MINUTES}
             current={mm}

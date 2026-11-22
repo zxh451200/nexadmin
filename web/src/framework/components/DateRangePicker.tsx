@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { CalendarRange } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { DateRange } from 'react-day-picker'
@@ -8,6 +7,7 @@ import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { PickerShell } from './pickers/PickerShell'
 import { PickerTrigger } from './pickers/PickerTrigger'
 import { dateLocale, fmtDate, toDate } from './pickers/dates'
+import { usePickerDraft } from './pickers/usePickerDraft'
 
 export interface DateRangeValue {
   from?: string
@@ -30,20 +30,16 @@ export interface DateRangePickerProps {
 export function DateRangePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id, ariaLabel }: DateRangePickerProps) {
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
-  const [open, setOpen] = useState(false)
   const from = toDate(value?.from)
   const to = toDate(value?.to)
-  const [draft, setDraft] = useState<DateRange | undefined>()
+  const { open, setOpen, draft, setDraft } = usePickerDraft<DateRange | undefined>(() => (from ? { from, to } : undefined))
 
   const text = from ? `${fmtDate(from)} ~ ${to ? fmtDate(to) : ''}` : ''
 
   return (
     <PickerShell
       open={open}
-      onOpenChange={(o) => {
-        setOpen(o)
-        if (o) setDraft(from ? { from, to } : undefined)
-      }}
+      onOpenChange={setOpen}
       disabled={disabled}
       title={placeholder ?? t('picker.selectDateRange')}
       contentClassName="w-auto min-w-0"
@@ -70,6 +66,7 @@ export function DateRangePicker({ value, onChange, allowClear = true, placeholde
           defaultMonth={draft?.from}
           onSelect={setDraft}
           locale={dateLocale(i18n.language)}
+          fixedWeeks
           initialFocus
         />
       </div>

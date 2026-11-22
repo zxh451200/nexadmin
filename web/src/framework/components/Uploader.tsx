@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { Camera, ImagePlus, Images, Upload, UserRound, VideoIcon } from 'lucide-react'
+import { Camera, ImagePlus, Upload, UserRound, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -356,17 +356,8 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
                 {actionLabel}
               </Button>
               {withLibrary ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2.5"
-                  disabled={disabled || !!uploading}
-                  onClick={() => setPickOpen(true)}
-                >
-                  <Images className="size-4" aria-hidden="true" />
-                  {t('uploader.pickFromLibrary')}
-                </Button>
+                /* 「从文件库选择」走共享触发器（RemoteSelect 同款外观）：与视频地址/图集等入口全站同貌 */
+                <PickFromLibraryButton className="shrink-0" disabled={disabled || !!uploading} onClick={() => setPickOpen(true)} />
               ) : null}
               {cur && !uploading ? (
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2.5 text-destructive hover:text-destructive" onClick={() => onChange([])}>

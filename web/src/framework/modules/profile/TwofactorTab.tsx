@@ -143,7 +143,8 @@ export function TwofactorTab() {
       {/* 状态与动作合并成一行（行排法同 BindingsTab）：badge 独占一行时左右全空，像没排完 */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          {enabled ? <Badge variant="success">{t('profile.twofactor.enabledOn')}</Badge> : <Badge variant="outline">{t('profile.twofactor.enabledOff')}</Badge>}
+          {/* 未绑定的中性徽章用 secondary 实底（同 BindingsTab 的「未绑定」），outline 透明底在白卡上像没做样式 */}
+          {enabled ? <Badge variant="success">{t('profile.twofactor.enabledOn')}</Badge> : <Badge variant="secondary">{t('profile.twofactor.enabledOff')}</Badge>}
           {enabled ? (
             <span className="text-xs text-muted-foreground">
               {t('profile.twofactor.recoveryLeft', { count: status.data?.recoveryLeft ?? 0 })}
@@ -184,13 +185,7 @@ export function TwofactorTab() {
             </Button>
           </div>
         </div>
-      ) : (
-        <div>
-          <Button onClick={() => void startEnroll()} disabled={enroll.isPending}>
-            {t('profile.twofactor.startEnroll')}
-          </Button>
-        </div>
-      )}
+      ) : null}
 
       <ResponsiveDialog
         open={enrollOpen}

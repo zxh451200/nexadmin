@@ -21,7 +21,7 @@ import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Skeleton } from '@/framework/ui/skeleton'
-import { formatSize } from '@/framework/upload/precheck'
+import { formatSizeOrDash } from '@/framework/upload/precheck'
 import { cn } from '@/lib/utils'
 import { FileActionsMenu, FilePreviewDialog, MoveDialog, RenameDialog } from './FileActions'
 import { FileThumb } from './FileThumb'
@@ -283,7 +283,7 @@ export default function FilePage() {
       ),
     },
     { key: 'category', title: t('fileMgr.filterType'), mobile: 'sub', render: (f) => t(`fileMgr.kind.${f.category}`) },
-    { key: 'size', title: t('fileMgr.size'), sortKey: 'size', align: 'end', render: (f) => <span className="num">{formatSize(f.size)}</span> },
+    { key: 'size', title: t('fileMgr.size'), sortKey: 'size', align: 'end', render: (f) => <span className="num">{formatSizeOrDash(f.size)}</span> },
     { key: 'visibility', title: t('fileMgr.visibility'), render: visBadge },
     { key: 'uploader', title: t('fileMgr.uploader') },
     { key: 'createdAt', title: t('fileMgr.createdAt'), sortKey: 'created_at', render: (f) => <span className="num">{fmtTime(f.createdAt)}</span> },
@@ -549,9 +549,9 @@ export default function FilePage() {
                                 </p>
                                 <p
                                   className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums"
-                                  title={`${formatSize(f.size)} · ${f.uploader} · ${fmtTime(f.createdAt)}`}
+                                  title={`${formatSizeOrDash(f.size)} · ${f.uploader} · ${fmtTime(f.createdAt)}`}
                                 >
-                                  {formatSize(f.size)} · {fmtDate(f.createdAt)}
+                                  {formatSizeOrDash(f.size)} · {fmtDate(f.createdAt)}
                                 </p>
                               </div>
                               <div data-no-marquee className="-me-1 -mt-1 shrink-0">

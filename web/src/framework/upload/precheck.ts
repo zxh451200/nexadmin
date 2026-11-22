@@ -43,3 +43,8 @@ export function formatSize(bytes: number) {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
+
+/** 外链登记（URL 导入）拿不到远端体积，size=0 表示「未知」，展示成 — 而不是误导性的 0 B */
+export function formatSizeOrDash(bytes: number) {
+  return bytes > 0 ? formatSize(bytes) : '—'
+}

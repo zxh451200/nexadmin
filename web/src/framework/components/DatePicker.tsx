@@ -62,6 +62,7 @@ export function DatePicker({ value, onChange, allowClear = true, placeholder, di
             onChange?.(fmtDate(d))
             setOpen(false)
           }}
+          fixedWeeks
           initialFocus
         />
       </div>

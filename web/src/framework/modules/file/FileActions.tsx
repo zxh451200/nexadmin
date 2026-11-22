@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import { FileThumb } from './FileThumb'
 import { useFileGroups, useUpdateFile, type FileItem } from './api'
-import { formatSize } from '@/framework/upload/precheck'
+import { formatSizeOrDash } from '@/framework/upload/precheck'
 
 export function fileLink(f: FileItem): string {
   if (!f.url || f.url.startsWith('data:')) return f.url ? `${window.location.origin}/files/${f.id}/${encodeURIComponent(f.name)}` : ''
@@ -63,7 +63,7 @@ export function FilePreviewDialog({ file, images, onClose }: { file: FileItem | 
       </div>
       <div>
         <dt className="text-muted-foreground">{t('fileMgr.size')}</dt>
-        <dd className="num mt-0.5 text-foreground">{formatSize(f.size)}</dd>
+        <dd className="num mt-0.5 text-foreground">{formatSizeOrDash(f.size)}</dd>
       </div>
       {f.width && f.height ? (
         <div>
