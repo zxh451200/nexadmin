@@ -36,7 +36,7 @@
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
 {{if .HeadCode}}{{.HeadCode}}{{end}}
 <link rel="stylesheet" href="/website-assets/theme/torkon/site.css?v={{assetV "theme/torkon/site.css"}}">
-{{if or (eq .Route "/products") (hasPrefix .Route "/products/")}}<link rel="stylesheet" href="/website-assets/site-pd.css?v={{assetV "site-pd.css"}}">{{end}}
+{{if or (eq .Route "/products") (hasPrefix .Route "/products/") (hasPrefix .Route "/orders/")}}<link rel="stylesheet" href="/website-assets/site-pd.css?v={{assetV "site-pd.css"}}">{{end}}
 <noscript><style>[data-reveal]{opacity:1;transform:none}[role="tabpanel"][hidden]{display:block !important}.tk-mnav[hidden]{display:block !important}</style></noscript>
 </head>
 <body>

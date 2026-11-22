@@ -795,6 +795,7 @@
     initChat();
     initShare();
     initProductDetail();
+    initOrderStatus();
     initProductSort();
     decorateZoomables();
     clearWinHandlers();
@@ -1931,6 +1932,61 @@
     var cta = document.getElementById('pd-cta');
     if (!btn || !cta) return;
     btn.addEventListener('click', function () { cta.click(); });
+  }
+
+  // ---- 订单状态页：pending 时轮询状态端点直到终态。访客在收银台付款后跳回本页，
+  //      SSR 渲染的是回跳那一刻的状态（通常还是待支付），不轮询就得手动刷新才能看到
+  //      「支付成功」。状态文本用 JSStrings 里的 orderPending/… 翻译；终态停止轮询，
+  //      pending 轮询期间有新收银台地址就同步「继续支付」链接。 ----
+  function initOrderStatus() {
+    var root = document.querySelector('[data-order-status]');
+    if (!root) return;
+    var url = root.getAttribute('data-order-status-url');
+    var statusEl = root.querySelector('[data-order-status-text]');
+    var payLink = root.querySelector('[data-order-pay]');
+    var hint = root.querySelector('[data-order-poll-hint]');
+    if (!url || !statusEl) return;
+    var PAY_INTERVAL = 3000;
+    var PAY_MAX_POLLS = 600; // 3s × 600 ≈ 30 分钟：支付会话一般远短于此，超限就停（页面刷新可重来）
+    var polls = 0;
+    var stopped = false;
+    if (hint) hint.hidden = false;
+    function statusText(st) {
+      var key = st === 'paid' ? 'orderPaid' : st === 'failed' ? 'orderFailed' : st === 'closed' ? 'orderClosed' : 'orderPending';
+      return msg(key, st === 'paid' ? '支付成功，感谢购买！' : st === 'failed' ? '支付未完成' : st === 'closed' ? '订单已关闭' : '待支付');
+    }
+    function finish(st, finalText) {
+      if (stopped) return;
+      stopped = true;
+      if (finalText) statusEl.textContent = finalText;
+      if (st === 'paid') statusEl.classList.add('is-paid');
+      // 终态收掉「继续支付」：pending 时 SSR 渲染的按钮指向旧收银台地址，
+      // paid/failed/closed 后继续挂着只会让人空点（failed 的引导文案是重新下单）。
+      if (st && payLink) payLink.hidden = true;
+      if (hint) hint.hidden = true;
+    }
+    function tick() {
+      if (stopped) return;
+      polls += 1;
+      if (polls > PAY_MAX_POLLS) { finish('', ''); return; }
+      fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }).then(function (j) {
+        if (stopped || !j || j.code !== 0 || !j.data) return; // 单次网络/响应异常交给下一轮
+        var st = String(j.data.status || '');
+        if (st && st !== 'pending') {
+          finish(st, statusText(st));
+          return;
+        }
+        // 仍是 pending：收银台地址可能已轮换（幂等取回的新地址），同步「继续支付」
+        if (payLink && j.data.payUrl && payLink.getAttribute('href') !== j.data.payUrl) {
+          payLink.setAttribute('href', j.data.payUrl);
+        }
+        setTimeout(tick, PAY_INTERVAL);
+      }).catch(function () {
+        // 网络抖动：不中断流程，下一轮再试
+        if (!stopped) setTimeout(tick, PAY_INTERVAL);
+      });
+    }
+    tick();
   }
 
   function initProductDetail() {

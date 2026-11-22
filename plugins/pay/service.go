@@ -275,6 +275,7 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 		return nil, response.BadRequest(errKey)
 	}
 	if res.RefundNo != "" {
+		ctx = s.rebindCallbackTenant(ctx, "refund_no", res.RefundNo)
 		r, changed, rerr := s.transitionRefund(ctx, res)
 		result := ResultDuplicate
 		if changed {
@@ -295,7 +296,7 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 		}
 		return nil, nil
 	}
-	o, changed, err := s.transition(ctx, res)
+	o, changed, err := s.transition(s.rebindCallbackTenant(ctx, "payment_no", res.PaymentNo), res)
 	result := ResultDuplicate
 	if changed {
 		result = ResultAccepted
@@ -314,6 +315,24 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 		return nil, err
 	}
 	return o, nil
+}
+
+// rebindCallbackTenant 把回调处理放进资金单自己的租户上下文。公开回调（渠道网关
+// notify / mock 收银台 confirm）的请求上下文带着 Tenant 中间件给匿名请求注入的
+// 默认租户，而匿名建单的支付单归属渠道租户——不重绑就按注入租户查单，非默认
+// 租户的渠道单永远 order_not_found（实见过：官网下单后收银台确认 404，回调管线
+// 注释声明的「全局定位拿租户再翻转」并未实现）。按单号全局定位拿租户（Skip 只读）；
+// 单还没落库（回调先到）时保持原样，翻转事务里的行锁查询报 404，渠道重试后收敛。
+// With 覆盖注入的默认租户，Unskip 摘掉不可控来源上下文可能带的 skip 标记，
+// 保证翻转严格按订单租户隔离执行。
+func (s *Service) rebindCallbackTenant(ctx context.Context, noColumn, no string) context.Context {
+	var row Order
+	err := s.db.WithContext(tenant.Skip(ctx)).Select("tenant_id").
+		Where(noColumn+" = ?", no).Take(&row).Error
+	if err != nil || row.TenantID == 0 {
+		return ctx
+	}
+	return tenant.Unskip(tenant.With(ctx, row.TenantID))
 }
 
 // transition 把 pending 支付单翻转为 succeeded/failed：行锁 + 状态位，任何其他

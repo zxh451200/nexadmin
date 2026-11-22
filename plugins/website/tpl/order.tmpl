@@ -1,7 +1,8 @@
 {{define "content"}}
 {{/* 订单状态页：支付完成跳回这里，site.js 轮询状态端点直到终态。
-    pending 且有收银台地址时渲染「继续支付」；主题缺这张模板时回退 default。 */}}
-<article class="order-page" data-order-status data-order-no="{{.Order.OrderNo}}">
+    pending 且有收银台地址时渲染「继续支付」；主题缺这张模板时回退 default。
+    轮询地址带语言前缀由 .URL 生成（与下单表单 action 同口径），JS 不自行拼接。 */}}
+<article class="order-page" data-order-status data-order-no="{{.Order.OrderNo}}" data-order-status-url="{{.URL (print "/website/orders/" .Order.OrderNo "/status")}}">
   <div class="pd-wrap">
     <nav class="pd-crumb" aria-label="{{.T "product.crumbAria"}}">
       <a href="{{.Home}}">{{.T "layout.home"}}</a><span aria-hidden="true">›</span>

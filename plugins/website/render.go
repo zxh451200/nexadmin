@@ -927,6 +927,8 @@ func (v *siteView) JSStrings() template.JS {
 		"chatCardCountryInput", "chatCardRegionInput", "chatCardCityInput", "chatCardPhoneInvalid",
 		// 产品在线购买：下单失败的提示语（msg('buyFailed', …) 的键）
 		"buyFailed",
+		// 订单状态页轮询：site.js 把终态翻成站点文案（initOrderStatus）
+		"orderPending", "orderPaid", "orderFailed", "orderClosed",
 	} {
 		m[k] = v.T("site.js." + k)
 	}
