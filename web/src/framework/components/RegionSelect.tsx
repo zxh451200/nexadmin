@@ -22,8 +22,12 @@ export interface RegionSelectProps {
 
 const KEYS = ['province', 'city', 'district', 'street'] as const
 
-// 列宽下限：中文区划名多是 3–5 字，低于这个宽度点了不好按，高于内容的空白则纯属浪费
+// 列宽下限：中文区划名多是 3–5 字，低于这个宽度点了不好按；上限 11rem 防住
+// 「内蒙古自治区」「巴音郭楞蒙古自治州」这类长名把整列按 max-content 撑开——
+// 4 列合计曾到 660px+，窄窗口下比「触发器左缘→视口右缘」还宽，Radix 碰撞规避会把
+// 整块弹层左移压出对话框边缘（看着像左边被截断）。超出上限的长名截断成省略号。
 const COL_MIN = '6.5rem'
+const COL_MAX = '11rem'
 
 // 直辖市、港澳与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现；
 // 台湾省只到省级（没有公开的下级区划），选完就该收在省级这一列。
@@ -197,7 +201,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       ) : (
         <div
           className="grid divide-x divide-border rtl:divide-x-reverse"
-          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(${COL_MIN}, auto))` }}
+          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(${COL_MIN}, ${COL_MAX}))` }}
         >
           {columns.map((_, i) => (
             <div key={KEYS[i]}>{list(i)}</div>
