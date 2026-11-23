@@ -335,7 +335,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       // 名称列（第一个数据列，把手与勾选列排在它前面）的起始沿 nameStart 是落位线的尺子：
       // 第 N 级的落位线从名称列起始沿往里缩 N 档，正好对齐第 N 级行名称的真实缩进——
       // 「落在第几级」与上方可见的行缩进是同一把尺，肉眼可对。
-      const leadingCells = (onReorder ? 1 : 0) + (selection ? 1 : 0)
+      // 把手不是独立单元格：它和箭头、名称文字一起嵌在第一个可见列的 TableCell 内（见下面 cells 的 ci===0 分支）。
+      // 只有勾选列才是名称列之前的独立 td；把 onReorder 也算进来会取到下一列（负责人/电话），
+      // 落位线就画到名称列外面去了。
+      const leadingCells = selection ? 1 : 0
       const nameCell = el.querySelectorAll('td')[leadingCells]?.getBoundingClientRect()
       next.set(id, {
         top: r.top,
@@ -729,7 +732,9 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   // 这是树形表拖动「发涩/乱跳」的主因。布局保持稳定，只有被拖行压暗。
 
   const renderToggle = (node: T, big?: boolean) => {
-    const size = big ? 'h-9 w-9' : 'h-6 w-6'
+    // md: 必须显式写同值：Button size=icon 自带 md:h-9 md:w-9，twMerge 不会让无前缀的
+    // h-6 w-6 覆盖它，否则 md 以上箭头按钮 36px、叶子占位 24px，目录行图标与文字整体右移 12px。
+    const size = big ? 'h-9 w-9 md:h-9 md:w-9' : 'h-6 w-6 md:h-6 md:w-6'
     if (!node.children?.length) return <span className={cn('inline-block shrink-0', size)} aria-hidden="true" />
     const open = forceExpandAll || expanded.has(node.id)
     return (
