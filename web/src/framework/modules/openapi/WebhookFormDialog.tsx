@@ -93,7 +93,7 @@ function EventPicker({ events, value, onChange }: { events: OpenEvent[]; value: 
                 </AccordionTrigger>
               </div>
               <AccordionContent className="p-2">
-                <div className="grid grid-cols-1 gap-1 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-1">
                   {list.map((e) => {
                     const on = value.includes(e.name)
                     return (
@@ -158,7 +158,7 @@ export function WebhookFormDialog({ open, onOpenChange, editing, onCreated }: Pr
   })
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       size="lg"

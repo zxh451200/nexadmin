@@ -48,7 +48,7 @@ function InstallDialog({
   const [text, setText] = useState('')
   useEffect(() => setText(''), [entry?.id])
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={!!entry}
       onOpenChange={(o) => !o && onClose()}
       title={t('pluginMgr.market.installLicense.title', { name: entry?.name ?? '' })}

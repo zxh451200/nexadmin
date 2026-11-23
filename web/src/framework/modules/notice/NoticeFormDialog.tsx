@@ -229,7 +229,7 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
               />
             </FormGridFull>
             <FormGridFull>
-              <FormGrid cols={3}>
+              <FormGrid cols={1}>
                 <FormField
                   control={form.control}
                   name="scope"

@@ -55,6 +55,7 @@ export function UploadDialog({ open, onOpenChange, defaultGroupId }: Props) {
 
   return (
     <ResponsiveDialog
+      side="right"
       open={open}
       onOpenChange={(o) => {
         if (!o) reset()
@@ -75,7 +76,7 @@ export function UploadDialog({ open, onOpenChange, defaultGroupId }: Props) {
       }
     >
       <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-2">
             <Label>{t('fileMgr.uploadKind')}</Label>
             <Select

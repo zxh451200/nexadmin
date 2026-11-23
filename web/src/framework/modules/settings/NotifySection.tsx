@@ -107,8 +107,7 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
           >
             <Trash2 className="size-4" aria-hidden="true" />
           </Button>
-          {/* 固定两列：4 个字段两行排完。FormGrid 的 auto 启发式（TWO_COLS_MIN=6）会把 4 字段判成单列，
-              卡片被拉成通栏长条，开关行和按钮行又各占一行右对齐，整卡看着散。 */}
+          {/* 这里是设置页卡片（非弹窗），保留 4 字段两行的双列密度；弹窗表单一律走 FormGrid 单列。 */}
           <FormGrid cols={2}>
             <TextField control={form.control} name={`robots.${i}.name`} label={t('settings.notify.robotName')} />
             <SelectField

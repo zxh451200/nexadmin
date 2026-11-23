@@ -77,7 +77,7 @@ export function StartDialog({
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={(v) => !v && onClose()}
       title={t('plugin_workflow.startTitle')}
@@ -125,7 +125,7 @@ export function StartDialog({
               autoFocus
             />
           </label>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-xs text-muted-foreground">{t('plugin_workflow.fields.bizType')}</span>
               <Input value={bizType} onChange={(e) => setBizType(e.target.value)} placeholder="order / leave …" />

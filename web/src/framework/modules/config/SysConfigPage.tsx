@@ -274,7 +274,7 @@ export function ParamsSection() {
         )}
       />
 
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={open}
         onOpenChange={setOpen}
         title={editing ? t('sysConfig.edit') : t('sysConfig.create')}

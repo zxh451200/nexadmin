@@ -87,7 +87,7 @@ export function SubscriptionDialog({ report, onClose }: { report: { id: string; 
   )
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={!!report}
       onOpenChange={(o) => !o && onClose()}
       title={`${t('plugin_report.subscription.title')} · ${report?.name ?? ''}`}
@@ -122,7 +122,7 @@ export function SubscriptionDialog({ report, onClose }: { report: { id: string; 
             </SelectContent>
           </Select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <div className="flex flex-col gap-1.5">
             <Label>{t('plugin_report.subscription.hour')}</Label>
             <Input

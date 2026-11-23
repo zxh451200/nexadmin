@@ -316,7 +316,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
             </TabsList>
 
             <TabsContent value="basic" className="min-h-0 flex-1 overflow-y-auto pe-1">
-              <FormGrid cols={2}>
+              <FormGrid cols={1}>
                 <FormField
                   control={c}
                   name="type"
@@ -434,7 +434,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
             </TabsContent>
 
             <TabsContent value="attributes" className="min-h-0 flex-1 overflow-y-auto pe-1">
-              <FormGrid cols={2}>
+              <FormGrid cols={1}>
                 <TextField control={c} name="attrUsername" label={p('attrUsername')} hint={type === 'cas' ? h('casUsername') : undefined} mono />
                 <TextField control={c} name="attrNickname" label={p('attrNickname')} mono />
                 <TextField control={c} name="attrEmail" label={p('attrEmail')} mono />
@@ -447,7 +447,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
                     <legend className="px-1 text-sm font-medium">{p('groupRoleMappings')}</legend>
                     <p className="text-sm text-muted-foreground">{h('groupRoleMappings')}</p>
                     {mappings.fields.map((mapping, index) => (
-                      <div key={mapping.id} className="grid gap-3 rounded-md bg-background p-3 sm:grid-cols-2">
+                      <div key={mapping.id} className="grid grid-cols-1 gap-3 rounded-md bg-background p-3">
                         <TextField control={c} name={`groupRoleMappings.${index}.externalGroup`} label={p('group')} mono />
                         <FormField
                           control={c}
@@ -487,7 +487,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
             </TabsContent>
 
             <TabsContent value="behavior" className="min-h-0 flex-1 overflow-y-auto pe-1">
-              <FormGrid cols={2}>
+              <FormGrid cols={1}>
                 <TextField control={c} name="defaultRole" label={p('defaultRole')} hint={autoCreate ? h('defaultRole') : h('defaultRoleOff')} />
                 <FormGridFull>
                   {/* 后端要求开启 matchExisting 的源必须带 identity:match（requireMatchPerm）：

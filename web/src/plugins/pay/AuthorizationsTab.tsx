@@ -280,7 +280,7 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={(v) => !v && onClose()}
       title={t('plugin_pay.auth.create')}
@@ -335,7 +335,7 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
             </CapabilityNote>
           ) : null}
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             <span>
               {t('plugin_pay.fields.amount')}
@@ -354,7 +354,7 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
             placeholder={t('plugin_pay.fields.currency')}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <CapabilitySelect
             label={t('plugin_pay.fields.method')}
             value={method}
@@ -370,7 +370,7 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
             <Input value={cardLast4} maxLength={4} onChange={(e) => setCardLast4(e.target.value)} />
           </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.payerId')}
             <Input value={payerId} onChange={(e) => setPayerId(e.target.value)} placeholder={t('plugin_pay.auth.payerIdHint')} />

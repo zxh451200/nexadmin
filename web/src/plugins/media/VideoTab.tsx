@@ -289,7 +289,7 @@ export function VideoTab() {
         )}
       />
 
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={regOpen}
         onOpenChange={setRegOpen}
         title={t('plugin_media.video.registerTitle')}

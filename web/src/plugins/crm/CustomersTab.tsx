@@ -235,7 +235,7 @@ function CustomerFormDialog({
             aria-labelledby="crm-customer-type"
             value={value.type ?? 'person'}
             onValueChange={(v) => setType(v as CustomerType)}
-            className="grid-cols-1 gap-1 sm:grid-cols-2"
+            className="grid-cols-1 gap-1"
           >
             {TYPES.map((tp) => (
               <Label
@@ -262,7 +262,7 @@ function CustomerFormDialog({
           />
           {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_crm.nameRequired')}</span> : null}
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.code')}
             <Input
@@ -292,7 +292,7 @@ function CustomerFormDialog({
         <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.codeHint')}</p>
         {isCompany ? (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.taxNo')}
                 <Input
@@ -307,7 +307,7 @@ function CustomerFormDialog({
                 <Input maxLength={64} value={value.industry ?? ''} onChange={(e) => set({ industry: e.target.value })} />
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.country')}
                 <CountrySelect
@@ -327,7 +327,7 @@ function CustomerFormDialog({
           <>
             {/* 个人只收法定国籍（配证件做实名）。「国家/地区」是企业侧的所在地、跟着注册地址走，
                 个人表单不再放第二个同款国家下拉——并排看就是重复字段（历史/导入数据仍照常展示）。 */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.nationality')}
                 <CountrySelect
@@ -381,7 +381,7 @@ function CustomerFormDialog({
             </SelectContent>
           </Select>
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.externalSource')}
             <Select
@@ -421,7 +421,7 @@ function CustomerFormDialog({
           </label>
         </div>
         <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.anchorHint')}</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.owner')}
             <Input value={value.owner ?? ''} onChange={(e) => set({ owner: e.target.value })} />
@@ -1800,7 +1800,7 @@ function CustomValuesDetail({ customer }: { customer: CrmCustomer }) {
   const [tags, setTags] = useState<string[]>(customer?.tags ?? [])
   if (!open || !customer) return null
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="sm" title={t('plugin_crm.tags.title', { name: customer.name })}>
+    <ResponsiveDialog side="right" open={open} onOpenChange={onOpenChange} size="sm" title={t('plugin_crm.tags.title', { name: customer.name })}>
       <div className="space-y-3 p-4">
         <TagEditor tags={tags} onChange={setTags} suggestions={suggestions} />
         <div className="flex justify-end gap-2">
@@ -1858,7 +1858,7 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   }
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.customer.field.title')} description={t('plugin_crm.customer.field.hint')}>
+    <ResponsiveDialog side="right" open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.customer.field.title')} description={t('plugin_crm.customer.field.hint')}>
       <div className="flex flex-col gap-3 p-4 text-sm">
         {draft === null ? (
           <>
@@ -1912,7 +1912,7 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                 .catch(() => undefined)
             }}
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <label className="flex flex-col gap-1">
                 <span>
                   {t('plugin_crm.customer.field.label')}
@@ -2010,7 +2010,7 @@ function BatchTagDialog({
   const [tags, setTags] = useState<string[]>([])
   if (!open) return null
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="sm" title={t('plugin_crm.tags.batchTitle', { count })}>
+    <ResponsiveDialog side="right" open={open} onOpenChange={onOpenChange} size="sm" title={t('plugin_crm.tags.batchTitle', { count })}>
       <div className="space-y-3 p-4">
         <TagEditor tags={tags} onChange={setTags} suggestions={suggestions} />
         <div className="flex justify-end gap-2">

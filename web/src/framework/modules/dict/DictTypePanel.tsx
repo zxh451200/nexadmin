@@ -229,7 +229,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         )}
       />
 
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={open}
         onOpenChange={setOpen}
         title={editing ? t('dict.type.edit') : t('dict.type.create')}

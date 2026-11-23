@@ -136,7 +136,7 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
                 {t('plugin_report.dataset.columns')}
                 <RequiredMark />
               </legend>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2">
                 {(src?.columns ?? []).map((c) => (
                   <label key={c.name} className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
                     <Checkbox
@@ -220,7 +220,7 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
                       <X aria-hidden="true" />
                     </Button>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-2">
                     {(jsrc?.columns ?? []).map((c) => {
                       const ref = `${j.table}.${c.name}`
                       const checked = form.columns.includes(ref)

@@ -44,7 +44,7 @@ export function CreateFormDialog({ open, onOpenChange, onCreated }: Props) {
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       title={t('plugin_formbuilder.createTitle')}

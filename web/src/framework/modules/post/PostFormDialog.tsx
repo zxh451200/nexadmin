@@ -98,7 +98,7 @@ export function PostFormDialog({ open, onOpenChange, editing, count }: PostFormD
   const formId = 'sys-post-form'
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       title={editing ? t('post.action.edit') : t('post.action.add')}

@@ -266,7 +266,7 @@ function RenameDialog({ doc, onOpenChange }: { doc: KbDocument; onOpenChange: (v
     }
   }
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={onOpenChange}
       title={t('plugin_kb.renameTitle')}
@@ -328,7 +328,7 @@ function SettingsDialog({
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       title={t('plugin_kb.settingsTitle')}
@@ -346,7 +346,7 @@ function SettingsDialog({
       }
     >
       <div className="flex flex-col gap-4 text-sm">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="kb-threshold">{t('plugin_kb.fields.threshold')}</Label>
             <Input id="kb-threshold" type="number" min="0.01" max="0.99" step="0.01" value={threshold} onChange={(e) => setThreshold(e.target.value)} />

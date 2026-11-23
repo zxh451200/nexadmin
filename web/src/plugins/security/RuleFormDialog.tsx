@@ -48,7 +48,7 @@ export function RuleFormDialog({ open, onOpenChange, editing }: Props) {
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       size="md"

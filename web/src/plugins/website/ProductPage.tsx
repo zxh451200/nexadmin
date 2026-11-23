@@ -517,7 +517,7 @@ function ProductFormBody({
           <LocalizedField fieldKey="title" required />
           <LocalizedField fieldKey="keywords" aiTarget="keywords" tags={{ max: maxKeywords }} placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
           <LocalizedField fieldKey="summary" />
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <SharedFieldShell labelKey="plugin_website.fields.slug">
               <Input
                 maxLength={64}
@@ -567,8 +567,8 @@ function ProductFormBody({
           <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
         </FormSection>
         <FormSection title={t('plugin_website.product.tradeSection')}>
-        {/* 价格三件套 + 数量/交期各占一整行 3 列 */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {/* 价格与交期字段统一单列纵向，和全站表单弹窗保持一致 */}
+        <div className="grid grid-cols-1 gap-3">
           <SharedFieldShell labelKey="plugin_website.product.priceMin">
             <Input
               type="number"
@@ -627,7 +627,7 @@ function ProductFormBody({
             />
           </SharedFieldShell>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3">
           <SharedFieldShell labelKey="plugin_website.product.port">
             <ConstantPicker
               value={port}

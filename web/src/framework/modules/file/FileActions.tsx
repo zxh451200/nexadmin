@@ -266,7 +266,7 @@ export function RenameDialog({
     }
   }
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={!!file}
       onOpenChange={onOpenChange}
       title={t('common.rename')}

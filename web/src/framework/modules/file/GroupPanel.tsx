@@ -183,7 +183,7 @@ export function GroupPanel({ value, onChange }: Props) {
         </nav>
       )}
 
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={!!editing}
         onOpenChange={(o) => !o && setEditing(null)}
         title={editing?.id ? t('fileMgr.renameGroup') : t('fileMgr.addGroup')}

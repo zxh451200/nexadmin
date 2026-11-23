@@ -224,7 +224,7 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       title={isNew ? t('plugin_pay.channel.create') : t('plugin_pay.channel.edit')}

@@ -459,7 +459,7 @@ export default function CodegenPage() {
 
       <DefineTableDialog open={defineOpen} onOpenChange={setDefineOpen} pending={defineSchema.isPending} onSubmit={onDefine} />
 
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={saveOpen}
         onOpenChange={setSaveOpen}
         title={t('plugin_codegen.saved.saveTitle')}

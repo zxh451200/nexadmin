@@ -58,7 +58,7 @@ function LicenseDialogBody({ plugin, onOpenChange, initialContent }: Props) {
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={!!plugin}
       onOpenChange={onOpenChange}
       title={t('pluginMgr.license.title', { name: plugin?.name ?? '' })}

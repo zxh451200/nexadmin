@@ -163,7 +163,7 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={(v) => !v && onClose()}
       title={rule ? t('plugin_pay.settle.ruleEdit') : t('plugin_pay.settle.ruleCreate')}
@@ -183,7 +183,7 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
           {t('plugin_pay.fields.subject')}
           <Input value={subjectId} onChange={(e) => setSubjectId(e.target.value)} placeholder={t('plugin_pay.settle.defaultSubject')} />
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             <span>
               {t('plugin_pay.fields.bizType')}
@@ -209,7 +209,7 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
             </Select>
           </label>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.feeRateBp')}
             <Input type="number" min="0" max="9999" value={rateBp} onChange={(e) => setRateBp(e.target.value)} />

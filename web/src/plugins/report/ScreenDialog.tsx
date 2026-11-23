@@ -160,8 +160,8 @@ export function ScreenDialog({ open, onOpenChange, editing }: Props) {
           </FormGridFull>
           {cur ? (
             <FormGridFull>
-              <div className="grid grid-cols-2 gap-2 rounded-md bg-muted/40 p-3 md:grid-cols-6">
-                <div className="col-span-2 flex flex-col gap-1">
+              <div className="grid grid-cols-1 gap-2 rounded-md bg-muted/40 p-3">
+                <div className="flex flex-col gap-1">
                   <Label htmlFor="sc-item-title">{t('plugin_report.screen.itemTitle')}</Label>
                   <Input id="sc-item-title" value={builtinText(t, cur.title)} maxLength={100} placeholder={names[cur.chartId]} onChange={(e) => setCur({ title: e.target.value })} />
                 </div>
@@ -169,7 +169,7 @@ export function ScreenDialog({ open, onOpenChange, editing }: Props) {
                 {num('y', GRID_ROWS - 1, 'Y')}
                 {num('w', GRID_COLS, t('plugin_report.screen.width'))}
                 {num('h', GRID_ROWS, t('plugin_report.screen.height'))}
-                <div className="col-span-2 flex items-end md:col-span-6">
+                <div className="flex items-end">
                   <Button type="button" variant="outline" className="text-destructive" onClick={() => { setItems(items.filter((_, i) => i !== sel)); setSel(-1) }}>
                     <Trash2 aria-hidden="true" />
                     {t('plugin_report.screen.removeItem')}
@@ -182,7 +182,7 @@ export function ScreenDialog({ open, onOpenChange, editing }: Props) {
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium">{t('plugin_report.screen.roles')}</legend>
               <p className="text-xs text-muted-foreground">{t('plugin_report.screen.rolesHint')}</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2">
                 {roles.map((r) => (
                   <label key={r.id} className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
                     <Checkbox

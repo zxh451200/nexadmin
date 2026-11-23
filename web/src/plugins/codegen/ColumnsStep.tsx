@@ -202,7 +202,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
   return (
     <div className="flex flex-col gap-4">
       <FormLayout onSubmit={(e) => e.preventDefault()}>
-        <FormGrid cols={2}>
+        <FormGrid cols={1}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="codegen-module">
               {t('plugin_codegen.config.module')}

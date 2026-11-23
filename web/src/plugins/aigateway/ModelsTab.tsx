@@ -106,7 +106,7 @@ function ModelFormDialog({
       }
     >
       <div className="flex flex-col gap-3 text-sm">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_aigateway.fields.kind')}
             <Select value={value.kind ?? 'llm'} onValueChange={(v) => set({ kind: v as AiKind })} disabled={!isNew}>
@@ -138,7 +138,7 @@ function ModelFormDialog({
             {nameMissing ? <span className="text-xs text-destructive">{t('plugin_aigateway.nameRequired')}</span> : null}
           </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_aigateway.fields.provider')}
             <Input value={value.provider ?? ''} onChange={(e) => set({ provider: e.target.value })} placeholder="openai / qwen / ..." />

@@ -425,7 +425,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
             </TabsList>
 
             <TabsContent value="basic" className="min-h-0 flex-1 overflow-y-auto pe-1">
-              <FormGrid cols={2}>
+              <FormGrid cols={1}>
                 <TextField control={c} name="name" label={p('name')} placeholder={t('common.pleaseInput')} />
                 <SwitchField control={c} name="enabled" label={p('enabled')} description={h('enabled')} />
 
@@ -613,7 +613,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
             </TabsContent>
 
             <TabsContent value="account" className="min-h-0 flex-1 overflow-y-auto pe-1">
-              <FormGrid cols={2}>
+              <FormGrid cols={1}>
                 <TextField control={c} name="attrUsername" label={p('attrUsername')} hint={h('attrUsername')} mono placeholder="uid" />
                 <TextField control={c} name="attrEmail" label={p('attrEmail')} mono placeholder="mail" />
                 <TextField control={c} name="attrNickname" label={p('attrNickname')} mono placeholder="displayName" />
@@ -656,7 +656,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       disabled={mappings.fields.length === 0}
                     />
                     {mappings.fields.map((mapping, index) => (
-                      <div key={mapping.id} className="grid gap-3 rounded-md bg-background p-3 sm:grid-cols-2">
+                      <div key={mapping.id} className="grid grid-cols-1 gap-3 rounded-md bg-background p-3">
                         <TextField control={c} name={`groupRoleMappings.${index}.externalGroup`} label={p('group')} mono />
                         <FormField
                           control={c}

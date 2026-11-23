@@ -1,5 +1,4 @@
 import type { FormEventHandler, ReactNode } from 'react'
-import { Children, isValidElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +31,7 @@ export function FormLayout({ children, onSubmit, id, showRequiredHint, className
 
 export interface FormGridProps {
   children: ReactNode
-  /** md 以上列数；默认 auto = 按字段多少决定（见 TWO_COLS_MIN） */
+  /** md 以上列数；全站表单统一单列纵向，默认 1（'auto' 仅为兼容旧调用，同样按 1 处理） */
   cols?: 'auto' | 1 | 2 | 3
   className?: string
 }
@@ -43,19 +42,9 @@ const colsClass: Record<1 | 2 | 3, string> = {
   3: 'md:grid-cols-3',
 }
 
-// 成对出现的字段不足 3 行时，两列会让弹窗显得空、上下错位，改成单列纵向。
-const TWO_COLS_MIN = 6
-
-export function FormGrid({ children, cols = 'auto', className }: FormGridProps) {
-  let effective: 1 | 2 | 3
-  if (cols === 'auto') {
-    const half = Children.toArray(children)
-      .filter(isValidElement)
-      .filter((cell) => cell.type !== FormGridFull).length
-    effective = half >= TWO_COLS_MIN ? 2 : 1
-  } else {
-    effective = cols
-  }
+export function FormGrid({ children, cols = 1, className }: FormGridProps) {
+  // 不再按字段数自动切两列：同样的表单在不同弹窗里忽横忽竖，是全站一致性最大的来源。
+  const effective: 1 | 2 | 3 = cols === 'auto' ? 1 : cols
   return <div className={cn('grid grid-cols-1 gap-3', colsClass[effective], className)}>{children}</div>
 }
 

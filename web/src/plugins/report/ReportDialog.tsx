@@ -89,7 +89,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
           void submit()
         }}
       >
-        {/* 只有名称/分组两个常规字段，交给 FormGrid 的 auto 判定走单列纵向；写死三列会空出三分之一并让两列错位 */}
+        {/* 只有名称/分组两个常规字段，FormGrid 默认单列纵向；写死三列会空出三分之一并让两列错位 */}
         <FormGrid>
           <div className="flex flex-col gap-2">
             <Label htmlFor="rp-name" required>{t('common.name')}</Label>

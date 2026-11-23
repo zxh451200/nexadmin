@@ -150,7 +150,7 @@ function OpportunityFormDialog({
               .map((c) => ({ value: c.id, label: c.name }))}
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.stage')}
             <Select value={value.stage ?? 'lead'} onValueChange={(v) => set({ stage: v as CrmOpportunityForm['stage'] })}>
@@ -176,7 +176,7 @@ function OpportunityFormDialog({
             />
           </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.expectedAt')}
             <DatePicker value={value.expectedAt} onChange={(v) => set({ expectedAt: v })} />

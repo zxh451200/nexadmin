@@ -19,7 +19,7 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 3. **迁移只增不改**：`migrations/framework/` 已执行的 SQL 永不修改，结构变更写新编号文件（mysql/mariadb/postgres 三份同步）。
 4. 内置表前缀 `sys_`，插件表 `plg_<id>_`，业务表 `biz_`；权限码 `模块:动作`。
 5. 文案一律走 i18n：前端 `web/src/locales/{zh-CN,en-US}.json` 双份同步；后端错误 key 写 `config/locales/<lang>.yaml`。
-6. 前端只用语义 token 与 framework 组件（DataTable/FormLayout/ResponsiveDialog 等），移动优先，逻辑方向类（ms-/me-/ps-/pe-）。
+6. 前端只用语义 token 与 framework 组件（DataTable/FormLayout/ResponsiveDialog 等），移动优先，逻辑方向类（ms-/me-/ps-/pe-）。弹窗统一走 `ResponsiveDialog`：实体新建/编辑/配置表单一律 `side="right"` 且字段用 `FormGrid` 单列纵向（默认 `cols={1}`，不要显式写 2/3 或裸 `grid-cols-2`）；确认框、只读详情、选择器、登录/账号安全短流程保持默认居中。手机端两种形态都走底部抽屉。
 7. `plugins/website`（官网）与 `plugins/` 其他插件同样受以上约束；官网文档区渲染 `docs/*.md`（含 `docs/en/` 译文），改文档重新构建即更新。
 
 ## 3. 完成标准

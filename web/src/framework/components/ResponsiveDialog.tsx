@@ -31,8 +31,8 @@ export interface ResponsiveDialogProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
   /**
    * 桌面呈现位置：center（默认）= 居中弹窗；right = 右侧抽屉。
-   * 全站约定：实体的新建/编辑长表单（多字段、多分区、要滚动）用 right；
-   * 短表单、详情查看、选择器、确认框、登录流程用默认 center。
+   * 全站约定：所有实体的新建/编辑/配置表单一律 side="right"（右侧抽屉 + 单列字段）；
+   * 确认框、只读详情、选择器、登录/账号安全等短流程保持默认 center。
    * 手机端不受影响：两种形态都是底部抽屉。
    */
   side?: 'center' | 'right'

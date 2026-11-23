@@ -38,7 +38,7 @@ export function AudiencePicker({ value, onChange }: Props) {
 
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-sm font-medium">{t('plugin_formbuilder.audience.roles')}</legend>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-4">
           {roles.map((r) => (
             <label key={r.id} className="flex min-h-10 items-center gap-2 text-sm md:min-h-8">
               <Checkbox checked={value.roles.includes(r.id)} onCheckedChange={(c) => toggleRole(r.id, c === true)} />

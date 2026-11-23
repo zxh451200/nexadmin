@@ -424,7 +424,7 @@ function PostFormBody({
               onCheckedChange={setPinned}
             />
           </div>
-          <FormGrid cols={2}>
+          <FormGrid cols={1}>
             <SharedFieldShell labelKey="plugin_website.fields.author">
               <Input
                 value={author}
@@ -572,7 +572,7 @@ function CategoryI18nBody({ row, onOpenChange }: { row: PostCategory; onOpenChan
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={onOpenChange}
       title={t('plugin_website.post.categoryI18nTitle', { name: row.title })}
@@ -721,7 +721,7 @@ function TaxonomyManager({ onOpenChange }: { onOpenChange: (v: boolean) => void 
 
   return (
     <>
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={onOpenChange}
       title={t('plugin_website.post.taxonomyTitle')}

@@ -84,7 +84,7 @@ function ConfigDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       size="md"
@@ -149,7 +149,7 @@ function ConfigDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             />
             <span className="text-xs text-muted-foreground">{t('plugin_realname.secretHint')}</span>
           </label>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span>{t('plugin_realname.timeoutMs')}</span>
               <Input

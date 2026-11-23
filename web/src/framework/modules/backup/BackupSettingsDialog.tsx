@@ -52,7 +52,7 @@ export function BackupSettingsDialog({ open, onOpenChange, value }: Props) {
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       title={t('backup.settings.title')}

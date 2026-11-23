@@ -41,7 +41,7 @@ export function AssignPermissionDialog({ role, onOpenChange }: AssignPermissionD
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       size="lg"

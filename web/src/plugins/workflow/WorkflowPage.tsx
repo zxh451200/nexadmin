@@ -568,7 +568,7 @@ function DefEditor({
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={(v) => !v && onClose()}
       title={def ? t('plugin_workflow.defEdit') : t('plugin_workflow.defCreate')}

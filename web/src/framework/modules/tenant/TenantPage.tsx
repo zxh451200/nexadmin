@@ -399,7 +399,7 @@ export default function TenantPage() {
         <Form {...form}>
           <FormLayout id="tenant-form" onSubmit={submit}>
             <FormSection title={t('tenant.basicInfo')}>
-              <FormGrid cols={2}>
+              <FormGrid cols={1}>
                 <FormField
                   control={form.control}
                   name="name"
@@ -470,7 +470,7 @@ export default function TenantPage() {
               </FormGrid>
             </FormSection>
             <FormSection title={t('tenant.quotaInfo')} description={t('tenant.quotaHint')}>
-              <FormGrid cols={3}>
+              <FormGrid cols={1}>
                 <FormField
                   control={form.control}
                   name="maxUsers"

@@ -1925,7 +1925,7 @@ function QuickReplyManager() {
       >
         <Pencil aria-hidden="true" />
       </Button>
-      <ResponsiveDialog open={open} onOpenChange={setOpen} title={t('plugin_im.quickReply.manage')} size="md">
+      <ResponsiveDialog side="right" open={open} onOpenChange={setOpen} title={t('plugin_im.quickReply.manage')} size="md">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 rounded-md border p-3">
             <label className="flex flex-col gap-1">
@@ -2046,7 +2046,7 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       title={t('plugin_im.settings.title')}
@@ -2110,7 +2110,7 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
               />
             </label>
           ) : null}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               {t('plugin_im.settings.start')}
               <TimeField value={form.hoursStart} onChange={(v) => setForm({ ...form, hoursStart: v })} />

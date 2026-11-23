@@ -1591,7 +1591,7 @@ export default function TicketPage() {
               maxLength={2000}
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <Field label={t('plugin_ticket.fields.priority')}>
               <SimpleSelect
                 value={createForm.priority}
@@ -1642,7 +1642,7 @@ export default function TicketPage() {
           </div>
           {/* 自定义字段：管理员定义的附加信息，建单时一并填；必填与类型由后端把关。 */}
           {enabledFields.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <FieldInputs
                 defs={enabledFields}
                 values={createCustom}
@@ -1657,7 +1657,7 @@ export default function TicketPage() {
       {settingsOpen ? <TicketSettingsDialog onOpenChange={setSettingsOpen} /> : null}
 
       {/* 自定义字段定义：加字段不动表结构，值统一存在工单的 custom_values 里。 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={fieldsOpen}
         onOpenChange={setFieldsOpen}
         title={t('plugin_ticket.fields.title')}
@@ -1698,7 +1698,7 @@ export default function TicketPage() {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <Field label={t('plugin_ticket.fields.code')} required>
               <Input
                 value={fieldForm.code}
@@ -1765,7 +1765,7 @@ export default function TicketPage() {
       </ResponsiveDialog>
 
       {/* 改附加字段：清空某项再保存就是删掉它（后端的合并语义里 null 才是删除）。 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={!!valuesTarget}
         onOpenChange={(o) => {
           if (!o) setValuesTarget(null)
@@ -1783,7 +1783,7 @@ export default function TicketPage() {
           </>
         }
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3">
           <FieldInputs
             defs={enabledFields}
             values={valuesDraft}
@@ -1793,7 +1793,7 @@ export default function TicketPage() {
       </ResponsiveDialog>
 
       {/* 快捷回复管理 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={cannedOpen}
         onOpenChange={setCannedOpen}
         title={t('plugin_ticket.canned.manage')}
@@ -1869,7 +1869,7 @@ export default function TicketPage() {
       </ResponsiveDialog>
 
       {/* SLA 策略：营业时间 + 按优先级的首响/解决时限 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={slaOpen}
         onOpenChange={setSlaOpen}
         title={t('plugin_ticket.sla.title')}
@@ -1920,7 +1920,7 @@ export default function TicketPage() {
             {/* 新建态给显式反馈：否则「点了没反应」——表单本来就在默认策略上，唯一的可见变化只有编码框解锁 */}
             {policyNew ? <Badge variant="secondary">{t('plugin_ticket.sla.creating')}</Badge> : null}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             {policyNew ? (
               <Field label={t('plugin_ticket.sla.code')} required>
                 <Input
@@ -1969,7 +1969,7 @@ export default function TicketPage() {
                 ))}
               </div>
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <Field label={t('plugin_ticket.sla.start')} required>
                 <Input
                   type="number"
@@ -2073,7 +2073,7 @@ export default function TicketPage() {
       </ResponsiveDialog>
 
       {/* 分组管理：组队列 + 组员 + 自动分派开关 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={groupOpen}
         onOpenChange={setGroupOpen}
         title={t('plugin_ticket.groups.manage')}
@@ -2137,7 +2137,7 @@ export default function TicketPage() {
                 onChange={(e) => setGroupForm((f) => ({ ...f, description: e.target.value }))}
               />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <Field label={t('plugin_ticket.groups.sort')}>
                 <Input
                   type="number"
@@ -2245,7 +2245,7 @@ export default function TicketPage() {
       </ResponsiveDialog>
 
       {/* 自动化规则：新建工单时按条件改优先级/转组/加内部备注 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={ruleOpen}
         onOpenChange={setRuleOpen}
         title={t('plugin_ticket.rules.manage')}
@@ -2300,7 +2300,7 @@ export default function TicketPage() {
               />
             </Field>
             <p className="border-t pt-3 text-sm font-medium text-foreground">{t('plugin_ticket.rules.match')}</p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3">
               <Field label={t('plugin_ticket.rules.matchPriority')}>
                 <SimpleSelect
                   aria-label={t('plugin_ticket.rules.matchPriority')}
@@ -2362,7 +2362,7 @@ export default function TicketPage() {
               {t('plugin_ticket.rules.action')}
               <RequiredMark />
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <Field label={t('plugin_ticket.rules.setPriority')}>
                 <SimpleSelect
                   aria-label={t('plugin_ticket.rules.setPriority')}
@@ -2555,7 +2555,7 @@ export default function TicketPage() {
       </ResponsiveDialog>
 
       {/* 标签：逗号分隔，支持点选已有标签 */}
-      <ResponsiveDialog
+      <ResponsiveDialog side="right"
         open={tagOpen}
         onOpenChange={setTagOpen}
         title={t('plugin_ticket.tags.edit')}
@@ -3505,7 +3505,7 @@ function TicketSettingsDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
   }
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open
       onOpenChange={onOpenChange}
       title={t('plugin_ticket.settings.title')}

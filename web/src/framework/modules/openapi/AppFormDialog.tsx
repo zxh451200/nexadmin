@@ -70,7 +70,7 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
   })
 
   return (
-    <ResponsiveDialog
+    <ResponsiveDialog side="right"
       open={open}
       onOpenChange={onOpenChange}
       size="lg"

@@ -569,7 +569,7 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
     >
       <div className="flex flex-col gap-5">
         <FormSection title={t('plugin_devicehub.point.section.basic')}>
-          <FormGrid cols={2}>
+          <FormGrid cols={1}>
             <Field label={t('plugin_devicehub.point.name')} required>
               <Input
                 value={form.name}
@@ -624,7 +624,7 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
         </FormSection>
         {/* 换算与落库规则说明集中成一段，避免每个数字框下面各挂两行小字 */}
         <FormSection title={t('plugin_devicehub.point.section.collect')} description={t('plugin_devicehub.point.collectHint')}>
-          <FormGrid cols={3}>
+          <FormGrid cols={1}>
             <Field label={t('plugin_devicehub.point.scale')}>
               <Input type="number" step="0.001" min="0" className="num" value={form.scale} onChange={(e) => setForm((f) => ({ ...f, scale: Number(e.target.value) || 1 }))} />
             </Field>
@@ -1162,7 +1162,7 @@ function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3">
           <Field label={t('plugin_devicehub.point.name')} required>
             <SimpleSelect
               className="w-full"
@@ -1284,7 +1284,7 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
     >
       <div className="flex flex-col gap-5">
         <FormSection title={t('plugin_devicehub.device.section.basic')}>
-          <FormGrid cols={2}>
+          <FormGrid cols={1}>
             <Field label={t('plugin_devicehub.device.name')} required>
               <Input
                 value={form.name}
