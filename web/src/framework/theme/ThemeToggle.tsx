@@ -29,7 +29,9 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t('theme.toggle')}>
+        {/* 下拉关闭后 Radix 以键盘模态还焦触发器，ghost 按钮的 focus 环会一直留着；
+            顶栏图标钮有明确的图标形态，去掉 ring（下拉菜单自身仍有完整焦点管理） */}
+        <Button variant="ghost" size="icon" aria-label={t('theme.toggle')} className="focus-visible:ring-0 focus-visible:ring-offset-0">
           {resolved === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
         </Button>
       </DropdownMenuTrigger>
