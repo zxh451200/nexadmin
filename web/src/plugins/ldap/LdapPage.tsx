@@ -70,7 +70,7 @@ export function LdapSection() {
     // 不带 body 的话后端只测已保存配置，刚改完就点测试会测到旧值，最迷惑人。
     mutationFn: () => api.post('/plugins/ldap/test', { ...cur, bindPassword }),
     onSuccess: () => toast.success(t('plugin_ldap.testOk')),
-    onError: (e) => toast.error((e as Error).message),
+    // 错误 toast 由 http 拦截器统一弹出，这里再 toast 一次会变双份。
   })
 
   const val = (k: keyof LdapConfig, fallback = '') => (form[k as keyof typeof form] as string) ?? (config.data?.[k] as string) ?? fallback
@@ -125,10 +125,7 @@ export function LdapSection() {
         </div>
         <FormGrid cols={2}>
           <label className={field}>
-            <span>
-              {t('plugin_ldap.bindDn')}
-              <RequiredMark />
-            </span>
+            {t('plugin_ldap.bindDn')}
             <Input value={val('bindDN')} onChange={(e) => set('bindDN', e.target.value)} />
             <span className={hint}>{t('plugin_ldap.bindDnHint')}</span>
           </label>

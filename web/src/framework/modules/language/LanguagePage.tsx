@@ -43,8 +43,10 @@ const signature = (rows: LanguageRow[]) =>
     .map((r) => [r.code, r.name, r.dir, r.default ? '1' : '0', r.htmlLang, r.ogLocale, r.prefix, r.dateFormat, r.enabled === false ? '0' : '1'].join('\u0001'))
     .join('\u0002')
 
-const CODE_RE = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/
-const PREFIX_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+// 与后端 core/languages.go 对齐：code 每段 2–8 位（zh-a 这类前端放过、后端会拒）；
+// prefix 放行下划线——同语基撞码时后端按 en-US → en_gb 回退，前端不能把合法回退值判成非法。
+const CODE_RE = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/
+const PREFIX_RE = /^[a-z0-9]+([-_][a-z0-9]+)*$/
 
 // RTL 语基与服务端 core/languages.go 的 rtlRe 同一张清单：新增行 dir 留空时前端先按代码
 // 预推导出同一结果，用户看到的默认值就是保存后会生效的值，而不是「界面 LTR、重启后 RTL」。

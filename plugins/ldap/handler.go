@@ -7,7 +7,9 @@ import (
 )
 
 // 路由前缀:/api/v1/plugins/ldap。权限码:ldap:list 查看;ldap:edit 编辑与测试。
-// 平台级配置,仅超管可达(配置接口挂 r 已要求登录 + 权限点)。
+// 平台级共享配置(表里没有 tenant_id,一行服务所有租户):读接口只需登录 + ldap:list,
+// 租户管理员也能看到当前配置(前端用 PlatformNotice 提示只读、收掉写入口);
+// 写与测试才加 core.RequirePlatform() 限定平台调用方。
 
 type handler struct{ svc *Service }
 
