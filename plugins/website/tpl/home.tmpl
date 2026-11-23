@@ -142,6 +142,32 @@
     </div>
   </section>
 
+  {{/* 源码交付实证：用真实目录树把「框架区 / 用户区分离」从口号变成看得见的结构。
+       目录与 AGENTS.md / 二次开发指南一致；框架区标 dim、用户区高亮，升级边界一眼可见。 */}}
+  <section class="hp-show hp-source" id="source">
+    <div class="container hp-source-in">
+      <div class="hp-source-copy" data-reveal>
+        <p class="hp-kicker">{{.T "home.source.kicker"}}</p>
+        <h2 class="hp-h2 hp-h2-sm">{{range $i, $line := titleLines (.T "home.source.title")}}{{if $i}}<br>{{end}}<span class="hp-h2-line{{if $i}} dim{{end}}">{{$line}}</span>{{end}}</h2>
+        <p class="hp-lead">{{.T "home.source.sub"}}</p>
+        <p class="hp-source-key"><span class="hp-source-swatch framework"></span>{{.T "home.source.legendFw"}}<span class="hp-source-swatch yours"></span>{{.T "home.source.legendYours"}}</p>
+        <a class="hp-more" href="{{.URL "/docs/二次开发指南"}}">{{.T "home.source.link"}}<span aria-hidden="true">→</span></a>
+      </div>
+      <div class="hp-tree" data-reveal role="img" aria-label="{{.T "home.source.aria"}}">
+        <div class="hp-tree-bar"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="hp-tree-title">~/myapp</span></div>
+        <pre class="hp-tree-body"><code><span class="tr-root">myapp/</span>
+├── <span class="tr-fw">core/</span>          <span class="tr-cmt">← {{.T "home.source.framework"}}</span>
+├── <span class="tr-fw">modules/</span>       <span class="tr-cmt">内置模块</span>
+├── <span class="tr-fw">plugins/</span>       <span class="tr-cmt">源码插件</span>
+├── <span class="tr-fw">web/</span>           <span class="tr-cmt">前端</span>
+├── <span class="tr-fw">migrations/</span>    <span class="tr-cmt">迁移</span>
+├── <span class="tr-you">internal/</span>     <span class="tr-cmt tr-hl">← {{.T "home.source.yours"}}</span>
+├── <span class="tr-you">my/</span>           <span class="tr-cmt tr-hl">← {{.T "home.source.yours"}}</span>
+└── <span class="tr-cmt">go.mod · config/ · docs/</span></code></pre>
+      </div>
+    </div>
+  </section>
+
   <section class="hp-show" id="extension">
     <div class="container">
       <div class="hp-show-head">

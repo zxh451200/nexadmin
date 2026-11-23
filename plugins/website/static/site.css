@@ -4033,6 +4033,15 @@ html[data-scheme="light"] .hp-window {
 .hp .shot-light { display: none; }
 html[data-scheme="light"] .hp .shot-dark { display: none; }
 html[data-scheme="light"] .hp .shot-light { display: block; }
+/* hero 截图源自视口截图，底部两张卡片天生是半截的（不是容器裁的）。
+   用渐变遮罩让图片底部溶入窗口底色 --panel，看起来是「内容继续向下延伸」
+   而不是「没截全」——linear.app / vercel 首页同款手法，不需要重截真·全页图，
+   也不用在首屏塞一个没人会去滚的滚动窗口。
+   起点 68% 保留上方完整卡片与趋势图，末端全透明后露出 --panel。 */
+.hp-window img {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
+}
 
 .hp-hero-caption {
   display: flex;
@@ -4196,6 +4205,75 @@ html[data-scheme="light"] .hp-show-shot {
 }
 .hp-tags .hp-tags-note::before { display: none; }
 
+/* ---- 源码交付实证区（真实目录树，框架区/用户区一眼分开） ---- */
+.hp-source-in {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 80px);
+  align-items: center;
+}
+.hp-source-copy .hp-h2 { margin-top: 14px; }
+.hp-source-copy .hp-lead { margin-top: 20px; }
+.hp-source-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 26px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.hp-source-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 7px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.hp-source-swatch.framework { background: var(--text-3); }
+.hp-source-swatch.yours { background: var(--accent-2); }
+.hp-source-copy .hp-more { margin-top: 28px; }
+
+.hp-tree {
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+  box-shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.7);
+}
+html[data-scheme="light"] .hp-tree { box-shadow: 0 20px 56px -28px rgba(8, 9, 10, 0.3); }
+.hp-tree-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+.hp-tree-title {
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+.hp-tree-body {
+  margin: 0;
+  padding: 20px 22px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.95;
+  color: var(--text-2);
+  overflow-x: auto;
+}
+.hp-tree-body code { font-size: inherit; background: none; border: 0; padding: 0; }
+.hp-tree-body .tr-root { color: var(--text); font-weight: 600; }
+.hp-tree-body .tr-fw { color: var(--text-2); }
+.hp-tree-body .tr-you { color: var(--accent-2); font-weight: 600; }
+.hp-tree-body .tr-cmt { color: var(--text-3); }
+.hp-tree-body .tr-hl { color: var(--accent-2); }
+
 /* ---- 通用分区 ---- */
 
 .hp-section {
@@ -4208,19 +4286,39 @@ html[data-scheme="light"] .hp-show-shot {
 
 .hp-caps {
   display: grid;
-  /* auto-fit：能力条目数量由后台维护，2/3/4 条都要排得匀，不留半排空位。 */
-  grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
-  gap: 0 clamp(28px, 4vw, 56px);
-  border-top: 1px solid var(--border);
+  /* auto-fit：能力条目数量由后台维护，2/3/4 条都要排得匀，不留半排空位。
+     改成实体卡片后保留 auto-fit：4 条一行、2 条各占一半，都不残留半排空位。 */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
 }
 .hp-cap {
-  padding: 26px 0 30px;
-  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  transition: border-color 0.2s, background 0.2s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.hp-cap-icon { display: inline-flex; color: var(--text-3); }
+.hp-cap:hover {
+  border-color: var(--border-strong);
+  background: var(--panel-2);
+  transform: translateY(-3px);
+}
+.hp-cap-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(94, 109, 210, 0.28);
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
 .hp-cap-icon svg { width: 19px; height: 19px; }
 .hp-cap h3 {
-  margin-top: 16px;
+  margin-top: 20px;
   font-size: 15.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -4560,6 +4658,7 @@ html[data-scheme="light"] .hp-cta-glow {
   .hp-intg-block,
   .hp-faq-block { grid-template-columns: 1fr; gap: 24px; }
   .hp-qs { grid-template-columns: 1fr; align-items: start; }
+  .hp-source-in { grid-template-columns: 1fr; gap: 32px; }
 }
 
 @media (max-width: 760px) {
