@@ -93,9 +93,7 @@ export function ReportViewer({ reportId }: { reportId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold">
-        {report.groupName ? `${builtinText(t, report.groupName)} / ${builtinText(t, report.name)}` : builtinText(t, report.name)}
-      </h2>
+      {/* 标题由页面负责（查看页在页头，列表页不展示），这里只管筛选器与图表本体 */}
       <ReportFilters reportId={reportId} filters={report.config.filters} values={values} onChange={setValues} />
       {groups.length === 0 ? <EmptyState title={t('plugin_report.report.noCharts')} /> : null}
       {groups.map((g) => (

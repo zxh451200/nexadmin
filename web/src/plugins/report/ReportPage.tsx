@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { usePermission } from '@/framework/auth/usePermission'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -8,16 +8,24 @@ import { DatasetsTab } from './DatasetsTab'
 import { ReportsTab } from './ReportsTab'
 import { ScreensTab } from './ScreensTab'
 
+/**
+ * 页签进 URL（?tab=）：刷新、浏览器后退、把「图表」页签发给同事都落在正确的位置。
+ * 无该页签权限的深链回退到第一个可见页签，与设置页同口径。
+ */
 export default function ReportPage() {
   const { t } = useTranslation()
   const { has } = usePermission()
+  const [params, setParams] = useSearchParams()
   const tabs = [
     { key: 'reports', perm: 'report:view', node: <ReportsTab /> },
     { key: 'screens', perm: 'report:view', node: <ScreensTab /> },
     { key: 'charts', perm: 'report:chart', node: <ChartsTab /> },
     { key: 'datasets', perm: 'report:dataset', node: <DatasetsTab /> },
   ].filter((x) => has(x.perm))
-  const [tab, setTab] = useState(tabs[0]?.key ?? 'reports')
+  const visible = tabs.map((x) => x.key)
+  const wanted = params.get('tab')
+  const tab = visible.find((k) => k === wanted) ?? visible[0] ?? 'reports'
+  const setTab = (k: string) => setParams({ tab: k }, { replace: true })
 
   return (
     <PageContainer>

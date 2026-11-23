@@ -9,6 +9,13 @@ export const routes: ModuleRoute[] = [
     menu: { title: 'plugin_report.menu', icon: 'ChartColumn', order: 70, group: 'monitor' },
   },
   {
+    // 报表查看页：从报表中心列表进入，不进菜单
+    path: 'monitor/report-view',
+    component: lazy(() => import('./ReportViewPage')),
+    perm: 'report:view',
+    hidden: true,
+  },
+  {
     // 数据大屏展示页：从报表中心的「大屏」页签进入，不进菜单
     path: 'monitor/report-screen',
     component: lazy(() => import('./ScreenViewPage')),
