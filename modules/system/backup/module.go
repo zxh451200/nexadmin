@@ -19,8 +19,17 @@ func (module) Name() string { return "backup" }
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := NewService(d.DB, d.Log, d.Config, about.Version)
 	routes(r, NewHandler(svc))
-	// 模块没有关闭钩子，goroutine 随进程退出（与 message 模块一致）。
-	go svc.Loop(context.Background())
+	// 与 recycle/message 的清理循环同口径：OnClose 关闭 stop，优雅退出定时检查。
+	stop := make(chan struct{})
+	if d.OnClose != nil {
+		d.OnClose(func() { close(stop) })
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stop
+		cancel()
+	}()
+	go svc.Loop(ctx)
 }
 
 // routes 注册接口：都要求超管 + 对应权限点；写操作进操作日志，下载单独记录。
