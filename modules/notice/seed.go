@@ -28,13 +28,13 @@ type seedRow struct {
 
 // 与前端 notice.mock.ts 一致的出厂公告。已读人数来自真实的 sys_notice_read，所以全新安装时都是 0。
 var seedRows = []seedRow{
-	{1, "系统升级维护通知 / Scheduled maintenance", "notice", "important", StatusPublished,
+	{1, "系统升级维护通知", "notice", "important", StatusPublished,
 		"<p>本周六 <strong>22:00 - 24:00</strong> 将进行系统升级，期间服务可能短暂不可用，请提前保存工作。</p><ul><li>影响范围：全部模块</li><li>预计时长：2 小时</li></ul>",
 		ScopeAll, nil, true, true, true, 30, 0, 0, 128},
-	{2, "新版本发布 / New release available", "announcement", "important", StatusPublished,
-		"<p>NexAdmin 新版本已发布,新增回收站、接口监控和登录锁定,欢迎体验。</p>", ScopeAll, nil, true, false, false, 52, 0, 0, 128},
-	{3, "2026 年度团建活动报名 / Team building sign-up", "activity", "normal", StatusPublished,
-		"<p>年度团建将于 11 月举行，欢迎在 OA 中报名。<em>Sign up before Nov 1.</em></p>", ScopeAll, nil, false, false, false, 100, 24 * 14, 0, 128},
+	{2, "新版本发布", "announcement", "important", StatusPublished,
+		"<p>NexAdmin 新版本已发布，新增回收站、接口监控和登录锁定，欢迎体验。</p>", ScopeAll, nil, true, false, false, 52, 0, 0, 128},
+	{3, "2026 年度团建活动报名", "activity", "normal", StatusPublished,
+		"<p>年度团建将于 11 月举行，欢迎在 OA 中报名，报名截止 11 月 1 日。</p>", ScopeAll, nil, false, false, false, 100, 24 * 14, 0, 128},
 	{4, "研发部技术分享周", "activity", "normal", StatusPublished,
 		"<p>研发部本周五下午举办技术分享，主题：前端性能优化与可观测性。</p>", ScopeDept, []idgen.ID{7300000000000000101}, false, false, false, 140, 0, 0, 36},
 	{5, "管理员须知：权限审计", "notice", "normal", StatusPublished,

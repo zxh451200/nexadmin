@@ -26,7 +26,7 @@ const base = (n: number, p: Partial<Notice> & Pick<Notice, 'title' | 'type' | 'l
 
 let items: Notice[] = [
   base(1, {
-    title: '系统升级维护通知 / Scheduled maintenance',
+    title: '系统升级维护通知',
     type: 'notice',
     level: 'important',
     status: 'published',
@@ -39,11 +39,11 @@ let items: Notice[] = [
     readCount: 71,
   }),
   base(2, {
-    title: '新版本发布 / New release available',
+    title: '新版本发布',
     type: 'announcement',
     level: 'important',
     status: 'published',
-    content: '<p>NexAdmin 新版本已发布,新增回收站、接口监控和登录锁定,欢迎体验。</p>',
+    content: '<p>NexAdmin 新版本已发布，新增回收站、接口监控和登录锁定，欢迎体验。</p>',
     popup: false,
     pinned: true,
     publishedAt: ago(52),
@@ -51,11 +51,11 @@ let items: Notice[] = [
     readCount: 96,
   }),
   base(3, {
-    title: '2026 年度团建活动报名 / Team building sign-up',
+    title: '2026 年度团建活动报名',
     type: 'activity',
     level: 'normal',
     status: 'published',
-    content: '<p>年度团建将于 11 月举行，欢迎在 OA 中报名。<em>Sign up before Nov 1.</em></p>',
+    content: '<p>年度团建将于 11 月举行，欢迎在 OA 中报名，报名截止 11 月 1 日。</p>',
     publishedAt: ago(100),
     expireAt: later(24 * 14),
     totalCount: 128,
