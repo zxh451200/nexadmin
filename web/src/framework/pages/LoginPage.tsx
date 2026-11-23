@@ -81,8 +81,8 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
       </svg>
       <div className="dot-grid-light absolute inset-0" style={{ maskImage: mask, WebkitMaskImage: mask }} aria-hidden="true" />
       <div className="pointer-events-none absolute -inset-s-24 -top-24 size-96 rounded-full bg-primary-foreground/20 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -bottom-32 inset-e-0 size-112 rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-s-1/4 top-[38%] size-64 rounded-full bg-primary/30 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -bottom-32 inset-e-0 size-112 rounded-full bg-accent/30 dark:bg-accent/15 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-s-1/4 top-[38%] size-64 rounded-full bg-primary-foreground/10 blur-3xl" aria-hidden="true" />
 
       {/* 几何装饰：双层六边形（呼应品牌 logo）+ 轨道环 + 实心小点缀；克制的透明度，保持大留白 */}
       <div
@@ -120,12 +120,12 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
         <ul className="mt-12 space-y-6">
           {features.map(({ icon: Icon, title, desc }) => (
             <li key={title} className="flex items-start gap-4">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 dark:bg-primary-foreground/20">
                 <Icon className="size-5" aria-hidden="true" />
               </span>
               <div>
                 <p className="font-semibold">{t(title)}</p>
-                <p className="mt-0.5 text-sm opacity-80">{t(desc)}</p>
+                <p className="mt-0.5 text-sm opacity-80 dark:opacity-90">{t(desc)}</p>
               </div>
             </li>
           ))}
@@ -231,6 +231,12 @@ export default function LoginPage() {
       {/* 深色：整页铺同一族品牌渐变，斜切线两侧同色（亮色不渲染，保持蓝色斜切面板）。
           定位元素按 DOM 顺序绘制，后续 BrandPanel 与右栏都带 relative 才能盖住这层。 */}
       <div className="login-page-bg absolute inset-0 hidden lg:dark:block" aria-hidden="true" />
+      {/* 深色右栏层次：表单侧淡点阵 + 右下冷光晕，让右半区不再是一整块死黑。
+          与 .login-page-bg 同作用域（仅 lg 深色），亮色不渲染；inset-e-/end- 在 RTL 下自动翻到表单侧。 */}
+      <div className="pointer-events-none absolute inset-0 hidden lg:dark:block" aria-hidden="true">
+        <div className="login-depth-dots absolute inset-e-0 top-0 h-full w-1/2" />
+        <div className="login-depth-glow absolute -bottom-40 -end-40 size-148 rounded-full" />
+      </div>
       <BrandPanel name={name} logoUrl={logoUrl} copyright={copyright} />
 
       <div className="relative flex flex-1 flex-col">

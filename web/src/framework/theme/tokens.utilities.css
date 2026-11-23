@@ -51,6 +51,20 @@
   }
 }
 
+@utility login-depth-dots {
+  /* 深色右栏的淡点阵：以表单区中心为焦点向四周渐隐，斜切边界和屏幕边缘都自然过渡。
+     只覆盖 inline-end 半边（表单侧），左栏已有 dot-grid，不重复；RTL 下自动翻到另一侧。 */
+  background-image: radial-gradient(circle, hsl(0 0% 100% / 0.1) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 80%);
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 80%);
+}
+
+@utility login-depth-glow {
+  /* 右下冷光晕：消掉表单区的死黑，色族跟随品牌面板的靛蓝，而不引入新的撞色 */
+  background-image: radial-gradient(circle, hsl(252 60% 62% / 0.22), transparent 66%);
+}
+
 @utility text-gradient {
   background-image: linear-gradient(
     90deg,
