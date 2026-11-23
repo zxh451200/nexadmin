@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, User, Wifi, WifiOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ArrowLeft, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, User, Wifi, WifiOff } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -17,6 +17,7 @@ import { SwitchRow } from '@/framework/components/SwitchField'
 import { LocationField, type GeoPoint } from '@/framework/map'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { useWs } from '@/framework/hooks/useWs'
+import { useMediaQuery } from '@/framework/hooks/use-mobile'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -27,6 +28,7 @@ import { cn } from '@/lib/utils'
 import { formatAgo, formatTime, formatTimeSec } from './format'
 import {
   exportHistory,
+  invalidateDeviceQueries,
   useAlarmEvents,
   useCommands,
   useCreateCommand,
@@ -107,6 +109,22 @@ export default function DevicePage() {
     next.set('device', no)
     setParams(next, { replace: true })
   }
+  // 单栏（<lg）时列表与详情二选一：70vh 的列表压在详情上头，点了行只能在下面几百像素外
+  // 找变化，列表内部还在自己滚。这里让 ?device= 同时表示「已进入详情」，返回即摘掉它。
+  const singlePane = useMediaQuery('(max-width: 1023px)')
+  const urlDevice = params.get('device')
+  const showDetail = !!selectedNo && (!singlePane || !!urlDevice)
+  const backToList = () => {
+    const next = new URLSearchParams(params)
+    next.delete('device')
+    setParams(next, { replace: true })
+  }
+  // 单栏切换列表/详情时把视口拉回卡片顶部：否则会停在上一屏的滚动位置，进详情直接落在中段，
+  // 设备名和返回按钮都在视口上方
+  const cardRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (singlePane) cardRef.current?.scrollIntoView({ block: 'start' })
+  }, [singlePane, showDetail])
 
   // 顶部总览：不点进详情就知道机群整体健不健康
   const stats = useDeviceStats()
@@ -115,12 +133,12 @@ export default function DevicePage() {
   // 是推的还是轮询来的，避免盯着一个已经不动的值以为还是实时。
   const { status: wsStatus } = useWs()
 
-  // WS：命中帧即刷全部查询（8s 轮询兜底）；统计、列表、规则、事件都在 KEY 前缀下
-  useDeviceFeed(() => {
-    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub'] })
-  })
-  useDeviceStream(selectedNo, () => {
-    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub'] })
+  // WS：按帧类型只刷受影响的那几块（8s 轮询兜底）。状态帧 → 列表/统计/详情/告警；
+  // 测点帧 → 实时值；告警帧 → 告警流水与规则。历史趋势不跟帧（见 invalidateDeviceQueries 注释）
+  useDeviceFeed(() => invalidateDeviceQueries(queryClient, ['devices', 'stats', 'device', 'alarms']))
+  useDeviceStream(selectedNo, (f) => {
+    if (f.type === 'alarm') invalidateDeviceQueries(queryClient, ['alarms', 'rules'])
+    else if (f.type === 'tick') invalidateDeviceQueries(queryClient, ['points'])
   })
 
   const [formOpen, setFormOpen] = useState(false)
@@ -141,13 +159,104 @@ export default function DevicePage() {
       await del.mutateAsync(d.deviceNo)
       toast.success(t('common.operateSuccess'))
       setSelectedNo(undefined)
+      // URL 里还挂着刚删掉的编号：留着会让「默认选第一台」把详情重新打开成别的设备
+      if (params.get('device')) {
+        const next = new URLSearchParams(params)
+        next.delete('device')
+        setParams(next, { replace: true })
+      }
     } catch {
       // 失败原因由 http 拦截器统一弹出
     }
   }
 
+  // 左栏：标题 + 搜索 + 设备行 + 翻页。宽屏下高度由整卡决定、行区自己滚；
+  // 单栏时按内容自然铺开，不让列表在页面里再套一层滚动。
+  const listPane = (
+    <div className="flex flex-col gap-2 p-2 lg:min-h-0 lg:border-e">
+      <div className="flex items-center justify-between gap-2 px-1 pt-1">
+        <span className="text-sm font-medium text-foreground">{t('plugin_devicehub.device.list')}</span>
+        <span className="num text-xs text-muted-foreground tabular-nums">{total}</span>
+      </div>
+      <Input
+        className="h-8"
+        value={kw}
+        onChange={(e) => setKw(e.target.value)}
+        placeholder={t('plugin_devicehub.device.search')}
+        aria-label={t('plugin_devicehub.device.search')}
+      />
+      {devices.isLoading ? (
+        /* 加载骨架按行形状占位，与 DataTable 的骨架同一语言 */
+        <div className="flex flex-col gap-2 py-2">
+          {Array.from({ length: 6 }, (_, k) => (
+            <Skeleton key={k} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : total === 0 ? (
+        kwQuery ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.device.noMatch')}</p>
+        ) : (
+          <EmptyState title={t('plugin_devicehub.device.empty')} className="py-8" />
+        )
+      ) : (
+        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          {list.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => select(d.deviceNo)}
+              aria-current={d.deviceNo === selectedNo ? 'true' : undefined}
+              className={cn(
+                'flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors hover:bg-accent',
+                d.deviceNo === selectedNo && 'bg-accent',
+              )}
+            >
+              <span className="flex w-full items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{d.name}</span>
+                <Badge variant={statusVariant(d.status)}>{t(`plugin_devicehub.status.${d.status}`)}</Badge>
+              </span>
+              <span className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate font-mono">{d.deviceNo}</span>
+                <span className="shrink-0">{t(`plugin_devicehub.protocol.${d.protocol}`)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {total > DEVICES_PAGE_SIZE ? (
+        <div className="flex items-center justify-between px-1 pb-1 text-xs text-muted-foreground">
+          <span className="tabular-nums">{t('plugin_devicehub.device.pageInfo', { page, pages })}</span>
+          <span className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              disabled={page <= 1}
+              aria-label={t('plugin_devicehub.device.pagePrev')}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              disabled={page >= pages}
+              aria-label={t('plugin_devicehub.device.pageNext')}
+              onClick={() => setPage((p) => Math.min(pages, p + 1))}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+
   return (
-    <PageContainer>
+    // 宽屏满高：页头 + 总览条固定，下面整卡撑满剩余高度，列表与详情各自在卡内滚动，
+    // 不再出现「列表滚一段 → 页面再滚一段」的双层滚动，分栏竖线也能拉到底。
+    <PageContainer className={singlePane ? undefined : 'h-full min-h-0'}>
       <PageHeader
         title={t('plugin_devicehub.title')}
         description={t('plugin_devicehub.description')}
@@ -187,94 +296,37 @@ export default function DevicePage() {
           {wsStatus === 'open' ? t('plugin_devicehub.ws.connected') : t('plugin_devicehub.ws.fallback')}
         </span>
       </div>
-      <Card className="grid grid-cols-1 overflow-hidden xl:grid-cols-[20rem_1fr]">
-        {/* 设备列表：标题 + 搜索 + 滚动列表。self-start：卡随内容收口，不被右侧详情的行高拉长成一块空板；
-            高度仍封顶，设备多了在卡内滚动。 */}
-        <div className="flex max-h-[70vh] min-h-0 flex-col gap-2 p-2 xl:max-h-[calc(100dvh-11rem)] xl:border-e">
-          <div className="flex items-center justify-between gap-2 px-1 pt-1">
-            <span className="text-sm font-medium text-foreground">{t('plugin_devicehub.device.list')}</span>
-            <span className="num text-xs text-muted-foreground tabular-nums">{total}</span>
-          </div>
-          <Input
-            className="h-8"
-            value={kw}
-            onChange={(e) => setKw(e.target.value)}
-            placeholder={t('plugin_devicehub.device.search')}
-            aria-label={t('plugin_devicehub.device.search')}
-          />
-          {devices.isLoading ? (
-            /* 加载骨架按行形状占位，与 DataTable 的骨架同一语言 */
-            <div className="flex flex-col gap-2 py-2">
-              {Array.from({ length: 6 }, (_, k) => (
-                <Skeleton key={k} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : total === 0 ? (
-            kwQuery ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.device.noMatch')}</p>
-            ) : (
-              <EmptyState title={t('plugin_devicehub.device.empty')} className="py-8" />
-            )
+      <Card
+        ref={cardRef}
+        className="overflow-hidden lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]"
+      >
+        {singlePane ? (
+          showDetail && selectedNo ? (
+            <>
+              {/* 单栏进详情：给一条明确的回头路，不然只能靠浏览器后退 */}
+              <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
+                <Button variant="ghost" size="sm" onClick={backToList}>
+                  <ArrowLeft aria-hidden="true" />
+                  {t('plugin_devicehub.device.backToList')}
+                </Button>
+              </div>
+              <DeviceDetail deviceNo={selectedNo} onEdit={openEdit} onDelete={onDelete} />
+            </>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {list.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => select(d.deviceNo)}
-                  className={cn(
-                    'flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors hover:bg-accent',
-                    d.deviceNo === selectedNo && 'bg-accent',
-                  )}
-                >
-                  <span className="flex w-full items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">{d.name}</span>
-                    <Badge variant={statusVariant(d.status)}>{t(`plugin_devicehub.status.${d.status}`)}</Badge>
-                  </span>
-                  <span className="flex w-full items-center gap-2 text-xs text-muted-foreground">
-                    <span className="min-w-0 flex-1 truncate font-mono">{d.deviceNo}</span>
-                    <span className="shrink-0">{t(`plugin_devicehub.protocol.${d.protocol}`)}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          {total > DEVICES_PAGE_SIZE ? (
-            <div className="flex items-center justify-between px-1 pb-1 text-xs text-muted-foreground">
-              <span className="tabular-nums">{t('plugin_devicehub.device.pageInfo', { page, pages })}</span>
-              <span className="flex items-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  disabled={page <= 1}
-                  aria-label={t('plugin_devicehub.device.pagePrev')}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  disabled={page >= pages}
-                  aria-label={t('plugin_devicehub.device.pageNext')}
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                >
-                  <ChevronRight aria-hidden="true" />
-                </Button>
-              </span>
-            </div>
-          ) : null}
-        </div>
-
-        {/* 详情 */}
-        {selectedNo ? (
-          <DeviceDetail deviceNo={selectedNo} onEdit={openEdit} onDelete={onDelete} />
+            listPane
+          )
         ) : (
-          <div className="flex min-h-64 items-center justify-center border-t text-sm text-muted-foreground xl:border-t-0 xl:border-s">
-            {t('plugin_devicehub.pickDevice')}
-          </div>
+          <>
+            {listPane}
+            {/* 详情 */}
+            {showDetail && selectedNo ? (
+              <DeviceDetail deviceNo={selectedNo} onEdit={openEdit} onDelete={onDelete} />
+            ) : (
+              <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground lg:border-s">
+                {t('plugin_devicehub.pickDevice')}
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -300,8 +352,9 @@ function DeviceDetail({
   const [tab, setTab] = useState('points')
 
   return (
-    // 合并卡后的详情栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
-    <div className="flex min-h-0 flex-col gap-3 p-4 border-t xl:border-t-0 xl:border-s">
+    // 宽屏下是第二栏：自带分栏竖线，整栏自己滚（列表滚它的、详情滚它的）；
+    // 单栏时上方有返回条，不再额外画 border-t
+    <div className="flex min-h-0 flex-col gap-3 p-4 lg:border-s lg:overflow-y-auto">
       {/* 头部两行：第一行设备名 + 状态 + 操作；第二行编号/协议/地址，视觉上不与操作按钮抢一行 */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -673,6 +726,13 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
   const [range, setRange] = useState('24')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  // 区间右端跟着时钟走：页面一直开着时，图表右沿不能永远停在打开那一刻
+  // （实时帧只刷测点值，历史靠这里每分钟把窗口往前推一格）
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
   const query = useMemo(() => {
     const pick = (from: Date, to: Date) => ({
       pointId,
@@ -686,9 +746,9 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
       if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return null
       return pick(from, to)
     }
-    const to = new Date()
+    const to = new Date(now)
     return pick(new Date(to.getTime() - Number(range) * 3600_000), to)
-  }, [pointId, range, customFrom, customTo])
+  }, [pointId, range, customFrom, customTo, now])
   const history = useHistory(deviceNo, query ?? { pointId: '' })
   const rows = history.data?.rows ?? []
   // 后端按查询窗口降采样，bucket 回传实际采样间隔（raw/hour/5s/2m…），展示出来避免误读
@@ -715,7 +775,7 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
           aria-label={t('plugin_devicehub.point.name')}
           value={pointId}
           onChange={setPickedId}
-          options={numeric.map((p) => ({ value: p.id, label: p.name }))}
+          options={numeric.map((p) => ({ value: p.id, label: p.unit ? `${p.name} (${p.unit})` : p.name }))}
         />
         <SimpleSelect
           className="w-36"
@@ -766,11 +826,17 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
           </div>
           <TrendChart
             data={rows.map((r) => ({ ts: fmtTs(r.ts), avg: r.avg, min: r.min, max: r.max }))}
-            series={[
-              { key: 'avg', label: t('plugin_devicehub.history.avg') },
-              { key: 'min', label: t('plugin_devicehub.history.min') },
-              { key: 'max', label: t('plugin_devicehub.history.max') },
-            ]}
+            // raw 分辨率下后端把 min/max/avg 填成同一个原始读数，三条线严丝合缝地重合，
+            // 图例却摆出三个统计口径——只画一条「值」，别让人以为这里还有别的信息
+            series={
+              bucket === 'raw'
+                ? [{ key: 'avg', label: t('plugin_devicehub.history.value') }]
+                : [
+                    { key: 'avg', label: t('plugin_devicehub.history.avg') },
+                    { key: 'min', label: t('plugin_devicehub.history.min') },
+                    { key: 'max', label: t('plugin_devicehub.history.max') },
+                  ]
+            }
             xKey="ts"
           />
         </>
@@ -934,9 +1000,11 @@ function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
   }, [rules])
   // 事件流：级别筛选 + 分页——事件只增不删，不翻页五十条以后就翻不动了
   const EVENTS_PAGE_SIZE = 10
-  const [level, setLevel] = useState('')
+  // 「全部级别」用 'all' 而不是空串：Radix 的 Select 把 value='' 当成「未选中」，
+  // 选项文字进不了触发器，筛选框会一直显示成一个空白胶囊（2026-11-23 实测）。
+  const [level, setLevel] = useState('all')
   const [page, setPage] = useState(1)
-  const events = useAlarmEvents(deviceNo, { level: level || undefined, page, pageSize: EVENTS_PAGE_SIZE })
+  const events = useAlarmEvents(deviceNo, { level: level === 'all' ? undefined : level, page, pageSize: EVENTS_PAGE_SIZE })
   const eventRows = events.data?.list ?? []
   const eventTotal = events.data?.total ?? 0
   const eventPages = Math.max(1, Math.ceil(eventTotal / EVENTS_PAGE_SIZE))
@@ -987,7 +1055,7 @@ function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
               setPage(1)
             }}
             options={[
-              { value: '', label: t('plugin_devicehub.alarm.levelAll') },
+              { value: 'all', label: t('plugin_devicehub.alarm.levelAll') },
               ...LEVELS.map((l) => ({ value: l, label: t(`plugin_devicehub.alarm.level.${l}`) })),
             ]}
           />

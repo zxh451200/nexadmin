@@ -1,6 +1,6 @@
 // 设备接入与监控的 API 层：类型 + react-query hooks + WS 实时订阅。
 import { useEffect, useRef } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 import { useWs } from '@/framework/hooks/useWs'
@@ -138,6 +138,20 @@ export interface DeviceWsFrame {
 export const DEVICE_WS_FEED = 'device:feed'
 export const deviceWsTopic = (deviceNo: string) => `device:${deviceNo}`
 
+/** 可以按帧局部失效的查询域（queryKey 的第二段）。 */
+export type DeviceQueryPart = 'devices' | 'device' | 'stats' | 'points' | 'commands' | 'alarms' | 'rules' | 'history'
+
+/**
+ * 实时帧只刷受影响的那几块，不要把 `plugin_devicehub` 整域打红：
+ * 之前每一帧都整域失效，历史趋势这种聚合查询（30 天降采样）被每来一个测点就重跑一遍，
+ * 而它的窗口右端是固定的，重跑也拿不到新数据——纯白打库。
+ * 现在：status → 列表/统计/详情/告警；tick → 测点实时值；alarm → 告警流水与规则。
+ * 历史趋势由 HistoryPanel 自己按分钟滚动窗口，不跟帧。
+ */
+export function invalidateDeviceQueries(qc: QueryClient, parts: DeviceQueryPart[]) {
+  for (const p of parts) void qc.invalidateQueries({ queryKey: [...KEY, p] })
+}
+
 function useDeviceTopic(topic: string | undefined, onFrame: (f: DeviceWsFrame) => void) {
   const { subscribe } = useWs()
   const handler = useRef(onFrame)
@@ -156,7 +170,7 @@ export function useDeviceStream(deviceNo: string | undefined, onFrame: (f: Devic
   useDeviceTopic(deviceNo ? deviceWsTopic(deviceNo) : undefined, onFrame)
 }
 
-/** 全列表帧：任何设备状态/测点变化都发一帧。 */
+/** 全列表帧：设备在线状态变化（service.go 只在 status 真的变了时发）。 */
 export function useDeviceFeed(onFrame: (f: DeviceWsFrame) => void) {
   useDeviceTopic(DEVICE_WS_FEED, onFrame)
 }
