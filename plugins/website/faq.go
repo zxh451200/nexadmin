@@ -175,10 +175,10 @@ const SourceFaqs = "website_faqs"
 // 导出的 xlsx 末尾多一列「更新时间」，导入中心会忽略没登记的列——导出的文件可以直接改完再导回。
 func faqImportColumns() []importspec.Column {
 	return []importspec.Column{
-		{Key: "question", Label: "问题", Required: true, Example: "支持哪些付款方式？"},
-		{Key: "answer", Label: "答案", Example: "支持 T/T、PayPal 等方式"},
-		{Key: "sort", Label: "排序", Example: "10"},
-		{Key: "status", Label: "状态", Example: "展示中"},
+		{Key: "question", Label: "问题", LabelKey: "website.import_faq_question", Required: true, Example: "支持哪些付款方式？"},
+		{Key: "answer", Label: "答案", LabelKey: "website.import_faq_answer", Example: "支持 T/T、PayPal 等方式"},
+		{Key: "sort", Label: "排序", LabelKey: "website.import_faq_sort", Example: "10"},
+		{Key: "status", Label: "状态", LabelKey: "website.import_faq_status", Example: "展示中"},
 	}
 }
 

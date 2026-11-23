@@ -79,9 +79,10 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 			},
 		},
 		{
-			Name:    SourceFaqs,
-			Title:   "常见问题导入",
-			Columns: faqImportColumns(),
+			Name:     SourceFaqs,
+			Title:    "常见问题导入",
+			TitleKey: "website.import_faqs_title",
+			Columns:  faqImportColumns(),
 			Handler: func(ctx context.Context, _ int, row map[string]string) error {
 				return svc.importFaqRow(ctx, row)
 			},

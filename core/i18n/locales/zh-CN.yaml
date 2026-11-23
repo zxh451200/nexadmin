@@ -850,6 +850,11 @@ website:
   import_col_seo_keywords: "SEO 关键词"
   import_col_author: "作者"
   import_col_i18n: "多语言"
+  import_faqs_title: "常见问题导入"
+  import_faq_question: "问题"
+  import_faq_answer: "答案"
+  import_faq_sort: "排序"
+  import_faq_status: "状态"
 codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"

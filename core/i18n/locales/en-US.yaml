@@ -851,6 +851,11 @@ website:
   import_col_seo_keywords: "SEO keywords"
   import_col_author: "Author"
   import_col_i18n: "Multilingual"
+  import_faqs_title: "FAQ import"
+  import_faq_question: "Question"
+  import_faq_answer: "Answer"
+  import_faq_sort: "Sort"
+  import_faq_status: "Status"
 codegen:
   table_not_found: "Table not found: %s"
   invalid_input: "Invalid input. Please check and try again."

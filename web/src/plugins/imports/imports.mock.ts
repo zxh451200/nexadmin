@@ -10,7 +10,7 @@ const SOURCES: ImportSourceMeta[] = [
     // 与 plugins/crm/import.go 的 ImportSources 同列同序：mock 的模板与列提示也是契约的一部分。
     columns: [
       { key: 'name', label: '客户名称', required: true, example: '张三' },
-      { key: 'type', label: '客户类型（个人/企业）', required: false, example: '个人' },
+      { key: 'type', label: '客户类型', required: false, example: '个人' },
       { key: 'phone', label: '手机号', required: false, example: '13800138000' },
       { key: 'email', label: '邮箱', required: false, example: 'zhangsan@example.com' },
       { key: 'level', label: '客户等级', required: false, example: 'A' },
@@ -39,6 +39,29 @@ const SOURCES: ImportSourceMeta[] = [
     ],
   },
   {
+    // 与 modules/system/post/importsource.go 的 ImportSources 同列同序。
+    name: 'sys_posts',
+    title: '岗位导入',
+    columns: [
+      { key: 'code', label: '岗位编码', required: true, example: 'seo' },
+      { key: 'name', label: '岗位名称', required: true, example: '总裁' },
+      { key: 'sort', label: '排序', required: false, example: '1' },
+      { key: 'status', label: '状态(1启用 0停用)', required: false, example: '1' },
+      { key: 'remark', label: '备注', required: false, example: '' },
+    ],
+  },
+  {
+    // 与 plugins/website/faq.go 的 faqImportColumns 同列同序。
+    name: 'website_faqs',
+    title: '常见问题导入',
+    columns: [
+      { key: 'question', label: '问题', required: true, example: '支持哪些付款方式？' },
+      { key: 'answer', label: '答案', required: false, example: '支持 T/T、PayPal 等方式' },
+      { key: 'sort', label: '排序', required: false, example: '10' },
+      { key: 'status', label: '状态', required: false, example: '展示中' },
+    ],
+  },
+  {
     // 与 plugins/website/product_io.go 的 ImportSources 同列同序：mock 的模板与列提示也是契约的一部分。
     name: 'website_products',
     title: '产品导入',
@@ -59,6 +82,7 @@ const SOURCES: ImportSourceMeta[] = [
       { key: 'priceUnit', label: '计量单位', required: false, example: 'piece' },
       { key: 'moq', label: '最小起订量', required: false, example: '100' },
       { key: 'leadTimeDays', label: '发货天数', required: false, example: '15' },
+      { key: 'freightAmount', label: '运费金额', required: false, example: '99.00' },
       { key: 'port', label: '装运港口', required: false, example: 'Shanghai' },
       { key: 'paymentTerms', label: '付款方式', required: false, example: 'T/T, L/C' },
       { key: 'specs', label: '动态属性', required: false, example: '[{"label":"Voltage","value":"18V"}] 或 电压:18V|品牌:NexTool' },
