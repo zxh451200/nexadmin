@@ -92,7 +92,7 @@
         "unavailable": "One-click installation is unavailable on this node",
         "checking": "Checking build and restart prerequisites…",
         "failed": "Environment check failed. Installation controls remain visible but unavailable; retry the check.",
-        "guidance": "Plugins ship as source, not hot-loadable binaries. For production, install and verify on a build machine, then deploy the artifacts. Installing here requires source, Go, npm, frontend dependencies and a service managed with start.",
+        "guidance": "Plugins ship as source, not hot-loadable binaries. For production, install and verify on a build machine, then deploy the artifacts. Installing here requires source, Go, npm, frontend dependencies and a service managed with start. When this node cannot install, use the CLI instead: go run ./cmd/nexadmin plugin install <path>.",
         "issue": {
           "source": "Complete project source is missing.",
           "go": "Go toolchain was not found.",
