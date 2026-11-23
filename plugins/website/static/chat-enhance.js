@@ -93,7 +93,7 @@
     '.chat-settings-actions{display:flex;justify-content:flex-end;margin-top:2px}',
     '.chat-settings-actions button{height:32px;padding:0 14px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
     '.chat-settings-actions button:hover{border-color:currentColor}',
-    '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,var(--text));color:var(--panel-2);font-weight:600}',
+    '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,var(--text));color:#fff;font-weight:600}',
     '.chat-settings-actions .is-primary:hover{filter:brightness(1.08);border-color:transparent}',
     // 翻译快捷浮层（工具栏文A 按钮）：立即翻译主按钮 + 两个自动翻译开关行 + 设置入口。
     // 贴着工具栏弹出（与表情、地址卡同位置）：原来从头部下方展开，离触发按钮半屏远，
@@ -102,9 +102,12 @@
     '.chat-settings-pop:focus{outline:none}',
     '.chat-tr-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}',
     '.chat-tr-head h3{margin:0;font-size:12.5px}',
-    '.chat-tr-now{box-sizing:border-box;width:100%;height:32px;margin-bottom:4px;border:1px solid transparent;border-radius:4px;background:var(--pc-accent,var(--text));color:var(--panel-2);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}',
+    // 文字不再反白取 --panel-2：那等于拿面板底色当字色，深色主题下只有 4:1，
+    // 再叠 [disabled] 的 opacity 会和底色混成同一个值（实测 1.9:1，字直接消失）。
+    // 主色底统一用白字（4.7:1），禁用态改成淡主色底 + 次级灰字，弱化但可读。
+    '.chat-tr-now{box-sizing:border-box;width:100%;height:32px;margin-bottom:4px;border:1px solid transparent;border-radius:4px;background:var(--pc-accent,var(--text));color:#fff;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}',
     '.chat-tr-now:hover{filter:brightness(1.08)}',
-    '.chat-tr-now[disabled]{opacity:.5;cursor:default;filter:none}',
+    '.chat-tr-now[disabled]{background:var(--accent-soft,rgba(128,128,128,.14));color:var(--text-3,inherit);cursor:default;filter:none}',
     '.chat-tr-row{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:12px;cursor:pointer}',
     '.chat-tr-row+.chat-tr-row{border-top:1px solid rgba(128,128,128,.14)}',
     '.chat-tr-row .chat-switch{flex:none}',
@@ -159,7 +162,7 @@
     // 主按钮做反色实心：原来主次都只有一圈边框，只靠字重区分，一眼看不出该点哪个。
     // 注意不能写 background:currentColor 再改 color —— 同一规则里 color 先落值，
     // currentColor 会跟着变成 Canvas，按钮就白底白字消失了；用 CanvasText 显式取反色。
-    '.chat-card-actions .is-primary{border-color:transparent;background:var(--pc-accent,var(--text));color:var(--panel-2);font-weight:600}',
+    '.chat-card-actions .is-primary{border-color:transparent;background:var(--pc-accent,var(--text));color:#fff;font-weight:600}',
     '.chat-card-actions .is-primary:hover{filter:brightness(1.08)}',
     // 地址卡片的国家/州省下拉：触发钮长得和输入框一致，展开层浮在表单上面；
     // 跟 .chat-card-pop 一样用 Canvas/currentColor，浅深主题都不用另配色。
