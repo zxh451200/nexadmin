@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core"
+	"nexadmin/core/tenant"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -13,6 +14,10 @@ func init() { core.RegisterBuiltin(module{}) }
 type module struct{}
 
 func (module) Name() string { return "recycle" }
+
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "sys_recycle", Column: "tenant_id"}}
+}
 
 // Register 注册路由，并挂上每日孤儿清理循环
 // （与 message 的清理循环同口径：OnClose 关闭 stop 通道，优雅关闭时退出）。

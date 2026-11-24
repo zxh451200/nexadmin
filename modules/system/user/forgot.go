@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
@@ -44,6 +45,7 @@ type forgotStore interface {
 
 type forgotUser struct {
 	ID       idgen.ID
+	TenantID idgen.ID
 	Username string
 	Name     string
 	Email    string // 有邮箱时重置成功发安全告警邮件；没有就跳过
@@ -59,7 +61,7 @@ func uniqueForgotUser(us []User) *forgotUser {
 	if name == "" {
 		name = u.Username
 	}
-	return &forgotUser{ID: u.ID, Username: u.Username, Name: name, Email: u.Email}
+	return &forgotUser{ID: u.ID, TenantID: u.TenantID, Username: u.Username, Name: name, Email: u.Email}
 }
 
 type gormForgotStore struct{ db *gorm.DB }
@@ -104,6 +106,7 @@ type forgotService struct {
 	now    func() time.Time
 	// sessions 用于重置成功后吊销该账号的全部会话；测试里可为 nil（跳过吊销）。
 	sessions *session.Store
+	auth     *auth.Service
 }
 
 func newForgotService(st forgotStore, db *gorm.DB, c cache.Cache, n *notify.Service, sms smsSender, log *zap.Logger) *forgotService {

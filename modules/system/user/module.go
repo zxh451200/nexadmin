@@ -27,6 +27,13 @@ type module struct {
 
 func (*module) Name() string { return "user" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "sys_user_identity", Column: "tenant_id"},
+		{Name: "sys_login_lock", Column: "tenant_id"},
+	}
+}
+
 // Register 注册路由。固定路径写在 /:id 之前。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	m.deps.Store(d)
@@ -34,7 +41,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if d.Auth != nil {
 		d.Auth.SetSessionPolicyProvider(func() auth.SessionPolicy { return sessionPolicy(d.DB) })
 	}
-	h := &handler{svc: &service{db: d.DB, cache: d.Cache, notify: d.Notify, sessions: session.Shared(d.Cache, d.Config.Auth.RefreshTTL)}, log: d.Log}
+	h := &handler{svc: &service{db: d.DB, cache: d.Cache, auth: d.Auth, notify: d.Notify, sessions: session.Shared(d.Cache, d.Config.Auth.RefreshTTL)}, log: d.Log}
 	svc := h.svc
 	// 令牌签发即登记会话：session.Middleware 只在 profile/message 等路由惰性登记，
 	// 不登记的会话不受 KickUser 吊销控制——管理员重置密码/停用就踢不掉这类在用会话。

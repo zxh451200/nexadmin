@@ -9,6 +9,7 @@ import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
+import { ApiError } from '@/framework/request/http'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
@@ -69,7 +70,7 @@ function Field({
 
 export default function TenantSelfPage() {
   const { t, i18n } = useTranslation()
-  const { data, isLoading, isError } = useTenantSelf()
+  const { data, isLoading, isError, error, refetch, isFetching } = useTenantSelf()
   const save = useSaveTenantSelf()
   const [form, setForm] = useState<TenantSelfInput>(EMPTY)
   const [errors, setErrors] = useState<Partial<Record<keyof TenantSelfInput, string>>>({})
@@ -88,7 +89,7 @@ export default function TenantSelfPage() {
       title={t('tenantSelf.title')}
       description={t('tenantSelf.description')}
       actions={
-        data ? (
+        data && !isError ? (
           <div className="flex items-center gap-2">
             <Badge variant={data.status === 'active' ? 'success' : data.status === 'expired' ? 'destructive' : 'warning'}>
               {t(`tenantSelf.status.${data.status}`)}
@@ -118,12 +119,25 @@ export default function TenantSelfPage() {
   }
 
   if (isError || !data) {
+    const unmanaged = error instanceof ApiError && error.status === 404
     return (
       <PageContainer>
         {header}
         <Card>
           <CardContent>
-            <EmptyState icon={<Building2 className="size-6" aria-hidden="true" />} title={t('tenantSelf.unmanaged')} description={t('tenantSelf.unmanagedDesc')} />
+            <EmptyState
+              icon={unmanaged ? <Building2 className="size-6" aria-hidden="true" /> : <HardDrive className="size-6" aria-hidden="true" />}
+              title={unmanaged ? t('tenantSelf.unmanaged') : t('common.loadFailed')}
+              description={unmanaged ? t('tenantSelf.unmanagedDesc') : undefined}
+              action={
+                unmanaged ? undefined : (
+                  <Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>
+                    <RotateCcw className="size-4" aria-hidden="true" />
+                    {t('common.retry')}
+                  </Button>
+                )
+              }
+            />
           </CardContent>
         </Card>
       </PageContainer>

@@ -27,6 +27,13 @@ type module struct{}
 
 func (*module) Name() string { return "saml" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_saml_source", Column: "tenant_id"},
+		{Name: "plg_saml_role_grant", Column: "tenant_id"},
+	}
+}
+
 var _ plugin.Starter = (*module)(nil)
 
 // Start 启动元数据后台同步：默认每 24 小时一次，saml.metadata_refresh_hours: 0 关闭。

@@ -266,6 +266,7 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	// WebSocket hub:所有插件的实时推送共用一条 WS 连接(见 core/ws)。
 	wsHub := ws.NewHub(0)
 	ws.SetDefault(wsHub)
+	ws.Wire(bus, wsHub)
 	e.GET("/ws", ws.NewHandler(wsHub, svc).Handle)
 	api := e.Group(contractAPIPrefix)
 	// 演示站写保护（config demo.enabled，默认关）：registry 始终创建，

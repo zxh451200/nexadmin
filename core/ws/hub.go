@@ -24,11 +24,12 @@ import (
 
 // Conn 是一个已升级的 WebSocket 连接（用户级，非主题级）。
 type Conn struct {
-	ID     string     // 连接 ID（随机，用于日志）
-	UserID string     // 挂载后的用户 ID
-	Send   chan Frame // 出站队列（满则丢弃该帧，不阻塞其它连接）
-	closed chan struct{}
-	once   sync.Once
+	ID       string     // 连接 ID（随机，用于日志）
+	UserID   string     // 挂载后的用户 ID
+	TenantID string     // 租户 ID；匿名连接为空
+	Send     chan Frame // 出站队列（满则丢弃该帧，不阻塞其它连接）
+	closed   chan struct{}
+	once     sync.Once
 }
 
 // Close 关闭连接（幂等）。
@@ -71,9 +72,9 @@ func NewHub(sendBuf int) *Hub {
 
 // Register 注册一个新连接（握手成功后调用）。onClose 在连接移除时回调（含其订阅主题，
 // 供调用方清理外部状态；可为 nil）。
-func (h *Hub) Register(connID, userID string, onClose func(connID string, topics []string)) *Conn {
+func (h *Hub) Register(connID, userID, tenantID string, onClose func(connID string, topics []string)) *Conn {
 	c := &Conn{
-		ID: connID, UserID: userID,
+		ID: connID, UserID: userID, TenantID: tenantID,
 		Send:   make(chan Frame, h.sendBuf),
 		closed: make(chan struct{}),
 	}
@@ -174,6 +175,49 @@ func (h *Hub) PublishToUser(userID string, data any) {
 		case c.Send <- frame:
 		default:
 		}
+	}
+}
+
+// KickUser 关闭某租户内指定用户的全部本地连接。
+func (h *Hub) KickUser(userID, tenantID string) {
+	h.mu.RLock()
+	var targets []*Conn
+	for _, c := range h.conns {
+		if c.UserID == userID && c.TenantID == tenantID {
+			targets = append(targets, c)
+		}
+	}
+	h.mu.RUnlock()
+	for _, c := range targets {
+		c.Close()
+	}
+}
+
+// KickTenant 关闭某租户的全部本地连接。
+func (h *Hub) KickTenant(tenantID string) {
+	h.mu.RLock()
+	var targets []*Conn
+	for _, c := range h.conns {
+		if c.TenantID == tenantID {
+			targets = append(targets, c)
+		}
+	}
+	h.mu.RUnlock()
+	for _, c := range targets {
+		c.Close()
+	}
+}
+
+// CloseAll 关闭全部本地连接；订阅重连后用它丢弃断开期间建立的失效连接。
+func (h *Hub) CloseAll() {
+	h.mu.RLock()
+	targets := make([]*Conn, 0, len(h.conns))
+	for _, c := range h.conns {
+		targets = append(targets, c)
+	}
+	h.mu.RUnlock()
+	for _, c := range targets {
+		c.Close()
 	}
 }
 

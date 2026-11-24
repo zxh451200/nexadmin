@@ -44,10 +44,17 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 			return forbiddenRole("user.super_operate_forbidden")
 		}
 	}
+	userTenants := make(map[idgen.ID]idgen.ID, len(ids))
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var users []User
 		if err := tx.Where("id IN ?", ids).Find(&users).Error; err != nil {
 			return err
+		}
+		for _, u := range users {
+			userTenants[u.ID] = u.TenantID
+			if err := s.revokeUser(ctx, u.ID, u.TenantID); err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("id IN ?", ids).Delete(&User{}).Error; err != nil {
 			return err
@@ -62,14 +69,9 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 	if err != nil {
 		return err
 	}
-	// 删除即下线：被删账号的会话全部吊销（软删还原后也要重新登录）。吊销失败不影响删除结果。
-	if s.sessions != nil {
-		for _, id := range ids {
-			_ = s.sessions.KickUser(ctx, id, "")
-		}
-	}
+	// 删除即下线；安全版本保证漏登记的旧令牌在软删还原后也不能复活。
 	for _, id := range ids {
-		event.Publish(ctx, event.UserDeleted, event.UserData{ID: id, TenantID: tenantOf(ctx)})
+		event.Publish(ctx, event.UserDeleted, event.UserData{ID: id, TenantID: userTenants[id]})
 	}
 	return nil
 }
@@ -92,14 +94,16 @@ func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me 
 	if status == statusOff && (u.IsSuper || u.ID == me.ID) {
 		return bad("user.super_self_cannot_disable")
 	}
+	if status == statusOff {
+		// 先吊销再落库；缓存写入失败时停用直接失败，旧凭据不会继续可用。
+		if err := s.revokeUser(ctx, id, u.TenantID); err != nil {
+			return err
+		}
+	}
 	if err := s.db.WithContext(ctx).Model(&User{}).Where("id = ?", int64(id)).Update("status", status).Error; err != nil {
 		return err
 	}
 	u.Status = status
-	// 停用即下线：被停用账号的会话全部吊销，旧令牌立刻失效（重新启用不恢复会话，重新登录即可）。
-	if status == statusOff && s.sessions != nil {
-		_ = s.sessions.KickUser(ctx, id, "")
-	}
 	event.Publish(ctx, event.UserUpdated, userEvent(u))
 	return nil
 }
@@ -151,13 +155,13 @@ func (s *service) resetPassword(ctx context.Context, id idgen.ID, newPw string, 
 	if err != nil {
 		return err
 	}
+	if err := s.revokeUser(ctx, id, u.TenantID); err != nil {
+		return err
+	}
 	if err := s.db.WithContext(ctx).Model(&User{}).Where("id = ?", int64(id)).Update("password", hash).Error; err != nil {
 		return err
 	}
 	s.mailAccount(ctx, u, "reset")
-	if s.sessions != nil {
-		return s.sessions.KickUser(ctx, id, "")
-	}
 	return nil
 }
 

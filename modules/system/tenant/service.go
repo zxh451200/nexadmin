@@ -3,22 +3,62 @@ package tenant
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
+	"nexadmin/core/config"
 	"nexadmin/core/response"
 	ctenant "nexadmin/core/tenant"
+	"nexadmin/modules/internal/session"
 	"nexadmin/pkg/idgen"
 )
 
 // Service 封装租户与套餐的数据访问与业务规则。
-type Service struct{ db *gorm.DB }
+type Service struct {
+	db             *gorm.DB
+	deletionTables []ctenant.Table
+	isolationOn    bool
+	isolatedIDs    map[idgen.ID]struct{}
+	auth           *auth.Service
+	sessions       *session.Store
+}
 
 // NewService 创建服务。
-func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+func NewService(db *gorm.DB) *Service {
+	return NewServiceWithTables(db, ctenant.BaselineTables())
+}
+
+// NewServiceWithTables creates a service with an immutable deletion-table snapshot.
+func NewServiceWithTables(db *gorm.DB, tables []ctenant.Table) *Service {
+	normalized, err := ctenant.Validate(tables)
+	if err != nil {
+		panic("tenant: invalid deletion table registry: " + err.Error())
+	}
+	return &Service{db: db, deletionTables: normalized}
+}
+
+// NewServiceWithIsolation adds the configured tenant-database deletion guard.
+func NewServiceWithIsolation(db *gorm.DB, tables []ctenant.Table, isolation config.Isolation) *Service {
+	s := NewServiceWithTables(db, tables)
+	s.isolationOn = isolation.Enabled
+	if !isolation.Enabled {
+		return s
+	}
+	s.isolatedIDs = make(map[idgen.ID]struct{}, len(isolation.Tenants))
+	for raw := range isolation.Tenants {
+		id, err := idgen.Parse(raw)
+		if err != nil || id <= 0 || id.String() != raw {
+			panic(fmt.Sprintf("tenant: invalid database isolation tenant ID %q", raw))
+		}
+		s.isolatedIDs[id] = struct{}{}
+	}
+	return s
+}
 
 func bad(key string, args ...any) error      { return response.BadRequest(key, args...) }
 func conflict(key string, args ...any) error { return response.Conflict(key, args...) }
@@ -265,6 +305,39 @@ func (s *Service) CreateTenant(ctx context.Context, in TenantInput) (*Tenant, er
 	return t, nil
 }
 
+func (s *Service) revokeTenant(ctx context.Context, id idgen.ID) error {
+	target := ctenant.With(ctenant.Unskip(ctx), id)
+	var stampErr error
+	if s.auth != nil {
+		stampErr = s.auth.InvalidateTenant(target, id)
+	}
+	var sessionErr error
+	if s.sessions != nil {
+		sessionErr = s.sessions.KickTenant(target, id)
+	}
+	ctenant.Invalidate(id)
+	return errors.Join(stampErr, sessionErr)
+}
+
+// prepareAccessRevocation 在租户状态落库前处理允许状态的切换；缓存写失败时写操作直接失败。
+// 自然到期不经过写接口，因此这里同时比较“当前真实状态”和“本次修改后的状态”。
+func (s *Service) prepareAccessRevocation(ctx context.Context, id idgen.ID, status string, expireAt time.Time) error {
+	info, err := ctenant.Lookup(ctenant.With(ctenant.Unskip(ctx), id), id)
+	if err != nil {
+		return err
+	}
+	next := ctenant.Info{ID: id, Status: status, ExpireAt: expireAt}
+	if info != nil {
+		next = *info
+		next.Status, next.ExpireAt = status, expireAt
+	}
+	now := time.Now()
+	if info.StateAt(now).Allowed() != next.StateAt(now).Allowed() {
+		return s.revokeTenant(ctx, id)
+	}
+	return nil
+}
+
 // UpdateTenant 修改租户。
 func (s *Service) UpdateTenant(ctx context.Context, id idgen.ID, in TenantInput) (*Tenant, error) {
 	cur, err := s.GetTenant(ctx, id)
@@ -286,9 +359,13 @@ func (s *Service) UpdateTenant(ctx context.Context, id idgen.ID, in TenantInput)
 	if in.AiEnabled != nil {
 		aiEnabled = *in.AiEnabled
 	}
+	status := statusOr(in.Status, cur.Status)
+	if err := s.prepareAccessRevocation(ctx, id, status, exp); err != nil {
+		return nil, err
+	}
 	err = s.db.WithContext(ctx).Model(&Tenant{}).Where("id = ?", int64(id)).Updates(map[string]any{
 		"name": in.Name, "domain": in.Domain, "package_id": int64(in.PackageID), "expire_at": exp,
-		"status": statusOr(in.Status, cur.Status), "admin_username": admin,
+		"status": status, "admin_username": admin,
 		"max_users": in.MaxUsers, "max_roles": in.MaxRoles, "max_storage_mb": in.MaxStorageMb,
 		"ai_enabled": aiEnabled, "ai_daily_quota": in.AiDailyQuota,
 	}).Error
@@ -313,6 +390,9 @@ func (s *Service) Renew(ctx context.Context, id idgen.ID, expireAt string) (*Ten
 	if status == StatusExpired {
 		status = StatusActive
 	}
+	if err := s.prepareAccessRevocation(ctx, id, status, exp); err != nil {
+		return nil, err
+	}
 	err = s.db.WithContext(ctx).Model(&Tenant{}).Where("id = ?", int64(id)).
 		Updates(map[string]any{"expire_at": exp, "status": status}).Error
 	if err != nil {
@@ -324,11 +404,15 @@ func (s *Service) Renew(ctx context.Context, id idgen.ID, expireAt string) (*Ten
 
 // SetStatus 启停租户。
 func (s *Service) SetStatus(ctx context.Context, id idgen.ID, status string) (*Tenant, error) {
-	if _, err := s.GetTenant(ctx, id); err != nil {
+	t, err := s.GetTenant(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	if status != StatusActive && status != StatusSuspended && status != StatusExpired {
 		return nil, bad("tenant.status_invalid")
+	}
+	if err := s.prepareAccessRevocation(ctx, id, status, t.ExpireAt); err != nil {
+		return nil, err
 	}
 	if err := s.db.WithContext(ctx).Model(&Tenant{}).Where("id = ?", int64(id)).Update("status", status).Error; err != nil {
 		return nil, err
@@ -337,27 +421,46 @@ func (s *Service) SetStatus(ctx context.Context, id idgen.ID, status string) (*T
 	return s.GetTenant(ctx, id)
 }
 
-// DeleteTenants 批量删除租户记录。租户行可以删，但名下还有用户/角色/文件时拒绝：
-// 租户删除没有级联清业务数据的能力（各业务表逐表清理的口径没有任何一处定义过），
-// 静默留下悬挂数据比报错更危险。真要清空一个租户，先在租户内把用户清完再删。
+// DeleteTenants refuses deletion while registered tenant-owned data or an isolated tenant database exists.
+// Checks and SQL deletion share one transaction; security stamps, cache invalidation, and socket revocation
+// happen before deletion and are intentionally not rolled back with the SQL transaction.
 func (s *Service) DeleteTenants(ctx context.Context, ids []idgen.ID) error {
-	for table, column := range map[string]string{
-		"sys_user":   "tenant_id",
-		"sys_role":   "tenant_id",
-		"sys_dept":   "tenant_id",
-		"sys_file":   "tenant_id",
-		"sys_notice": "tenant_id",
-	} {
-		var n int64
-		if err := s.db.WithContext(ctx).Table(table).
-			Where(column+" IN ?", toInt64(ids)).Count(&n).Error; err != nil {
-			return err
-		}
-		if n > 0 {
-			return conflict("tenant.tenant_in_use", table)
+	if s.isolationOn {
+		for _, id := range ids {
+			if _, ok := s.isolatedIDs[id]; ok {
+				return conflict("tenant.tenant_in_use", "database.isolation.tenants="+id.String())
+			}
 		}
 	}
-	err := s.db.WithContext(ctx).Where("id IN ?", toInt64(ids)).Delete(&Tenant{}).Error
+	raw := toInt64(ids)
+	err := s.db.WithContext(ctenant.Skip(ctx)).Transaction(func(tx *gorm.DB) error {
+		for _, table := range s.deletionTables {
+			var n int64
+			if err := tx.Table(table.Name).
+				Where(table.Column+" IN ?", raw).Limit(1).Count(&n).Error; err != nil {
+				return err
+			}
+			if n == 0 {
+				continue
+			}
+			var blockingID int64
+			if err := tx.Table(table.Name).
+				Where(table.Column+" IN ?", raw).Limit(1).Pluck(table.Column, &blockingID).Error; err != nil {
+				return err
+			}
+			return conflict("tenant.tenant_in_use", fmt.Sprintf("%s.%s=%d", table.Name, table.Column, blockingID))
+		}
+		// 删除后 TenantInfo 会把该 ID 视为不受管，必须先推进版本，避免旧令牌在删除完成后重新放行。
+		for _, id := range ids {
+			if err := s.revokeTenant(ctx, id); err != nil {
+				return err
+			}
+		}
+		return tx.Where("id IN ?", raw).Delete(&Tenant{}).Error
+	})
+	if err != nil {
+		return err
+	}
 	ctenant.Invalidate(ids...)
-	return err
+	return nil
 }

@@ -36,7 +36,7 @@ The first screen after signing in. Stat cards (today's sign-ins, unread messages
 
 ## System
 
-- **Users**: every colleague's account. Create, edit, delete (batch supported), enable or disable, reset password, unlock, assign roles / departments / posts, plus Excel import and export. When someone forgets a password, an administrator resets it here.
+- **Users**: every colleague's account. Create, edit, delete (batch supported), enable or disable, reset password, unlock, assign roles / departments / posts, plus Excel import and export. When someone forgets a password, an administrator resets it here. Disabling, deleting or resetting invalidates every existing login for that account; re-enabling does not restore old tokens.
 - **Roles**: permissions are granted through roles. Create a role, tick the menus it sees and the buttons it can use, set its data scope (own only / own department / all, etc.), then assign the role to users.
 - **Menus**: the admin sidebar tree. Add or remove menus, change icons and order, show or hide them; button-level permissions are registered here too. This edits the site-wide menu (platform level).
 - **Departments**: the company org tree, multi-level with drag-and-drop ordering; the "Posts" tab maintains posts. The user list and approval flows both use departments.
@@ -68,7 +68,7 @@ The first screen after signing in. Stat cards (today's sign-ins, unread messages
 
 ## Tenants
 
-- **Tenants**: create tenants (customer companies), renew, enable or disable, and watch usage.
+- **Tenants**: create tenants (customer companies), renew, enable or disable, and watch usage. Suspending or deleting invalidates existing tenant logins and connections; restoring an expired / suspended tenant requires a fresh sign-in. Deletion is refused while registered business data or an isolated database remains.
 - **Packages**: define how many users / storage / AI quota each tier gets and which menus it may use.
 - **My tenant**: tenant admins see their own plan, quota and usage, and maintain the company profile.
 

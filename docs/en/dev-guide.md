@@ -127,6 +127,7 @@ ratelimit:
 | Data scope / role assignment checks | `nexadmin/core/datascope` (clips queries by the operator's data scope, `Resolve` fetches the scope) and `nexadmin/core/roleassign` (three checks for role assignment) are public packages for business modules; usage: `modules/notice/scope.go`, `modules/system/user/roleguard.go` | Supported |
 | Custom tenant resolution / domain mapping / login providers | Return `core.WithTenantResolver(...)` etc. from `Options()` in the user area's `internal/boot/boot.go`; `cmd/server/main.go` (framework area) appends them — no need to touch main.go | Supported |
 | Custom login method | Implement `auth.Provider` in a module and `core` collects it automatically (the first one wins) | Supported |
+| Tenant deletion protection | Implement `core/tenant.Provider` (`TenantTables() []tenant.Table`) for tenant business tables that must block deletion. Collection happens at startup without schema scanning or cascading deletes; audit/usage/history tables may follow platform retention policies instead | Supported |
 
 ### 3.8 Do the frontend ESLint rules apply in derived projects (partial)
 

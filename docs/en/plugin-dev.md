@@ -51,6 +51,7 @@ description: Scheduled jobs (5-field cron scheduling, run now, failure retry, ru
 author: NexAdmin
 edition: free                # free cron example; paid plugins use pro
 requires_nexadmin: ">=0.1.0"
+migration_target: platform     # platform (default) | tenant; declare table ownership when isolation is enabled
 
 menus:                       # written idempotently into sys_menu on install/mount
   - parent: /system          # parent node: a directory uses its path; a button uses the menu's perm
@@ -72,6 +73,7 @@ Rules:
 - Every permission code must start with `<id>:` (enforced at install time).
 - Never hard-code Chinese copy for menus — always use i18n keys.
 - Whether a menu is visible to a role is decided by the buyer in "Role Management", not by you.
+- Migration targets default to `platform`; a `tenant_id` column does not automatically move a table into a tenant business database. Declare `tenant` only when every table is physically split per tenant and queries do not join control-plane data. With `database.isolation` enabled, platform-plugin tables belong in `platform_tables` and `tenant`-plugin tables in `tables`; the manifest and config must agree. Workflow currently uses platform storage, so all five `plg_workflow_*` tables belong in `platform_tables`.
 
 ## 4. Backend
 
@@ -107,6 +109,18 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 ```
 
 `ID`, `Version` and `Edition` must match `plugin.yaml`.
+
+#### Tenant data and deletion protection
+
+Tenant deletion uses an explicit registry rather than runtime schema scanning. A module implements `nexadmin/core/tenant.Provider`, and enabled modules and plugins are collected automatically at startup:
+
+```go
+func (*module) TenantTables() []tenant.Table {
+    return []tenant.Table{{Name: "plg_cron_job", Column: "tenant_id"}}
+}
+```
+
+Declare real tenant-scoped business tables only; soft-deleted rows also block deletion. Register pending jobs, retry deliveries, callbacks and foreign-key references that remain functionally relevant after deletion. Platform-shared configuration and append-only audit/usage/history tables may be omitted and handled by platform retention policies. Disabled modules and plugins are not collected. The registry only decides whether deletion is allowed; it never cascades or replaces declarations with scattered hard-coded table lists.
 
 ### 4.2 Background tasks (optional)
 

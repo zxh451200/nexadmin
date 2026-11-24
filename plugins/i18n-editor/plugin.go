@@ -37,6 +37,13 @@ type module struct {
 
 func (*module) Name() string { return "i18n-editor" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_i18n_editor_entry", Column: "tenant_id"},
+		{Name: "plg_i18n_editor_version", Column: "tenant_id"},
+	}
+}
+
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	m.once.Do(func() { m.svc = &service{db: d.DB, bus: d.Bus} })
 	g := r.Group("/plugins/i18n-editor")

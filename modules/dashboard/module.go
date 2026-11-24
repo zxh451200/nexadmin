@@ -38,6 +38,10 @@ type module struct{}
 
 func (module) Name() string { return "dashboard" }
 
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "sys_dashboard_layout", Column: "tenant_id"}}
+}
+
 // 工作台只要求登录（页面本身不挂权限点），各区块的数据在下面按需降级。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// apistat 已由 core 在引擎级挂载（core/router.go InstallEngine），这里不再重复安装。

@@ -15,6 +15,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // 建表由运行时执行 plugins/imports/migrations/<引擎>/*.sql(安装时 CLI 拷贝),插件自己不做迁移。
@@ -52,6 +53,10 @@ func (m *module) service(d *core.Deps) *Service {
 }
 
 func (*module) Name() string { return "imports" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_imports_job", Column: "tenant_id"}}
+}
 
 // Register 注册路由，并收集实现了 SourceProvider 的业务模块。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

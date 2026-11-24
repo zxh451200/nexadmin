@@ -2,7 +2,7 @@
   "tenantSelf": {
     "menu": "My tenant",
     "title": "My tenant",
-    "description": "View your plan, quotas and usage, and maintain company details and branding",
+    "description": "View your plan, quotas and usage, and maintain company details",
     "unmanaged": "This account does not belong to a tenant",
     "unmanagedDesc": "Platform super admins are not part of a tenant. Sign in as a tenant administrator to use this page.",
     "daysLeft": "{{count}} days left",
@@ -40,7 +40,7 @@
     },
     "profile": {
       "title": "Company details",
-      "desc": "The company name and logo appear on the sign-in page and sidebar. Leave a field empty to use the platform branding.",
+      "desc": "The company name is used for tenant details. The logo is used for tenant branding; leave it empty to use the platform setting.",
       "companyName": "Company name",
       "contactName": "Contact",
       "contactPhone": "Phone",

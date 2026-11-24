@@ -46,6 +46,7 @@ description: 定时任务（5 段 cron 调度、立即执行、失败重试、�
 author: NexAdmin
 edition: free                # 免费 cron 示例；收费插件使用 pro
 requires_nexadmin: ">=0.1.0"
+migration_target: platform     # platform（默认）| tenant；启用独立库隔离时必须明确表的归属
 
 menus:                       # 安装/挂载时幂等写入 sys_menu
   - parent: /system          # 父节点：目录写它的 path，按钮写菜单的 perm
@@ -67,6 +68,7 @@ menus:                       # 安装/挂载时幂等写入 sys_menu
 - 所有权限码必须以 `<id>:` 开头（安装时强制检查）。
 - 菜单文案不要写死中文，一律用 i18n key。
 - 菜单是否对某个角色可见，由买家在「角色管理」里分配，不是你决定的。
+- 迁移目标默认是 `platform`；表带 `tenant_id` 并不会自动迁入租户业务库。只有确认每张表都按租户物理分库、查询不依赖控制面 join 时才声明 `tenant`。启用 `database.isolation` 时，把平台插件表加入 `platform_tables`，把 `tenant` 插件表加入 `tables`，清单与配置必须一致；工作流当前属于平台表，五张 `plg_workflow_*` 表均应加入 `platform_tables`。
 
 ## 4. 后端
 
@@ -102,6 +104,18 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 ```
 
 `ID`、`Version`、`Edition` 要和 `plugin.yaml` 保持一致。
+
+#### 租户数据与删除保护
+
+租户删除保护采用显式注册表，不运行时扫描数据库。模块只要实现 `nexadmin/core/tenant.Provider`，已启用模块与插件会在启动时自动收集：
+
+```go
+func (*module) TenantTables() []tenant.Table {
+    return []tenant.Table{{Name: "plg_cron_job", Column: "tenant_id"}}
+}
+```
+
+声明必须是真实存在、按租户隔离的业务表；软删除行同样阻止删除。待处理任务、重试投递、回调和外键关联等删除后仍被功能引用的数据要注册。平台共享配置、纯审计/用量/历史表可不注册，由平台按保留策略处理；停用模块或插件不参与收集。注册表只回答“能否删除”，不级联清数据，也不要改成散落的硬编码表清单。
 
 ### 4.2 后台任务（可选）
 

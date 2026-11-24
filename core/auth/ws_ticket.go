@@ -24,10 +24,12 @@ var wsTicketTTL = 15 * time.Second
 const wsTicketIDLen = 32
 
 type wsTicket struct {
-	UserID   string `json:"uid"`
-	TenantID string `json:"tid"`
-	Username string `json:"un"`
-	Super    bool   `json:"su,omitempty"`
+	UserID      string `json:"uid"`
+	TenantID    string `json:"tid"`
+	Username    string `json:"un"`
+	Super       bool   `json:"su,omitempty"`
+	UserStamp   string `json:"us,omitempty"`
+	TenantStamp string `json:"ts,omitempty"`
 }
 
 func wsTicketKey(id string) string { return cache.GlobalKey("auth", "wsticket", id) }
@@ -56,11 +58,13 @@ func (s *Service) IssueWSTicket(ctx context.Context, cl *Claims) (string, int, e
 		return "", 0, err
 	}
 	id := hex.EncodeToString(buf)
+	userStamp, tenantStamp, err := s.stamps(ctx, &User{ID: cl.UserID, TenantID: cl.TenantID, Super: cl.Super})
+	if err != nil {
+		return "", 0, err
+	}
 	raw, err := json.Marshal(wsTicket{
-		UserID:   cl.UserID.String(),
-		TenantID: cl.TenantID.String(),
-		Username: cl.Username,
-		Super:    cl.Super,
+		UserID: cl.UserID.String(), TenantID: cl.TenantID.String(), Username: cl.Username, Super: cl.Super,
+		UserStamp: userStamp, TenantStamp: tenantStamp,
 	})
 	if err != nil {
 		return "", 0, err
@@ -95,5 +99,6 @@ func (s *Service) RedeemWSTicket(ctx context.Context, id string) (*Claims, error
 	if err != nil {
 		return nil, ErrInvalidToken
 	}
-	return &Claims{UserID: uid, TenantID: tid, Username: t.Username, Super: t.Super, Kind: kindAccess}, nil
+	return &Claims{UserID: uid, TenantID: tid, Username: t.Username, Super: t.Super, Kind: kindAccess,
+		UserStamp: t.UserStamp, TenantStamp: t.TenantStamp}, nil
 }

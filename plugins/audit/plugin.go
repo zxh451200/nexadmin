@@ -20,6 +20,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // 建表由运行时执行 plugins/audit/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
@@ -49,6 +50,10 @@ func (m *module) init(d *core.Deps) {
 }
 
 func (*module) Name() string { return "audit" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_audit_config", Column: "tenant_id"}}
+}
 
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

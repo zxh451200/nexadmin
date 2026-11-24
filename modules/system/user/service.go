@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/database"
 	"nexadmin/core/notify"
@@ -21,6 +22,7 @@ import (
 type service struct {
 	db       *gorm.DB
 	cache    cache.Cache
+	auth     *auth.Service
 	notify   *notify.Service // 可为空：账号通知邮件（设置页开关，默认关）
 	sessions *session.Store  // 可为空：重置密码/停用/删除后吊销目标用户会话（测试手工构造可不填）
 }
@@ -55,6 +57,19 @@ func ensureUserQuota(ctx context.Context, tx *gorm.DB, adding int) error {
 func tenantOf(ctx context.Context) idgen.ID {
 	id, _ := tenant.From(ctx)
 	return id
+}
+
+func (s *service) revokeUser(ctx context.Context, userID, tenantID idgen.ID) error {
+	target := tenant.With(tenant.Unskip(ctx), tenantID)
+	var stampErr error
+	if s.auth != nil {
+		stampErr = s.auth.InvalidateUser(target, tenantID, userID)
+	}
+	var sessionErr error
+	if s.sessions != nil {
+		sessionErr = s.sessions.KickUser(target, userID, "")
+	}
+	return errors.Join(stampErr, sessionErr)
 }
 
 // filtered 组装列表/导出的筛选条件（含当前操作者的数据范围）。返回的查询可重复使用（先 Count 再 Find）。

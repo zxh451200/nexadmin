@@ -26,6 +26,14 @@ type module struct{}
 
 func (*module) Name() string { return "scim" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_scim_token", Column: "tenant_id"},
+		{Name: "plg_scim_group", Column: "tenant_id"},
+		{Name: "plg_scim_group_member", Column: "tenant_id"},
+	}
+}
+
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	s := &service{db: d.DB}
 	admin := r.Group("/plugins/scim")

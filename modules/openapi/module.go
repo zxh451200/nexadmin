@@ -11,6 +11,7 @@ import (
 	"nexadmin/core/event"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -18,6 +19,15 @@ func init() { core.RegisterBuiltin(module{}) }
 type module struct{}
 
 func (module) Name() string { return "openapi" }
+
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "sys_pat", Column: "tenant_id"},
+		{Name: "sys_openapi_app", Column: "tenant_id"},
+		{Name: "sys_webhook", Column: "tenant_id"},
+		{Name: "sys_webhook_delivery", Column: "tenant_id"},
+	}
+}
 
 var startOnce sync.Once
 

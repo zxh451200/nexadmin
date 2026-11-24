@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/middleware"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -193,7 +194,8 @@ func (h *handler) userinfo(c *gin.Context) {
 		h.writeErr(c, oerr(http.StatusInternalServerError, "server_error", "internal error"))
 		return
 	}
-	if app == nil || !app.Enabled || u == nil || (u.TenantID != app.TenantID && !u.Super) || !visibleTo(app, u) {
+	if app == nil || !app.Enabled || u == nil || (u.TenantID != app.TenantID && !u.Super) || !visibleTo(app, u) ||
+		tenant.CheckActive(ctx, app.TenantID) != nil || (!u.Super && tenant.CheckActive(ctx, u.TenantID) != nil) {
 		bearerFail(c)
 		return
 	}

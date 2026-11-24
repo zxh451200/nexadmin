@@ -68,7 +68,10 @@ defineMock([
     handler: ({ body }) => {
       if (!body?.oldPassword || !body?.newPassword) mockError(400, 'Invalid password')
       if (body.oldPassword === body.newPassword) mockError(400, 'New password must differ from the old one')
-      return null
+      return {
+        accessToken: `mock.a.admin.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+        refreshToken: `mock.r.admin.${Date.now()}.${Math.random().toString(36).slice(2)}`,
+      }
     },
   },
   {

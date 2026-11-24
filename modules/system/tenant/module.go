@@ -9,6 +9,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/middleware"
 	ctenant "nexadmin/core/tenant"
+	"nexadmin/modules/internal/session"
 	"nexadmin/pkg/idgen"
 )
 
@@ -18,10 +19,27 @@ type module struct{}
 
 func (module) Name() string { return "tenant" }
 
+func deletionTables(d *core.Deps) []ctenant.Table {
+	providers := make([]ctenant.Provider, 0, len(d.Modules))
+	for _, m := range d.Modules {
+		if p, ok := core.UnwrapModule(m).(ctenant.Provider); ok {
+			providers = append(providers, p)
+		}
+	}
+	tables, err := ctenant.Validate(append(ctenant.BaselineTables(), ctenant.Tables(providers)...))
+	if err != nil {
+		panic("tenant: invalid deletion table registry: " + err.Error())
+	}
+	return tables
+}
+
 // Register 注册 /api/v1/tenants 与 /api/v1/tenant-packages。
 // 租户与套餐是平台级数据，两组路由都要求超管（RequireSuper）；权限码 tenant:* 与 tenantPkg:*。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &Handler{svc: NewService(d.DB)}
+	svc := NewServiceWithIsolation(d.DB, deletionTables(d), d.Config.Database.Isolation)
+	svc.auth = d.Auth
+	svc.sessions = session.Shared(d.Cache, d.Config.Auth.RefreshTTL)
+	h := &Handler{svc: svc}
 	ctenant.SetSource(h.svc) // 过期/额度/套餐菜单/域名绑定的强制执行信息来源
 
 	p := r.Group("/tenant-packages", middleware.RequireSuper())
@@ -88,7 +106,7 @@ func seedPackages(db *gorm.DB) error {
 		"企业版 Enterprise":   "企业版",
 		"旗舰版 Ultimate":     "旗舰版",
 		"教育版 Education":    "教育版",
-		"非营利 NGO":         "非营利版",
+		"非营利 NGO":          "非营利版",
 		"合作伙伴 Partner":     "合作伙伴",
 		"定制版 Custom":       "定制版",
 		"旧版 Legacy 2024":   "旧版2024",

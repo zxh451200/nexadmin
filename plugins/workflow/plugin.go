@@ -16,6 +16,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // 建表由运行时执行 plugins/workflow/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
@@ -54,6 +55,16 @@ func (m *module) service(d *core.Deps) *Service {
 }
 
 func (*module) Name() string { return "workflow" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_workflow_def", Column: "tenant_id"},
+		{Name: "plg_workflow_def_version", Column: "tenant_id"},
+		{Name: "plg_workflow_inst", Column: "tenant_id"},
+		{Name: "plg_workflow_task", Column: "tenant_id"},
+		{Name: "plg_workflow_action", Column: "tenant_id"},
+	}
+}
 
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

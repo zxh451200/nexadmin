@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useAuth } from '@/framework/auth/useAuth'
 import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
@@ -36,6 +37,17 @@ export interface MenuOption {
 
 const KEY = ['tenantPkg'] as const
 
+function useInvalidate() {
+  const qc = useQueryClient()
+  return () => {
+    void qc.invalidateQueries({ queryKey: KEY })
+    void qc.invalidateQueries({ queryKey: ['remote-select'] })
+    void qc.invalidateQueries({ queryKey: ['profile'] })
+    void qc.invalidateQueries({ queryKey: ['sysMenu'] })
+    void useAuth.getState().fetchMe().catch(() => undefined)
+  }
+}
+
 export function useTenantPackages(query: PageQuery) {
   return useQuery({
     queryKey: [...KEY, 'list', query],
@@ -45,25 +57,19 @@ export function useTenantPackages(query: PageQuery) {
 }
 
 export function useSaveTenantPackage() {
-  const qc = useQueryClient()
+  const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, body }: { id?: string; body: TenantPackageInput }) =>
       id ? api.put<TenantPackageRow>(`/tenant-packages/${id}`, body) : api.post<TenantPackageRow>('/tenant-packages', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY })
-      qc.invalidateQueries({ queryKey: ['remote-select'] })
-    },
+    onSuccess: invalidate,
   })
 }
 
 export function useDeleteTenantPackages() {
-  const qc = useQueryClient()
+  const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (ids: string[]) => api.del<null>('/tenant-packages', { ids: ids.join(',') }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEY })
-      qc.invalidateQueries({ queryKey: ['remote-select'] })
-    },
+    onSuccess: invalidate,
   })
 }
 

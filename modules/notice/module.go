@@ -8,6 +8,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/session"
 )
 
@@ -16,6 +17,15 @@ func init() { core.RegisterBuiltin(module{}) }
 type module struct{}
 
 func (module) Name() string { return "notice" }
+
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "sys_notice_target", Column: "tenant_id"},
+		{Name: "sys_notice_read", Column: "tenant_id"},
+		{Name: "sys_notice_clear", Column: "tenant_id"},
+		{Name: "sys_notice_dismiss", Column: "tenant_id"},
+	}
+}
 
 // Seed 种入出厂公告（setup.Seeder）。
 func (module) Seed(db *gorm.DB) error { return seed(db) }

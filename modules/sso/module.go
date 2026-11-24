@@ -14,6 +14,7 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/config"
 	"nexadmin/core/middleware"
+	"nexadmin/core/tenant"
 )
 
 // tokenLimiter 创建 /oauth/token 的失败计数器：ratelimit.token（默认每分钟 10 次，同 IP 或 IP+client），计数在 core/cache。
@@ -27,6 +28,13 @@ func init() { core.RegisterBuiltin(module{}) }
 type module struct{}
 
 func (module) Name() string { return "sso" }
+
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "sys_sso_app", Column: "tenant_id"},
+		{Name: "sys_sso_refresh", Column: "tenant_id"},
+	}
+}
 
 // configuredIssuer 读取 sso.issuer（default.yaml / config.yaml / 环境变量 NEXADMIN_SSO_ISSUER）。
 // core/config 没有 sso 段且不能改 core，所以这里单独读一次。

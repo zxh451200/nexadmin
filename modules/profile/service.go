@@ -17,8 +17,9 @@ import (
 
 // Service 是个人中心的业务层，所有方法只操作传入的 uid 自己的数据。
 type Service struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db   *gorm.DB
+	cfg  *config.Config
+	auth *auth.Service
 }
 
 func (s *Service) me(ctx context.Context, uid idgen.ID) (*userRow, error) {
@@ -80,6 +81,10 @@ func (s *Service) ChangePassword(ctx context.Context, uid idgen.ID, oldPw, newPw
 	}
 	hash, err := auth.HashPassword(newPw)
 	if err != nil {
+		return err
+	}
+	// 先吊销再落库；缓存写入失败时改密直接失败，旧凭据不会继续可用。
+	if err := s.auth.InvalidateUser(ctx, u.TenantID, u.ID); err != nil {
 		return err
 	}
 	return s.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", int64(uid)).

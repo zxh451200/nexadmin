@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/framework/auth/useAuth'
 import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
@@ -80,7 +81,12 @@ export function useTenantUsage(id: string) {
 
 function useInvalidate() {
   const qc = useQueryClient()
-  return () => qc.invalidateQueries({ queryKey: KEY })
+  return () => {
+    void qc.invalidateQueries({ queryKey: KEY })
+    void qc.invalidateQueries({ queryKey: ['profile'] })
+    void qc.invalidateQueries({ queryKey: ['sysMenu'] })
+    void useAuth.getState().fetchMe().catch(() => undefined)
+  }
 }
 
 export function useSaveTenant() {

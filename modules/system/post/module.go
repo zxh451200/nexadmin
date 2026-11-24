@@ -19,6 +19,10 @@ type module struct{}
 
 func (module) Name() string { return "post" }
 
+func (module) TenantTables() []tn.Table {
+	return []tn.Table{{Name: "sys_post", Column: "tenant_id"}}
+}
+
 // Register 注册 /api/v1/posts 路由，权限码 post:list|create|update|delete。
 // /posts/options 只要登录即可（用户表单下拉用，不暴露岗位详情）。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {

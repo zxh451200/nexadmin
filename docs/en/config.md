@@ -51,7 +51,7 @@ A failed check reports e.g. `config: server.port 99999 out of range`.
 | `database.user` / `database.password` | string | `root` / empty | Database credentials; the password never enters logs, and the wizard writes `config.yaml` with file mode 0600 | Pass passwords via env in production |
 | `database.name` | string | `nexadmin` | Database name; the wizard can optionally auto-create it | Match your database |
 | `database.node_id` | int | `0` | Snowflake ID node number 0–1023. Multi-instance instances must differ; with redis cache, startup uses a TTL lease to detect duplicates and refuses startup when another live instance holds it (no detection with `memory`), see Deployment Guide §10 | Multi-instance deployments |
-| `cache.driver` | string | `memory` | `memory` (in-process, dev only) or `redis` (Valkey-compatible, required in production). <br>Token revocation, captchas, rate-limit counters and online sessions all live in cache; login lockout is additionally persisted in `sys_login_lock` | `app.env=production` requires `redis` (memory refuses to start); <br>multi-instance deployments also require `redis`; atomic storage-quota reservation requires the cache to implement `cache.Lease` (both built-in drivers do; a custom implementation without it makes quota-gated uploads return 503) |
+| `cache.driver` | string | `memory` | `memory` (in-process, dev only) or `redis` (Valkey-compatible, required in production). <br>Token revocation, user / tenant security versions, captchas, rate-limit counters and online sessions all live in cache; security versions have no TTL. Login lockout is additionally persisted in `sys_login_lock` | `app.env=production` requires `redis` (memory refuses to start); <br>multi-instance deployments also require `redis`; atomic storage-quota reservation requires the cache to implement `cache.Lease` (both built-in drivers do; a custom implementation without it makes quota-gated uploads return 503) |
 | `cache.addr` / `cache.password` | string | empty / empty | Redis address (e.g. `valkey:6379`) and password; `driver=redis` requires addr, and unreachable fails startup with `cache: redis/valkey at <addr> is unavailable` | When using redis |
 
 ### 2.1 database.isolation (optional, off by default)
@@ -101,6 +101,8 @@ The `assistant` manifest declares `migration_target: platform`. With separate-da
 - The 001 migration was edited directly during development (framework 0.1.0 is unreleased); databases that already ran the old 001 must drop and recreate the table.
 
 This pass only reviewed code and corrected documentation — no tests or real SQL were run, and adding the config does not create the table.
+
+`workflow` also declares `migration_target: platform`. With separate-database isolation enabled, add `plg_workflow_def`, `plg_workflow_def_version`, `plg_workflow_inst`, `plg_workflow_task` and `plg_workflow_action` to `platform_tables`, not the tenant business `tables`. Definitions, approvals and engine state must stay transactionally aligned with control-plane data; these five tables are not currently supported across tenant databases.
 
 ### 2.2 MCP cache dependency
 

@@ -39,6 +39,10 @@ type module struct{}
 
 func (*module) Name() string { return "assistant" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_assistant_conversation", Column: "tenant_id"}}
+}
+
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	s := &service{db: d.DB, cache: d.Cache, gw: core.AIGateway(d), mcp: d.MCP,
 		messages: core.MessageCenterOf(d)}

@@ -2,7 +2,7 @@
   "tenantSelf": {
     "menu": "我的租户",
     "title": "我的租户",
-    "description": "查看套餐、额度与用量，维护企业资料与品牌",
+    "description": "查看套餐、额度与用量，维护企业资料",
     "unmanaged": "当前账号不隶属任何租户",
     "unmanagedDesc": "平台超级管理员不隶属于租户；请使用租户管理员账号查看本页。",
     "daysLeft": "剩余 {{count}} 天",
@@ -36,7 +36,7 @@
     },
     "profile": {
       "title": "企业资料",
-      "desc": "企业名称与 Logo 会用于登录页和侧栏品牌展示；留空则沿用平台设置。",
+      "desc": "企业名称用于资料展示；Logo 会用于租户品牌展示，留空则沿用平台设置。",
       "companyName": "企业名称",
       "contactName": "联系人",
       "contactPhone": "联系电话",

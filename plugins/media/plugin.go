@@ -9,6 +9,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // PermOptimize 与前端 route.tsx、plugin.yaml 的 menu.perm 一致。
@@ -24,6 +25,10 @@ func init() {
 type module struct{}
 
 func (*module) Name() string { return "media" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_media_video", Column: "tenant_id"}}
+}
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: newService(d.DB)}

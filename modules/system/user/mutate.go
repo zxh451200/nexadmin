@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
-	"nexadmin/modules/internal/password"
 	"nexadmin/core/event"
+	"nexadmin/modules/internal/password"
 	"nexadmin/pkg/idgen"
 )
 
@@ -241,12 +241,18 @@ func (s *service) update(ctx context.Context, id idgen.ID, in userInput, me acto
 	if err := s.guardUserWrite(ctx, me, u, p); err != nil {
 		return nil, err
 	}
+	wasDisabled := u.Status == statusOff
 	u.Username, u.Nickname, u.Avatar, u.Phone, u.Email, u.Gender = in.Username, in.Nickname, in.Avatar, in.Phone, in.Email, in.Gender
 	if in.ExternalIDSet || in.ExternalID != "" {
 		u.ExternalID = in.ExternalID
 	}
 	u.DeptID, u.Status, u.Remark = p.dept, in.Status, in.Remark
 	u.Province, u.City, u.District, u.Address = in.Region.Province, in.Region.City, in.Region.District, in.Address
+	if !wasDisabled && u.Status == statusOff {
+		if err := s.revokeUser(ctx, id, u.TenantID); err != nil {
+			return nil, err
+		}
+	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(u).Error; err != nil {
 			return err

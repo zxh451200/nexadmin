@@ -15,6 +15,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/job"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // 建表由运行时执行 plugins/formbuilder/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
@@ -36,6 +37,14 @@ func (m *module) service(d *core.Deps) *Service {
 }
 
 func (*module) Name() string { return "formbuilder" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_formbuilder_form", Column: "tenant_id"},
+		{Name: "plg_formbuilder_version", Column: "tenant_id"},
+		{Name: "plg_formbuilder_submission", Column: "tenant_id"},
+	}
+}
 
 // Register 注册路由。r 已经是 /api/v1 且默认要求登录。固定路径写在 /:id 之前。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

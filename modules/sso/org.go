@@ -199,7 +199,7 @@ func (h *handler) orgApp(c *gin.Context) (*App, bool) {
 		h.writeErr(c, oerr(http.StatusInternalServerError, "server_error", "internal error"))
 		return nil, false
 	}
-	if app == nil || !app.Enabled || !app.AllowOrgRead {
+	if app == nil || !app.Enabled || !app.AllowOrgRead || tenant.CheckActive(c.Request.Context(), app.TenantID) != nil {
 		bearerFail(c)
 		return nil, false
 	}

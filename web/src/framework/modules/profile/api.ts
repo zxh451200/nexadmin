@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { startOAuthBind } from '@/framework/auth/oauth'
 import { useAuth } from '@/framework/auth/useAuth'
 import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
-import { api } from '@/framework/request/http'
+import { api, tokenStore } from '@/framework/request/http'
 
 export interface Profile {
   id: string
@@ -63,7 +63,12 @@ export function useUpdateProfile() {
 
 export function useChangePassword() {
   return useMutation({
-    mutationFn: (body: { oldPassword: string; newPassword: string }) => api.put<null>('/profile/password', body),
+    mutationFn: (body: { oldPassword: string; newPassword: string }) =>
+      api.put<{ accessToken: string; refreshToken: string }>('/profile/password', body),
+    onSuccess: (pair) => {
+      tokenStore.set(pair.accessToken, pair.refreshToken)
+      useAuth.setState({ token: pair.accessToken })
+    },
   })
 }
 

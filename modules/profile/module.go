@@ -24,7 +24,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	auth.RegisterPerm("profile:view")
 	store := session.Shared(d.Cache, d.Config.Auth.RefreshTTL)
 	h := &Handler{
-		svc:      &Service{db: d.DB, cfg: d.Config},
+		svc:      &Service{db: d.DB, cfg: d.Config, auth: d.Auth},
 		sms:      smscode.Shared(d.Config, d.Cache, d.Log),
 		flow:     oauthflow.Shared(d.Config, d.Cache, d.Log),
 		auth:     d.Auth,

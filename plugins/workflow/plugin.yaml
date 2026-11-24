@@ -5,6 +5,7 @@ description: 嵌入式 BPMN 2.0 子集（内核抽为独立 Apache-2.0 module fl
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
+migration_target: platform
 menus:
   - parent: /biz
     type: menu

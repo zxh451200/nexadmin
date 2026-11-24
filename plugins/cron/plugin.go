@@ -39,6 +39,10 @@ func (m *module) service(d *core.Deps) *Service {
 
 func (*module) Name() string { return "cron" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_cron_job", Column: "tenant_id"}}
+}
+
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)

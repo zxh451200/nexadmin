@@ -16,6 +16,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 var _ plugin.Starter = (*module)(nil)
@@ -53,6 +54,10 @@ func (m *module) service(d *core.Deps) *Service {
 }
 
 func (*module) Name() string { return "aigateway" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_aigateway_model", Column: "tenant_id"}}
+}
 
 // Register 注册管理端路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

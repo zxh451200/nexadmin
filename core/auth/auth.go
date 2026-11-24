@@ -102,6 +102,9 @@ type Claims struct {
 	// SessionBinding 是登录发起方（插件）提供的不透明会话归属（SAML = "saml:<源ID>:<NameID>"）。
 	// 刷新时原样带走，SessionTracker 据此继续跟踪轮换后的令牌。
 	SessionBinding string `json:"sb,omitempty"`
+	// UserStamp / TenantStamp 是共享缓存里的安全版本；停用或改密后递增，旧令牌不会在恢复后复活。
+	UserStamp   string `json:"us,omitempty"`
+	TenantStamp string `json:"ts,omitempty"`
 	// Principal / Perms 不进 JWT，只由开放平台中间件为个人访问令牌（PrincipalPAT）与签名调用的应用（PrincipalApp）填充。
 	// PrincipalApp 没有对应的用户，权限直接取 Perms（见 middleware.Perm）。
 	Principal string   `json:"-"`
@@ -288,7 +291,51 @@ func singleSessionKey(u *User) string {
 	return cache.GlobalKey("auth", "single-session", u.TenantID.String(), u.ID.String())
 }
 
+func userStampKey(tenantID, userID idgen.ID) string {
+	return cache.GlobalKey("auth", "stamp", "user", tenantID.String(), userID.String())
+}
+
+func tenantStampKey(tenantID idgen.ID) string {
+	return cache.GlobalKey("auth", "stamp", "tenant", tenantID.String())
+}
+
+func (s *Service) stamp(ctx context.Context, key string) (string, error) {
+	value, err := s.cache.Get(ctx, key)
+	if errors.Is(err, cache.ErrNotFound) {
+		return "", nil
+	}
+	return value, err
+}
+
+func (s *Service) stamps(ctx context.Context, u *User) (userStamp, tenantStamp string, err error) {
+	userStamp, err = s.stamp(ctx, userStampKey(u.TenantID, u.ID))
+	if err != nil || u.Super {
+		return userStamp, "", err
+	}
+	tenantStamp, err = s.stamp(ctx, tenantStampKey(u.TenantID))
+	return userStamp, tenantStamp, err
+}
+
+// InvalidateUser 使该用户已签发的全部令牌与 WS 票据失效；调用方还应清理在线会话和连接。
+func (s *Service) InvalidateUser(ctx context.Context, tenantID, userID idgen.ID) error {
+	return s.cache.Set(ctx, userStampKey(tenantID, userID), newJTI(), 0)
+}
+
+// InvalidateTenant 使该租户已签发的全部令牌与 WS 票据失效；恢复租户时不清除版本。
+func (s *Service) InvalidateTenant(ctx context.Context, tenantID idgen.ID) error {
+	return s.cache.Set(ctx, tenantStampKey(tenantID), newJTI(), 0)
+}
+
 func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string, sessionStart int64, binding string) (Pair, error) {
+	userStamp, tenantStamp, err := s.stamps(ctx, u)
+	if err != nil {
+		return Pair{}, fmt.Errorf("auth: read security stamps: %w", err)
+	}
+	return s.issuePairWithStamps(ctx, u, previousRefresh, sessionStart, binding, userStamp, tenantStamp)
+}
+
+// issuePairWithStamps 使用调用方已经校验过的安全版本，避免刷新期间发生吊销却换回新版本令牌。
+func (s *Service) issuePairWithStamps(ctx context.Context, u *User, previousRefresh string, sessionStart int64, binding, userStamp, tenantStamp string) (Pair, error) {
 	session := externalSessionFrom(ctx)
 	if err := s.checkExternalSession(ctx, session); err != nil {
 		return Pair{}, err
@@ -325,6 +372,8 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 			SessionStart:     sessionStart,
 			ExternalSession:  session,
 			SessionBinding:   binding,
+			UserStamp:        userStamp,
+			TenantStamp:      tenantStamp,
 			RegisteredClaims: jwt.RegisteredClaims{ID: jti, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(exp)},
 		}
 		return jwt.NewWithClaims(jwt.SigningMethodHS256, cl).SignedString(s.secret)
@@ -347,6 +396,8 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 				SessionStart:     sessionStart,
 				ExternalSession:  session,
 				SessionBinding:   binding,
+				UserStamp:        userStamp,
+				TenantStamp:      tenantStamp,
 				RegisteredClaims: jwt.RegisteredClaims{ID: accessJTI, IssuedAt: jwt.NewNumericDate(now)},
 			}
 			(*s.toucher.Load())(ctx, &cl, ri.IP, ri.UA)
@@ -407,33 +458,99 @@ func (s *Service) parse(ctx context.Context, token, kind string) (*Claims, error
 	if err != nil || !t.Valid || cl.Kind != kind || cl.ID == "" {
 		return nil, ErrInvalidToken
 	}
-	if err := s.checkExternalSession(ctx, cl.ExternalSession); err != nil {
+	if err := s.validateClaims(ctx, &cl, kind); err != nil {
 		return nil, err
 	}
-	revoked, err := s.cache.Exists(ctx, revokedKey(cl.ID))
-	if err != nil {
-		return nil, fmt.Errorf("auth: check revocation: %w", err) // 缓存不可用时拒绝放行
+	return &cl, nil
+}
+
+func (s *Service) validateClaims(ctx context.Context, cl *Claims, kind string) error {
+	if cl.Kind != kind {
+		return ErrInvalidToken
 	}
-	if revoked {
+	if err := s.checkExternalSession(ctx, cl.ExternalSession); err != nil {
+		return err
+	}
+	if cl.ID != "" {
+		revoked, err := s.cache.Exists(ctx, revokedKey(cl.ID))
+		if err != nil {
+			return fmt.Errorf("auth: check revocation: %w", err)
+		}
+		if revoked {
+			return ErrInvalidToken
+		}
+		if s.singleSession {
+			raw, err := s.cache.Get(ctx, singleSessionKey(&User{ID: cl.UserID, TenantID: cl.TenantID}))
+			if errors.Is(err, cache.ErrNotFound) {
+				return ErrInvalidToken
+			}
+			if err != nil {
+				return fmt.Errorf("auth: check single session: %w", err)
+			}
+			var entries map[string]cache.LeaseEntry
+			if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+				return fmt.Errorf("auth: decode single session: %w", err)
+			}
+			entry, ok := entries[kind+":"+cl.ID]
+			if !ok || !time.Now().Before(entry.Until) {
+				return ErrInvalidToken
+			}
+		}
+	}
+	userStamp, err := s.stamp(ctx, userStampKey(cl.TenantID, cl.UserID))
+	if err != nil {
+		return fmt.Errorf("auth: check user security stamp: %w", err)
+	}
+	if userStamp != cl.UserStamp {
+		return ErrInvalidToken
+	}
+	if !cl.Super {
+		tenantStamp, err := s.stamp(ctx, tenantStampKey(cl.TenantID))
+		if err != nil {
+			return fmt.Errorf("auth: check tenant security stamp: %w", err)
+		}
+		if tenantStamp != cl.TenantStamp {
+			return ErrInvalidToken
+		}
+	}
+	return nil
+}
+
+// ReissueSession 在调用方已吊销旧安全版本后，为当前设备签发新令牌，并保留原会话时限与外部 IdP 归属。
+func (s *Service) ReissueSession(ctx context.Context, cl *Claims) (*User, Pair, error) {
+	if cl == nil || cl.Kind != kindAccess || cl.ID == "" {
+		return nil, Pair{}, ErrInvalidToken
+	}
+	u, err := s.Profile(ctx, cl)
+	if err != nil {
+		return nil, Pair{}, err
+	}
+	if u.ID != cl.UserID || u.TenantID != cl.TenantID || u.Super != cl.Super {
+		return nil, Pair{}, ErrInvalidToken
+	}
+	if err := s.CheckTenant(ctx, u); err != nil {
+		return nil, Pair{}, err
+	}
+	pair, err := s.issuePair(WithExternalSession(ctx, cl.ExternalSession), u, "", cl.SessionStart, cl.SessionBinding)
+	return u, pair, err
+}
+
+// ValidateSession 复核长连接的身份、用户状态与租户状态；WS 票据没有 JTI，但同样校验安全版本。
+func (s *Service) ValidateSession(ctx context.Context, cl *Claims) (*User, error) {
+	if cl == nil {
 		return nil, ErrInvalidToken
 	}
-	if s.singleSession {
-		raw, err := s.cache.Get(ctx, singleSessionKey(&User{ID: cl.UserID, TenantID: cl.TenantID}))
-		if errors.Is(err, cache.ErrNotFound) {
-			return nil, ErrInvalidToken
-		}
-		if err != nil {
-			return nil, fmt.Errorf("auth: check single session: %w", err)
-		}
-		var entries map[string]cache.LeaseEntry
-		if err := json.Unmarshal([]byte(raw), &entries); err != nil {
-			return nil, fmt.Errorf("auth: decode single session: %w", err)
-		}
-		if entry, ok := entries[kind+":"+cl.ID]; !ok || !time.Now().Before(entry.Until) {
-			return nil, ErrInvalidToken
-		}
+	if err := s.validateClaims(ctx, cl, kindAccess); err != nil {
+		return nil, err
 	}
-	return &cl, nil
+	u, err := s.Profile(ctx, cl)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.CheckTenant(ctx, u); err != nil {
+		return nil, err
+	}
+	return u, nil
 }
 
 // ParseAccess 校验 access token。
@@ -517,7 +634,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (Pair, error
 	if err := s.revoke(ctx, cl.ID, time.Until(cl.ExpiresAt.Time)); err != nil {
 		return Pair{}, err
 	}
-	pair, err := s.issuePair(WithExternalSession(ctx, cl.ExternalSession), u, cl.ID, cl.SessionStart, cl.SessionBinding)
+	pair, err := s.issuePairWithStamps(WithExternalSession(ctx, cl.ExternalSession), u, cl.ID, cl.SessionStart, cl.SessionBinding, cl.UserStamp, cl.TenantStamp)
 	if err != nil {
 		return Pair{}, err
 	}

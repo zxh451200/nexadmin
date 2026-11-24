@@ -67,7 +67,13 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	done(c, nil, h.sessions.KickUser(ctx, uidOf(c), session.Current(c)))
+	cl := auth.ClaimsFrom(c)
+	if err := h.sessions.KickUser(ctx, cl.UserID, ""); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	_, pair, err := h.auth.ReissueSession(ctx, cl)
+	done(c, pair, err)
 }
 
 // Bindings GET /profile/bindings

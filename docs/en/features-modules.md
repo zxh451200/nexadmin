@@ -98,13 +98,14 @@ The criterion is `core.IsPlatformCaller` (`core/router.go:51`): **a super admin,
 - `recycle`: soft-deleted users / notices / roles / dictionary types & items / posts, filterable by name, type and deletion date. Only a purge cascades to related rows; a restore keeps them.
 - `file`: folders, tus resumable uploads, previews, public and signed links, move and rename, local or S3 storage, bounded by the tenant's storage quota.
 - `backup`: immediate backup, scheduled backups with retention, download and delete; also requires super admin.
+- `tenant`: platform super admins manage tenants, packages, expiry, suspension and deletion guards; state changes, renewal and deletion revoke credentials and connections according to the real lifecycle, and old tokens never revive after restoration. Tenant admins use "My tenant" for their company profile and branding; see [Open platform and access](features-access.md) for the full contract.
 
 ### Monitoring
 
 - `log`: operation and sign-in logs can be queried, deleted, pruned and exported. Exports always go to the export center with an explicit column whitelist (no request params, responses or stack traces). `log.export_max_rows` is a **per-job** cap — exceeding it fails the whole job and asks for narrower filters.
 - `sendlog`: channel, scene (captcha / notice / phone bind / account notice / security alert / test), recipient, title or template name, status, failure reason and duration. Recipients are masked (`138****1234`, `a***@x.com`); codes, bodies and keys are never stored. Writes are enqueued and a failure only reaches the log; in-app messages are not recorded.
 - The three monitors share `sys_monitor_snapshot`: a snapshot every 30 seconds, kept 7 days. With the memory cache driver only process memory and uptime are available (key count and hit rate are 0); API stats are in-process and reset on restart.
-- `online`: session list and force logout, backed by cache indexes rather than a table.
+- `online`: session list and force logout, backed by cache indexes rather than a table. Unified disable / password-change revocation also advances user or tenant security versions and closes WebSockets, without relying on a complete online list.
 - Data-scope clipping actually applies to: users, departments (writes plus the department page's `scene=manage` read), notices (admin-side by creator, with extra publish-target limits), and operation / sign-in logs.
 
 ### Development, security and menu-less endpoints

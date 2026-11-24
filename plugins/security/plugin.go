@@ -21,6 +21,7 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/plugin"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -77,6 +78,15 @@ func (m *module) install(d *core.Deps) {
 }
 
 func (*module) Name() string { return "security" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_security_totp", Column: "tenant_id"},
+		{Name: "plg_security_recovery", Column: "tenant_id"},
+		{Name: "plg_security_policy", Column: "tenant_id"},
+		{Name: "plg_security_ip_rule", Column: "tenant_id"},
+	}
+}
 
 // Register 注册路由，并把门与前置检查挂到 d.Auth。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

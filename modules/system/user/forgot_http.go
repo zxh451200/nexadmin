@@ -18,6 +18,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/password"
 	"nexadmin/modules/internal/session"
 	"nexadmin/modules/internal/smscode"
@@ -125,13 +126,15 @@ func (f *forgotService) resetEmail(ctx context.Context, rawEmail, code, newPassw
 	if err != nil {
 		return err
 	}
+	if err := f.revokeSessions(ctx, u); err != nil {
+		return err
+	}
 	if err := f.store.setPassword(ctx, u.ID, hash); err != nil {
 		return err
 	}
 	if err := clearLock(ctx, f.db, f.cache, u.Username); err != nil { // 重置后顺带解除登录锁定
 		f.log.Warn("clear login lock after reset failed", zap.Error(err))
 	}
-	f.revokeSessions(ctx, u.ID) // 与个人中心改密同款：被盗会话随重置一并失效
 	_ = f.cache.Del(ctx, cache.Key(ctx, "forgot", "cool", digest(email)))
 	f.alertReset(ctx, email, u.Name, ip, lang, "email")
 	return nil
@@ -171,26 +174,32 @@ func (f *forgotService) resetPhone(ctx context.Context, rawPhone, code, newPassw
 	if err != nil {
 		return err
 	}
+	if err := f.revokeSessions(ctx, u); err != nil {
+		return err
+	}
 	if err := f.store.setPassword(ctx, u.ID, hash); err != nil {
 		return err
 	}
 	if err := clearLock(ctx, f.db, f.cache, u.Username); err != nil {
 		f.log.Warn("clear login lock after reset failed", zap.Error(err))
 	}
-	f.revokeSessions(ctx, u.ID)
 	f.alertReset(ctx, u.Email, u.Name, ip, lang, "短信")
 	return nil
 }
 
 // revokeSessions 吊销该账号的全部会话（密码重置后旧会话不能再继续用）。
 // 找回密码时操作者本身没有登录态，无需保留任何会话，全部踢掉。
-func (f *forgotService) revokeSessions(ctx context.Context, uid idgen.ID) {
-	if f.sessions == nil {
-		return
+func (f *forgotService) revokeSessions(ctx context.Context, u *forgotUser) error {
+	target := tenant.With(tenant.Unskip(ctx), u.TenantID)
+	var stampErr error
+	if f.auth != nil {
+		stampErr = f.auth.InvalidateUser(target, u.TenantID, u.ID)
 	}
-	if err := f.sessions.KickUser(ctx, uid, ""); err != nil {
-		f.log.Warn("forgot: cannot revoke sessions after reset", zap.Int64("user_id", int64(uid)), zap.Error(err))
+	var sessionErr error
+	if f.sessions != nil {
+		sessionErr = f.sessions.KickUser(target, u.ID, "")
 	}
+	return errors.Join(stampErr, sessionErr)
 }
 
 // reqLang 取框架协商好的语言码，而不是自己拆 Accept-Language 头。
@@ -207,6 +216,7 @@ func reqLang(c *gin.Context) string {
 func (m *module) registerForgot(d *core.Deps) {
 	f := newForgotService(gormForgotStore{db: d.DB}, d.DB, d.Cache, d.Notify, smscode.Shared(d.Config, d.Cache, d.Log), d.Log)
 	f.sessions = session.Shared(d.Cache, d.Config.Auth.RefreshTTL) // 重置成功后吊销该账号全部会话
+	f.auth = d.Auth
 	byIP := middleware.RateLimit(d.Cache, d.Log, "forgot_route", middleware.ByIPAndPath(), 60, time.Hour)
 	d.Public.POST("/auth/forgot/send-code", byIP, func(c *gin.Context) {
 		var body struct {

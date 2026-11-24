@@ -11,6 +11,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/cache"
 	"nexadmin/core/middleware"
+	"nexadmin/core/tenant"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -25,6 +26,10 @@ const (
 type module struct{}
 
 func (module) Name() string { return "file" }
+
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "sys_file_group", Column: "tenant_id"}}
+}
 
 // Register 注册路由。r 要求登录；预览/下载走 d.Public（<img>、<video> 带不了令牌，靠随机串/签名保护）。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {

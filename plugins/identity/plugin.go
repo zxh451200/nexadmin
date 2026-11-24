@@ -33,6 +33,7 @@ import (
 	"nexadmin/core/job"
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 var _ plugin.Starter = (*module)(nil)
@@ -62,6 +63,13 @@ func (m *module) service(d *core.Deps) *Service {
 }
 
 func (*module) Name() string { return "identity" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_identity_source", Column: "tenant_id"},
+		{Name: "plg_identity_directory_run", Column: "tenant_id"},
+	}
+}
 
 // Register 注册路由。管理接口都带 core.Perm；CAS 登录入口是公开接口（d.Public），按 IP 限流。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

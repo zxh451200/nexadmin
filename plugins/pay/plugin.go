@@ -58,6 +58,24 @@ func (m *module) service(d *core.Deps) *Service {
 
 func (*module) Name() string { return "pay" }
 
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_pay_order", Column: "tenant_id"},
+		{Name: "plg_pay_idem", Column: "tenant_id"},
+		{Name: "plg_pay_channel", Column: "tenant_id"},
+		{Name: "plg_pay_refund", Column: "tenant_id"},
+		{Name: "plg_pay_auth", Column: "tenant_id"},
+		{Name: "plg_pay_reconcile_task", Column: "tenant_id"},
+		{Name: "plg_pay_reconcile_diff", Column: "tenant_id"},
+		{Name: "plg_pay_commission_rule", Column: "tenant_id"},
+		{Name: "plg_pay_settlement", Column: "tenant_id"},
+		{Name: "plg_pay_payout_batch", Column: "tenant_id"},
+		{Name: "plg_pay_payout_item", Column: "tenant_id"},
+		{Name: "plg_pay_outbox", Column: "tenant_id"},
+		{Name: "plg_pay_callback", Column: "tenant_id"},
+	}
+}
+
 // Register 注册管理端与公开路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)

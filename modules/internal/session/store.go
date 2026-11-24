@@ -31,6 +31,8 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/config"
+	"nexadmin/core/tenant"
+	"nexadmin/core/ws"
 	"nexadmin/pkg/idgen"
 )
 
@@ -261,6 +263,8 @@ func (s *Store) Kick(ctx context.Context, sid string, userID idgen.ID) (*Session
 
 // KickUser 下线某用户除 exceptSID 外的全部会话（改密码后使用）。
 func (s *Store) KickUser(ctx context.Context, userID idgen.ID, exceptSID string) error {
+	tid, _ := tenant.From(ctx)
+	ws.RevokeUser(userID.String(), tid.String())
 	all, err := s.all(ctx)
 	if err != nil {
 		return err
@@ -269,6 +273,25 @@ func (s *Store) KickUser(ctx context.Context, userID idgen.ID, exceptSID string)
 		if ses.UserID != userID || ses.ID == exceptSID {
 			continue
 		}
+		if err := s.revoke(ctx, ses); err != nil {
+			return err
+		}
+		if err := s.remove(ctx, ses.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// KickTenant 下线某租户的全部会话并关闭其 WebSocket；调用方需先推进租户安全版本。
+func (s *Store) KickTenant(ctx context.Context, tenantID idgen.ID) error {
+	ctx = tenant.With(tenant.Unskip(ctx), tenantID)
+	ws.RevokeTenant(tenantID.String())
+	all, err := s.all(ctx)
+	if err != nil {
+		return err
+	}
+	for _, ses := range all {
 		if err := s.revoke(ctx, ses); err != nil {
 			return err
 		}

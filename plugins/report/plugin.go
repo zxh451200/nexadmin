@@ -22,6 +22,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // 建表由运行时执行 plugins/report/migrations/<引擎>/*.sql，插件自己不做迁移。
@@ -35,6 +36,17 @@ func init() {
 type module struct{}
 
 func (*module) Name() string { return "report" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_report_dataset", Column: "tenant_id"},
+		{Name: "plg_report_chart", Column: "tenant_id"},
+		{Name: "plg_report_report", Column: "tenant_id"},
+		{Name: "plg_report_screen", Column: "tenant_id"},
+		{Name: "plg_report_screen_role", Column: "tenant_id"},
+		{Name: "plg_report_subscription", Column: "tenant_id"},
+	}
+}
 
 // Register 注册路由。r 已经是 /api/v1 且默认要求登录。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {

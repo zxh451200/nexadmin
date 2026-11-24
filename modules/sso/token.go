@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"nexadmin/core/tenant"
 )
 
 type tokenRequest struct {
@@ -54,6 +56,9 @@ func (p *provider) token(ctx context.Context, iss string, r tokenRequest) (*toke
 	app, e := p.authClient(ctx, r.ClientID, r.ClientSecret)
 	if e != nil {
 		return nil, e
+	}
+	if err := tenant.CheckActive(ctx, app.TenantID); err != nil {
+		return nil, invalidGrant()
 	}
 	if r.GrantType == grantClientCredentials {
 		return p.byClientCredentials(iss, app, r)
@@ -135,6 +140,11 @@ func (p *provider) byRefresh(ctx context.Context, iss string, app *App, r tokenR
 // issueTokens 签发 access/id/refresh；family 为空表示新会话（授权码换取），否则沿用（refresh 轮换）。
 func (p *provider) issueTokens(ctx context.Context, iss string, app *App, u *userRow, scope, nonce string,
 	authTime time.Time, family string) (*tokenResponse, *oauthErr) {
+	if !u.Super {
+		if err := tenant.CheckActive(ctx, u.TenantID); err != nil {
+			return nil, invalidGrant()
+		}
+	}
 	now := p.now()
 	sub := u.ID.String()
 	at, err := p.keys.sign(jwt.MapClaims{

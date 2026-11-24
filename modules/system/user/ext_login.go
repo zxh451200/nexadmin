@@ -17,6 +17,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
+	"nexadmin/modules/internal/session"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/oauth"
 )
@@ -334,6 +335,14 @@ func (m *module) DeactivateMissingExternal(ctx context.Context, provider string,
 			return n, err
 		} else if protected {
 			continue
+		}
+		if d.Auth != nil {
+			if err := d.Auth.InvalidateUser(ctx, u.TenantID, u.ID); err != nil {
+				return n, err
+			}
+		}
+		if err := session.Shared(d.Cache, d.Config.Auth.RefreshTTL).KickUser(tenant.With(ctx, u.TenantID), u.ID, ""); err != nil {
+			return n, err
 		}
 		if err := d.DB.WithContext(ctx).Model(&User{}).Where("tenant_id = ? AND id = ? AND is_super = ?", int64(tid), int64(u.ID), false).
 			Update("status", statusOff).Error; err != nil {

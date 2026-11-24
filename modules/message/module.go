@@ -39,6 +39,10 @@ type module struct{}
 
 func (module) Name() string { return "message" }
 
+func (module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "sys_message", Column: "tenant_id"}}
+}
+
 // Seed 种入演示消息（setup.Seeder）。
 func (module) Seed(db *gorm.DB) error { return seed(db) }
 

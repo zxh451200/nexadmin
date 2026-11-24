@@ -12,6 +12,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -40,6 +41,13 @@ func (m *module) service(d *core.Deps) *Service {
 }
 
 func (*module) Name() string { return "totp" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{
+		{Name: "plg_totp_secret", Column: "tenant_id"},
+		{Name: "plg_totp_recovery", Column: "tenant_id"},
+	}
+}
 
 // Register 注册个人中心路由(登录即可,不挂权限点——自己的数据自己读写),
 // 并把 LoginGate 挂到框架登录链。

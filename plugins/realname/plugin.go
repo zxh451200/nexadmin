@@ -13,6 +13,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
+	"nexadmin/core/tenant"
 )
 
 // 权限码与 plugin.yaml 的 menu.perm、前端 route.tsx 保持一致。
@@ -36,6 +37,10 @@ func init() {
 type module struct{}
 
 func (*module) Name() string { return "realname" }
+
+func (*module) TenantTables() []tenant.Table {
+	return []tenant.Table{{Name: "plg_realname_config", Column: "tenant_id"}}
+}
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: NewService(d.DB, d.Cache, d.Log)}

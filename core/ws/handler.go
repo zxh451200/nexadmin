@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -82,6 +83,15 @@ func (h *Handler) Handle(c *gin.Context) {
 		return
 	}
 	// 匿名连接只能订阅 public: 前缀的公开主题；业务主题的归属由 TopicGuard 判定。
+	if cl != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		_, err = h.auth.ValidateSession(ctx, cl)
+		cancel()
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+	}
 
 	wsConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -89,11 +99,12 @@ func (h *Handler) Handle(c *gin.Context) {
 		return
 	}
 	connID := randomID()
-	userID := ""
+	userID, tenantID := "", ""
 	if cl != nil {
 		userID = cl.UserID.String()
+		tenantID = cl.TenantID.String()
 	}
-	conn := h.hub.Register(connID, userID, nil)
+	conn := h.hub.Register(connID, userID, tenantID, nil)
 	defer func() {
 		conn.Close()
 		_ = wsConn.Close()
@@ -125,6 +136,15 @@ func (h *Handler) Handle(c *gin.Context) {
 					return
 				}
 			case <-ticker.C:
+				if cl != nil {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					_, err := h.auth.ValidateSession(ctx, cl)
+					cancel()
+					if err != nil {
+						conn.Close()
+						return
+					}
+				}
 				_ = wsConn.SetWriteDeadline(time.Now().Add(WriteWait))
 				if err := wsConn.WriteControl(websocket.PingMessage, nil, time.Now().Add(WriteWait)); err != nil {
 					conn.Close()
