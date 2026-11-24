@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 )
 
@@ -103,6 +104,9 @@ func (m *Manifest) Validate() error {
 	}
 	if strings.TrimSpace(m.Version) == "" {
 		return fmt.Errorf("plugin.yaml: version 不能为空")
+	}
+	if !semver.IsValid("v" + strings.TrimPrefix(strings.TrimSpace(m.Version), "v")) {
+		return fmt.Errorf("plugin.yaml: version %q 不是合法 SemVer", m.Version)
 	}
 	if m.Edition != Free && m.Edition != Pro {
 		return fmt.Errorf("plugin.yaml: edition 必须是 free 或 pro，当前为 %q", m.Edition)

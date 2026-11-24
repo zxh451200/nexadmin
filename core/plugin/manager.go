@@ -19,6 +19,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/i18n"
+	"nexadmin/core/lifecycle"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/core/seed"
@@ -276,8 +277,16 @@ func (m *Manager) evaluate(p Plugin) {
 		bad("plugin.yaml 的 id %q 与注册的 id %q 不一致", man.ID, p.ID)
 		return
 	}
+	if man.Name != p.Name {
+		bad("plugin.yaml 的 name %q 与注册的 name %q 不一致", man.Name, p.Name)
+		return
+	}
 	if man.Edition != p.Edition {
 		bad("plugin.yaml 的 edition %q 与注册的 %q 不一致", man.Edition, p.Edition)
+		return
+	}
+	if man.Version != p.Version {
+		bad("plugin.yaml 的 version %q 与注册的 %q 不一致", man.Version, p.Version)
 		return
 	}
 	if err := CheckRequires(man.RequiresNexadmin, m.opts.FrameworkVersion); err != nil {
@@ -810,6 +819,9 @@ func (m *Manager) runStarter(e *entry, run *pluginRun, s Starter, d *core.Deps) 
 	dd := *d
 	guard := m.activeGuard(e)
 	dd.PluginActive = func() bool { return run.ctx.Err() == nil && guard() }
+	rt := lifecycle.NewRuntime(run.ctx, e.p.ID)
+	dd.PluginRuntime = rt
+	defer rt.Close()
 	var done <-chan struct{}
 	err := func() (err error) {
 		defer func() {
@@ -837,6 +849,7 @@ func (m *Manager) runStarter(e *entry, run *pluginRun, s Starter, d *core.Deps) 
 		return
 	}
 	<-run.ctx.Done()
+	rt.Close()
 	if done == nil {
 		return // 无退出确认，保留本轮占位，禁止重复启动。
 	}

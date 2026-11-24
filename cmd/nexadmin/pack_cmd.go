@@ -12,6 +12,7 @@ import (
 
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
+	"nexadmin/pkg/pluginlint"
 )
 
 // cmdPack 实现 `nexadmin plugin pack <id>`：把已安装的插件（plugins/<id>/ + web/src/plugins/<id>/）
@@ -45,6 +46,9 @@ func cmdPack(args []string, out io.Writer) error {
 	man, err := plugin.LoadManifest(backend)
 	if err != nil {
 		return fmt.Errorf("读取清单失败: %w", err)
+	}
+	if _, err := pluginlint.LintSource(root, id); err != nil {
+		return fmt.Errorf("插件静态检查失败: %w", err)
 	}
 	if *dst == "" {
 		*dst = fmt.Sprintf("%s-%s.zip", id, man.Version)

@@ -47,8 +47,8 @@ const usage = `用法:
   nexadmin plugin create <id> [--out <目录,默认 ./id>] [--name <名称>] [--edition free|pro]
                       创建独立全栈插件包（不修改框架；安装到派生项目后构建）
   nexadmin plugin list
-  nexadmin plugin install [--force] <目录或zip>
-  nexadmin plugin remove [--purge] <id>
+  nexadmin plugin install [--force] [--allow-modified] [--allow-incompatible] <目录或zip>
+  nexadmin plugin remove [--purge] [--allow-unmanaged] <id>
   nexadmin plugin keygen [--out .dev-keys/private.pem]
   nexadmin plugin sign --key <私钥> --plugin <id> --customer <名称> --expires <日期> [--domains a.com,b.com] [--serial <序列号,默认随机>] [--out 文件]
   nexadmin plugin revoke --key <私钥> --serial <序列号> --reason <原因> [--plugin <id>] [--list <现有清单>] [--out <清单文件,默认 license-revoked.json>]
@@ -58,7 +58,7 @@ const usage = `用法:
                       把已安装插件打成发行包（plugin.yaml + backend/ + web/ 的 zip，与 install 输入格式互逆）
   nexadmin plugin verify --sig <签名文件> --key <公钥文件> <zip>
                       校验官网市场下载包的 ed25519 签名
-  nexadmin plugin lint <插件目录（含 plugin.yaml）>
+  nexadmin plugin lint [--layout package|source] <插件目录|插件 id>
                       上架前自检：Go 注册、路由/菜单、mock/双语词条、有迁移时三方言同名集合
   nexadmin upgrade --from <源码包目录或zip> [--to <版本>] [--dry-run] [--manifest .nexadmin.manifest.json] [--allow-dirty]
   nexadmin new <名称> [--out <目录,默认 ../名称>] [--module <go模块路径,默认 名称>] [--plugins <id,id>|basic|standard | --with-plugins] [--without-totp] [--git]

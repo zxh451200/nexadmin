@@ -484,32 +484,38 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, d *core.Deps, act
 // startRemove 移除 → 重建 → 自重启。purge 已经删库，无法回滚，因此不做源码恢复。
 func startRemove(root, id string, purge bool) string {
 	return marketRunner.Run("remove", id, func(x *market.Ctx) error {
-		if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
-			return err
-		}
-		change := func() error {
-			if purge {
-				x.Log("清理插件数据表与菜单…")
-			}
-			if err := market.Remove(root, id, purge, ctxWriter{x}); err != nil {
+		err := market.WithProjectLock(root, func() error {
+			if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
 				return err
 			}
-			x.Log("开始重建…")
-			if err := market.Rebuild(context.Background(), root, true, x.LogPlain); err != nil {
-				return fmt.Errorf("重建失败: %w", err)
+			change := func() error {
+				if purge {
+					x.Log("清理插件数据表与菜单…")
+				}
+				if err := market.Remove(root, id, market.RemoveOptions{Purge: purge}, ctxWriter{x}); err != nil {
+					return err
+				}
+				x.Log("开始重建…")
+				if err := market.Rebuild(context.Background(), root, true, x.LogPlain); err != nil {
+					return fmt.Errorf("重建失败: %w", err)
+				}
+				return nil
+			}
+			var err error
+			if purge {
+				err = change()
+			} else {
+				err = market.ChangeSources(root, id, change)
+			}
+			if err != nil {
+				if !purge {
+					x.Log("失败，源码已恢复到移除前状态；可修正后重试")
+				}
+				return err
 			}
 			return nil
-		}
-		var err error
-		if purge {
-			err = change()
-		} else {
-			err = market.ChangeSources(root, id, change)
-		}
+		})
 		if err != nil {
-			if !purge {
-				x.Log("失败，源码已恢复到移除前状态；可修正后重试")
-			}
 			return err
 		}
 		return triggerRestart(root, x)
@@ -519,10 +525,12 @@ func startRemove(root, id string, purge bool) string {
 // startRebuild 仅重建 + 自重启（不装不删）。
 func startRebuild(root string, withWeb bool) string {
 	return marketRunner.Run("rebuild", "", func(x *market.Ctx) error {
-		if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
-			return err
-		}
-		if err := market.Rebuild(context.Background(), root, withWeb, x.LogPlain); err != nil {
+		if err := market.WithProjectLock(root, func() error {
+			if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
+				return err
+			}
+			return market.Rebuild(context.Background(), root, withWeb, x.LogPlain)
+		}); err != nil {
 			return err
 		}
 		return triggerRestart(root, x)

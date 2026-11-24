@@ -43,28 +43,33 @@ func cmdInstall(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	id, err := market.Install(root, fl.Arg(0), market.InstallOptions{
-		Overwrite: *force, AllowIncompatible: *allowIncompatible, AllowModified: *allowModified,
+	return market.WithProjectLock(root, func() error {
+		id, err := market.Install(root, fl.Arg(0), market.InstallOptions{
+			Overwrite: *force, AllowIncompatible: *allowIncompatible, AllowModified: *allowModified,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "插件 %s 已安装。请重新编译并重启。\n", id)
+		return nil
 	})
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "插件 %s 已安装。请重新编译并重启。\n", id)
-	return nil
 }
 
 func cmdRemove(args []string, out io.Writer) error {
 	fs := newFlags("remove")
 	purge := fs.Bool("purge", false, "同时清理数据库：DROP plg_<id>_% 表并删除该插件的菜单（不可恢复）")
+	allowUnmanaged := fs.Bool("allow-unmanaged", false, "仅用于移除旧版手工安装且不在台账中的源码；市场 UI 不提供此能力")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("用法: nexadmin plugin remove [--purge] <id>")
+		return errors.New("用法: nexadmin plugin remove [--purge] [--allow-unmanaged] <id>")
 	}
 	root, err := findRoot()
 	if err != nil {
 		return err
 	}
-	return market.Remove(root, fs.Arg(0), *purge, out)
+	return market.WithProjectLock(root, func() error {
+		return market.Remove(root, fs.Arg(0), market.RemoveOptions{Purge: *purge, AllowUnmanaged: *allowUnmanaged}, out)
+	})
 }

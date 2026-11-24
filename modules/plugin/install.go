@@ -57,6 +57,12 @@ func catalogOptions(e market.Entry, opts market.InstallOptions) market.InstallOp
 }
 
 func runInstall(root string, entries []market.Entry, opts market.InstallOptions, x *market.Ctx, ops installOperations) error {
+	return market.WithProjectLock(root, func() error {
+		return runInstallUnlocked(root, entries, opts, x, ops)
+	})
+}
+
+func runInstallUnlocked(root string, entries []market.Entry, opts market.InstallOptions, x *market.Ctx, ops installOperations) error {
 	ids := make([]string, len(entries))
 	for i, e := range entries {
 		ids[i] = e.ID
@@ -106,6 +112,12 @@ func runInstall(root string, entries []market.Entry, opts market.InstallOptions,
 }
 
 func runUpload(root, zipPath string, x *market.Ctx, ops installOperations) error {
+	return market.WithProjectLock(root, func() error {
+		return runUploadUnlocked(root, zipPath, x, ops)
+	})
+}
+
+func runUploadUnlocked(root, zipPath string, x *market.Ctx, ops installOperations) error {
 	defer os.Remove(zipPath)
 	if err := requireInstallEnvironment(root, ops); err != nil {
 		return err

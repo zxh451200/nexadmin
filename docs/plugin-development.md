@@ -119,16 +119,24 @@ func (*module) TenantTables() []tenant.Table {
 
 ### 4.2 后台任务（可选）
 
-需要常驻 goroutine（调度器、消费者）就实现 `plugin.Starter`：
+需要常驻 goroutine（调度器、消费者），或需要注册进程内事件、跨实例事件、异步任务，就实现 `plugin.Starter`。没有 `Starter` 的插件不能注册任务；即使只注册任务、不启动后台 goroutine，也必须实现 `Starter`。
 
 ```go
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
-    go scheduler.Run(ctx) // 必须非阻塞；ctx 在进程退出时取消
+    go scheduler.Run(ctx) // 必须非阻塞；ctx 在本轮运行期结束或进程退出时取消
     return nil
 }
 ```
 
 `Start` 是同步调用的，必须尽快返回。返回的错误只会记日志，不影响路由挂载。
+
+插件管理器在每轮 `Starter.Start` 前注入 `d.PluginRuntime`，类型为 `*core/lifecycle.Runtime`。插件必须在 `Start` 内通过它注册运行期扩展：
+
+- `d.PluginRuntime.Subscribe(...)`：进程内事件。
+- `d.PluginRuntime.SubscribeCluster(d.Bus, ...)`：跨实例事件。
+- `d.PluginRuntime.RegisterJob(type, handler)`：异步任务。
+
+禁止使用 `event.Subscribe` / `job.Register` 全局注册，`plugin lint` 会拒绝。运行 ctx 结束会自动撤销上述注册，并取消经它注册且已开始执行的任务。
 
 ### 4.3 约定（违反会被审核打回）
 
@@ -136,7 +144,7 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 - 数据表前缀：`plg_<id>_`，例如 `plg_cron_job`。
 - 权限码前缀：`<id>:`，例如 `cron:list`。每个接口都要加 `core.Perm(...)`。
 - 只能依赖 `core/` 和 `pkg/`。**不要改 core、不要改 framework、不要 import 内置模块或别的插件。**
-- 可用的框架能力都在 `core.Deps` 里：`DB`、`Cache`、`Auth`、`Log`、`Config`、统一通知入口 `Notify`（站内 / 邮件 / 短信 / 机器人，nil 安全）、跨实例事件广播 `Bus`（nil 安全）、停止时的清理登记 `OnClose`、运行时接口文档 `APIDoc`，以及不要求登录的 `Public` 和仅超管的 `Admin` 路由组。不要直接查别人的表；确实要读内置表（如 cron 的 `clean_logs` 清理日志）要用表名常量，并处理表不存在的情况，不能 panic。
+- 可用的框架能力都在 `core.Deps` 里：`DB`、`Cache`、`Auth`、`Log`、`Config`、统一通知入口 `Notify`（站内 / 邮件 / 短信 / 机器人，nil 安全）、跨实例事件广播 `Bus`（nil 安全）、本轮运行期扩展 `PluginRuntime`、停止时的清理登记 `OnClose`、运行时接口文档 `APIDoc`，以及不要求登录的 `Public` 和仅超管的 `Admin` 路由组。不要直接查别人的表；确实要读内置表（如 cron 的 `clean_logs` 清理日志）要用表名常量，并处理表不存在的情况，不能 panic。
 - 业务主键用雪花 ID（`pkg/idgen`），接口里序列化成字符串。
 - 租户隔离：按租户的数据表带 `tenant_id`，查询必须带当前租户条件。
 - 外部请求（HTTP 回调等）必须防 SSRF：禁止内网和回环地址，设置超时。cron 的 `ssrf.go` 可以直接参考。
@@ -271,13 +279,15 @@ zip -r cron-1.0.0.zip cron/        # 目录名 = 插件 id；包内不要带 nod
 在一个干净的派生项目里验证安装（使用实际包文件名与插件 ID 替换下例）：
 
 ```bash
-go run ./cmd/nexadmin plugin lint <插件目录>   # 上架前静态自检，见下
+go run ./cmd/nexadmin plugin lint cron-1.0.0.zip  # 安装包布局：plugin.yaml + backend/ + web/
 go run ./cmd/nexadmin plugin install cron-1.0.0.zip
+# 在母版或派生项目源码内，也可按插件 id 检查源码布局：
+go run ./cmd/nexadmin plugin lint --layout source cron
 go build ./... && go vet ./... && go test ./plugins/<id>/...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 
-`plugin lint` 不执行插件代码，静态核对：Go `plugin.Register` 的 ID/Version/Edition 与清单一致（支持字符串常量与 `plugin.Free/Pro`，动态注册拒绝）；路由 `export const routes` 的 path/perm 与清单菜单一一对应；mock 文件存在且非空；中英文词条键集合一致且覆盖全部静态 `t(...)`/`i18nKey` 与菜单标题；有迁移时 mysql/mariadb/postgres 三方言同名文件集合一致。它不做 TS 类型检查，发布前仍须构建与测试。
+`plugin lint` 不执行插件代码，安装、打包与后台重建会自动调用同一检查。它静态核对：合法 SemVer 版本；Go `plugin.Register` 的 ID/Name/Version/Edition 与清单一致（支持字符串常量与 `plugin.Free/Pro`，动态注册拒绝）；入口 `init` 只允许静态注册；禁止全局事件订阅与任务注册，运行期扩展须经 `d.PluginRuntime` 注册；路由 `export const routes` 的 path/perm 与清单菜单对应，隐藏辅助路由须声明 `hidden: true`、不写菜单且权限属于本插件；mock 文件可选，存在时必须非空；中英文词条键集合一致并覆盖静态 `t(...)`/`i18nKey` 与菜单标题，动态 key 只接受固定字面命名空间；有迁移时 mysql/mariadb/postgres 三方言同名文件集合一致。`common.*`、`dataTable.*`、`localeForm.*` 由宿主语言包提供。它不做 TS 类型检查，发布前仍须构建与测试。
 
 覆盖安装使用 `go run ./cmd/nexadmin plugin install --force <目录或zip>`。三个放宽开关彼此独立，都必须在路径之前（安装子命令使用标准 `flag.Parse`，不解析路径之后的选项）：
 
@@ -287,7 +297,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 把已安装插件重新打成发行包：`go run ./cmd/nexadmin plugin pack [--out <路径.zip>] <id>`（产出 `plugin.yaml + backend/ + web/` 的 zip，与 install 输入格式互逆；`--out` 同样要在位置参数之前）。`release pack` 打的是框架包。`plugin list` 读取磁盘清单与离线授权，不证明 Go 空导入、迁移和运行时挂载成功；还需核对 `plugins/plugins.go`、启动日志与运行时 `GET /api/v1/plugins`。
 
-安装命令会拒绝路径穿越的压缩包，并限制解压后的文件数量和总大小。卸载与停用：
+安装命令会拒绝路径穿越的压缩包，并限制解压后的文件数量和总大小。安装、卸载与重建通过项目根目录的 `.nexadmin-plugin.lock` 跨进程串行；并发操作最多等待两分钟。只有安装台账记录的市场插件才能覆盖或由市场删除，随项目交付的内置源码禁止这两类操作。旧版手工安装且不在台账中的插件，仅 CLI 的 `plugin remove --allow-unmanaged <id>` 可显式移除，后台不提供绕过。卸载与停用：
 
 - `plugin remove <id>`：删除 `plugins/<id>/`、`web/src/plugins/<id>/` 并从 `plugins.go` 摘掉导入；**数据表与授权文件保留**，重装后数据原样回来。重新编译并重启生效。
 - `plugin remove --purge <id>`：在 remove 之外先连数据库清理——DROP `plg_<id>_%` 前缀的表（平台插件清平台库，`migration_target: tenant` 插件清各租户业务库），并按清单的菜单码删除 `sys_menu` 记录；清单缺失时表仍按前缀清、菜单需手动处理。授权文件保留。数据库清不掉会中止且不删文件，可重试。
@@ -436,20 +446,21 @@ cd web && npx tsc --noEmit && npx eslint src
 - 插件自己的路由——`gate` / `admit` 按运行期状态判定，停用后请求直接 403 并带原因
 - `GET /plugins/active` 的可用性判据
 - 侧栏菜单可见性——`MenuVisible` 与 `/plugins/active` 同一判据，不会留下一个点进去 403 的入口
+- 本轮 `PluginRuntime` 注册的进程内/跨实例事件订阅与异步任务处理器——本地节点停用即撤销，并取消已开始执行的任务
+
+这是运行期注册的撤销，不是插件代码热卸载，也不代表后台 worker 能自动恢复。
 
 **需要重启**：
 
 - 已建立的 WebSocket / SSE 长连接——守卫只追加、不摘除
-- 事件订阅——`core/event` 只有 `Subscribe`，没有 `Unsubscribe`
-- 作业注册——`core/job` 的运行期注销不是公开能力
 - 插件里用 `sync.Once` 造出来的 service 单例
-- 后台 worker——除非 Module 实现 `plugin.RestartableStarter`
+- 停用后需重新拉起、但 Module 未实现 `plugin.RestartableStarter` 的后台 worker
 
 `RestartableStarter` 的约定：`Start` 返回时要给出 `Done()`，ctx 取消后所有任务确认退出，框架才会在恢复启用时重新 `Start` 一次并给一份新的 ctx。
 
 **当前官方插件都还没实现它**，所以带 worker 的插件停用后再启用必须重启：重新启用会留下 `needRestart=true`，此时接口和菜单也仍然不可用——框架不假装它已经活了。
 
-停用清单是节点本地文件（`data/licenses/disabled.json`），集群多节点不会自动同步：要么逐节点切换，要么用配置 `disabled_plugins` 随配置分发。`nexadmin plugin list` 只读磁盘与配置，不读这个叠加层。
+上述撤销只作用于当前节点。多节点部署的 operator overlay 仍不自动同步：停用清单是节点本地文件（`data/licenses/disabled.json`），要么逐节点切换，要么用配置 `disabled_plugins` 随配置分发。`nexadmin plugin list` 只读磁盘与配置，不读这个叠加层。
 
 ### 热挂载
 

@@ -80,7 +80,7 @@ type Bus struct {
 	ps  cache.PubSub // nil = 缓存不支持发布订阅，只剩本地行为
 
 	mu       sync.RWMutex
-	handlers []handler
+	handlers []*handler
 
 	// debounce：这些事件种类在 window 内相同载荷的重复事件被合并（先立即执行一次，窗口结束若期间又来过则补一次）。
 	debMu     sync.Mutex
@@ -145,15 +145,31 @@ func (b *Bus) SetDebounce(kind string, window time.Duration) {
 	b.debounce[kind] = window
 }
 
-// On 注册某类事件的处理函数；fn 在订阅协程里串行调用，应尽快返回。
+// On 注册某类事件的处理函数，返回幂等的取消函数；fn 在订阅协程里串行调用，应尽快返回。
 // reset 在订阅断线重连成功后调用，用来做一次全量校正（可为 nil）。nil 总线上调用是空操作。
-func (b *Bus) On(kind string, fn func(json.RawMessage), reset func()) {
+func (b *Bus) On(kind string, fn func(json.RawMessage), reset func()) func() {
 	if b == nil {
-		return
+		return func() {}
 	}
+	h := &handler{kind: kind, fn: fn, reset: reset}
 	b.mu.Lock()
-	b.handlers = append(b.handlers, handler{kind: kind, fn: fn, reset: reset})
+	b.handlers = append(b.handlers, h)
 	b.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			for i, cur := range b.handlers {
+				if cur == h {
+					copy(b.handlers[i:], b.handlers[i+1:])
+					b.handlers[len(b.handlers)-1] = nil
+					b.handlers = b.handlers[:len(b.handlers)-1]
+					break
+				}
+			}
+		})
+	}
 }
 
 // Publish 把事件广播给其它实例（不含自己）。尽力而为：队列满或发布失败只记日志。nil 总线上调用是空操作。
@@ -201,7 +217,7 @@ func (b *Bus) dispatch(msg string) {
 		return // 坏消息忽略；自己发的不处理（已经在本地做过了），这是防重复的关键
 	}
 	b.mu.RLock()
-	hs := append([]handler(nil), b.handlers...)
+	hs := append([]*handler(nil), b.handlers...)
 	b.mu.RUnlock()
 	for i, h := range hs {
 		if h.kind != env.Kind {
@@ -257,7 +273,7 @@ func (b *Bus) debFire(key, kind string, window time.Duration, fn func(json.RawMe
 func (b *Bus) onReset() {
 	b.log.Warn("cluster: event subscription re-established, resyncing")
 	b.mu.RLock()
-	hs := append([]handler(nil), b.handlers...)
+	hs := append([]*handler(nil), b.handlers...)
 	b.mu.RUnlock()
 	for _, h := range hs {
 		if h.reset != nil {

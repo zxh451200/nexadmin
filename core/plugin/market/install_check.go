@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"nexadmin/core/plugin"
+	"nexadmin/pkg/pluginlint"
 )
 
 // InstallOptions 分别授予覆盖、不兼容安装及覆盖本地修改的许可，不能相互替代。
@@ -125,6 +126,9 @@ func prepareInstall(root, src, sub string, opts InstallOptions) (_ *installPlan,
 		return nil, err
 	}
 	if plan.status.Exists {
+		if !plan.status.Managed {
+			return nil, fmt.Errorf("插件 %s 是随项目交付的内置源码，不是市场安装插件，禁止覆盖", man.ID)
+		}
 		if !opts.Overwrite {
 			return nil, fmt.Errorf("插件 %s 已安装（需显式 Overwrite 允许覆盖）", man.ID)
 		}
@@ -187,6 +191,15 @@ func prepareInstall(root, src, sub string, opts InstallOptions) (_ *installPlan,
 		if err := copyTree(web, plan.web); err != nil {
 			return nil, err
 		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, plugin.ManifestFile), raw, 0o644); err != nil {
+		return nil, err
+	}
+	if err := os.RemoveAll(filepath.Join(tmp, "package")); err != nil {
+		return nil, err
+	}
+	if _, err := pluginlint.Lint(tmp); err != nil {
+		return nil, fmt.Errorf("插件静态检查失败: %w", err)
 	}
 	return plan, nil
 }

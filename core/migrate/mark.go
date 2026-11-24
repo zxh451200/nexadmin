@@ -53,6 +53,26 @@ func (r *Runner) checkMark(scope, name string) (FileStatus, error) {
 // MarkApplied 不执行任何 SQL，把磁盘上尚未记录的迁移文件按当前 checksum 写入版本表，来源标为手工。
 // 流程：只读检查 -> 确认 -> 拿数据库级锁 -> 锁内重新检查 -> 写入并记日志。
 func (r *Runner) MarkApplied(ref, actor string, confirm Confirm) error {
+	return r.markUnexecuted(ref, actor, SourceManual, "", confirm,
+		fmt.Sprintf("将把 %s 标记为已执行但不会运行其中的任何 SQL，请确认你已手工完成其中的全部变更", ref))
+}
+
+// AdoptBaseline 显式把一个完整的存量库迁移文件采纳为基线：不执行其中任何 SQL，也不按表/索引是否存在裁剪语句。
+// actor 与 reason 必填，并连同 UTC 时间、文件和完整 checksum 写入审计日志；版本表以 SourceAdopt 区分于真实执行。
+// 调用方必须已确认该文件描述的全部结构（包括后续 ALTER/索引）都与当前数据库一致。
+func (r *Runner) AdoptBaseline(ref, actor, reason string, confirm Confirm) error {
+	actor, reason = strings.TrimSpace(actor), strings.TrimSpace(reason)
+	if actor == "" {
+		return fmt.Errorf("migrate: AdoptBaseline 必须提供 actor")
+	}
+	if reason == "" {
+		return fmt.Errorf("migrate: AdoptBaseline 必须提供 reason")
+	}
+	prompt := fmt.Sprintf("将把 %s 显式 adopt 为存量库基线，不会运行其中任何 SQL；请确认该文件的全部结构（含 ALTER/索引）均已存在且一致。原因: %q", ref, reason)
+	return r.markUnexecuted(ref, actor, SourceAdopt, reason, confirm, prompt)
+}
+
+func (r *Runner) markUnexecuted(ref, actor, source, reason string, confirm Confirm, prompt string) error {
 	scope, name, err := ParseRef(ref)
 	if err != nil {
 		return err
@@ -60,7 +80,7 @@ func (r *Runner) MarkApplied(ref, actor string, confirm Confirm) error {
 	if _, err := r.checkMark(scope, name); err != nil {
 		return err
 	}
-	if err := ask(confirm, fmt.Sprintf("将把 %s 标记为已执行但不会运行其中的任何 SQL，请确认你已手工完成其中的全部变更", key(scope, name))); err != nil {
+	if err := ask(confirm, prompt); err != nil {
 		return err
 	}
 	return r.Exclusive(func() error {
@@ -71,9 +91,14 @@ func (r *Runner) MarkApplied(ref, actor string, confirm Confirm) error {
 		if err != nil {
 			return err
 		}
-		now := time.Now()
-		if err := r.Store.Insert(Record{Scope: scope, Version: name, Checksum: s.Checksum, AppliedAt: now, Source: SourceManual}); err != nil {
+		now := time.Now().UTC()
+		if err := r.Store.Insert(Record{Scope: scope, Version: name, Checksum: s.Checksum, AppliedAt: now, Source: source}); err != nil {
 			return fmt.Errorf("migrate: 写入版本表: %w", err)
+		}
+		if source == SourceAdopt {
+			r.Log.Infof("迁移基线显式 adopt（未运行 SQL）: operator=%q time=%s file=%s checksum=%s reason=%q",
+				actor, now.Format(time.RFC3339), key(scope, name), s.Checksum, reason)
+			return nil
 		}
 		r.Log.Infof("迁移手工标记为已执行（未运行 SQL）: operator=%s time=%s file=%s checksum=%.12s",
 			actor, now.Format(time.RFC3339), key(scope, name), s.Checksum)

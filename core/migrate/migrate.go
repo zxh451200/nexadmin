@@ -7,9 +7,9 @@
 //   - 多实例并发靠数据库级锁，拿到锁后重新读版本表，别的实例已做完的直接跳过。
 //   - 迁移里的 INSERT/UPDATE/DELETE 只给 WARN，不阻断（出厂数据应由 Seeder 种入）。
 //
-// 存量库基线：某个 scope 在版本表里一条记录都没有（升级前建的库）时，该 scope 的未记录文件按
-// “CREATE TABLE 的目标表已存在就跳过该表及其索引，不存在才执行”处理；全部跳过则只记录不执行。
-// 之后这个 scope 恢复严格模式。插件的 sys_plugin_migration 旧记录会被直接导入。
+// 迁移默认严格按版本表执行，不用“scope 为空 + 同名表存在”推断历史 Schema。
+// 存量库由操作者通过 AdoptBaseline 显式 adopt 指定文件；旧插件的 sys_plugin_migration
+// 记录仍作为既有台账导入，但不会据此跳过台账之外的文件。
 package migrate
 
 import (
@@ -52,8 +52,8 @@ func NewRunner(st Store, log Logger, sources ...Source) *Runner {
 // Item 是一个待执行的迁移文件。
 type Item struct {
 	File
-	Stmts    []string // 实际要执行的语句（基线时可能少于文件里的全部语句，甚至为空）
-	Baseline bool     // 存量库基线：表已存在，只记录不执行（Stmts 为空）
+	Stmts    []string // 实际要执行的语句；旧台账导入时为空
+	Baseline bool     // 来自既有迁移台账，只记录不执行；不再按表存在推断
 	Warnings []string // DML 警告
 }
 
@@ -82,29 +82,7 @@ func (e *PendingError) Error() string {
 		len(e.Files), strings.Join(e.Files, ", "))
 }
 
-var (
-	createTableRe = regexp.MustCompile("(?is)^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?[`\"]?([A-Za-z0-9_]+)")
-	dmlRe         = regexp.MustCompile(`(?is)^(INSERT|UPDATE|DELETE)\b`)
-)
-
-// Split 去掉 “--” 注释行，按分号切分语句（迁移文件里不写含分号的字符串）。
-func Split(sql string) []string {
-	var b strings.Builder
-	for _, line := range strings.Split(sql, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "--") {
-			continue
-		}
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	var out []string
-	for _, s := range strings.Split(b.String(), ";") {
-		if s = strings.TrimSpace(s); s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
+var dmlRe = regexp.MustCompile(`(?is)^(INSERT|UPDATE|DELETE)\b`)
 
 // DMLWarnings 找出语句里的 INSERT/UPDATE/DELETE。
 func DMLWarnings(f File, stmts []string) []string {
@@ -120,15 +98,14 @@ func DMLWarnings(f File, stmts []string) []string {
 
 func key(scope, name string) string { return scope + "/" + name }
 
-// scan 比对磁盘文件与版本表，返回每个文件的状态与待执行项。tableExists=false 时视为一条记录都没有。
+// scan 比对磁盘文件与版本表，返回每个文件的状态与待执行项。
+// 普通待执行文件始终保留全部 SQL；只有旧插件台账命中的文件才作为 Baseline 导入。
 func (r *Runner) scan() (status []FileStatus, items []Item, err error) {
 	files, err := Discover(r.Store.Engine(), r.Sources)
 	if err != nil {
 		return nil, nil, err
 	}
-	applied := map[string]string{}
-	manual := map[string]bool{}
-	hasScope := map[string]bool{}
+	applied := map[string]Record{}
 	if ok, err := r.Store.HasTable(Table); err != nil {
 		return nil, nil, err
 	} else if ok {
@@ -137,34 +114,33 @@ func (r *Runner) scan() (status []FileStatus, items []Item, err error) {
 			return nil, nil, err
 		}
 		for _, rec := range recs {
-			applied[key(rec.Scope, rec.Version)] = rec.Checksum
-			manual[key(rec.Scope, rec.Version)] = rec.Source == SourceManual
-			hasScope[rec.Scope] = true
+			applied[key(rec.Scope, rec.Version)] = rec
 		}
 	}
 	legacy := map[string]map[string]bool{}
 	for _, f := range files {
-		sum, done := applied[key(f.Scope, f.Name)]
+		rec, done := applied[key(f.Scope, f.Name)]
 		switch {
-		case done && sum != f.Checksum:
-			status = append(status, FileStatus{Scope: f.Scope, Name: f.Name, Checksum: f.Checksum, Recorded: sum, State: StateMismatch, Manual: manual[key(f.Scope, f.Name)]})
+		case done && rec.Checksum != f.Checksum:
+			status = append(status, FileStatus{Scope: f.Scope, Name: f.Name, Checksum: f.Checksum, Recorded: rec.Checksum, State: StateMismatch, Manual: isUnexecutedSource(rec.Source), Source: rec.Source})
 			continue
 		case done:
-			status = append(status, FileStatus{Scope: f.Scope, Name: f.Name, Checksum: f.Checksum, Recorded: sum, State: StateApplied, Manual: manual[key(f.Scope, f.Name)]})
+			status = append(status, FileStatus{Scope: f.Scope, Name: f.Name, Checksum: f.Checksum, Recorded: rec.Checksum, State: StateApplied, Manual: isUnexecutedSource(rec.Source), Source: rec.Source})
 			continue
 		}
 		status = append(status, FileStatus{Scope: f.Scope, Name: f.Name, Checksum: f.Checksum, State: StatePending})
-		it := Item{File: f, Stmts: Split(f.SQL)}
-		if !hasScope[f.Scope] { // 该 scope 还没有任何记录：存量库基线
-			if _, ok := legacy[f.Scope]; !ok {
-				if legacy[f.Scope], err = r.Store.Legacy(f.Scope); err != nil {
-					return nil, nil, err
-				}
-			}
-			if legacy[f.Scope][f.Name] {
-				it.Stmts, it.Baseline = nil, true
-			} else if it.Stmts, it.Baseline, err = r.baseline(it.Stmts); err != nil {
+		it := Item{File: f}
+		if _, ok := legacy[f.Scope]; !ok {
+			if legacy[f.Scope], err = r.Store.Legacy(f.Scope); err != nil {
 				return nil, nil, err
+			}
+		}
+		if legacy[f.Scope][f.Name] {
+			it.Baseline = true
+		} else {
+			it.Stmts, err = SplitForEngine(r.Store.Engine(), f.SQL)
+			if err != nil {
+				return nil, nil, fmt.Errorf("migrate: 分词 %s/%s: %w", f.Scope, f.Name, err)
 			}
 		}
 		it.Warnings = DMLWarnings(f, it.Stmts)
@@ -180,25 +156,6 @@ func (r *Runner) scan() (status []FileStatus, items []Item, err error) {
 		err = &ChecksumError{Files: bad}
 	}
 	return status, items, err
-}
-
-// baseline 只保留需要执行的语句：CREATE TABLE 的目标表已存在，就连同它后面的 CREATE INDEX 整组跳过。
-// 第一个 CREATE TABLE 之前的语句无从判断，照常执行。全部跳过返回 baseline=true。
-func (r *Runner) baseline(stmts []string) (run []string, baseline bool, err error) {
-	keep := true
-	for _, s := range stmts {
-		if m := createTableRe.FindStringSubmatch(s); m != nil {
-			exists, err := r.Store.HasTable(m[1])
-			if err != nil {
-				return nil, false, err
-			}
-			keep = !exists
-		}
-		if keep {
-			run = append(run, s)
-		}
-	}
-	return run, len(run) == 0 && len(stmts) > 0, nil
 }
 
 // Plan 列出待执行的迁移（只读，不拿锁、不建表），供 --dry-run 与 auto_migrate=false 的检查使用。
@@ -233,7 +190,8 @@ const (
 // FileStatus 是 migrate --status 的一行。
 type FileStatus struct {
 	Scope, Name, Checksum, Recorded, State string
-	Manual                                 bool // 记录是 --mark-applied 手工标记的（没有真实执行）
+	Manual                                 bool   // 记录没有真实执行 SQL（手工标记、显式 adopt 或旧台账导入）
+	Source                                 string // 版本表 source；空表示真实执行
 }
 
 // Status 列出所有迁移文件的状态（checksum 异常不当作错误返回，状态里标出）。
@@ -298,13 +256,22 @@ func (r *Runner) RunPending() (*Result, error) {
 			r.Log.Warnf("%s", w)
 		}
 		rec := Record{Scope: it.Scope, Version: it.Name, Checksum: it.Checksum, AppliedAt: time.Now().UTC()}
-		done, err := r.Store.Apply(rec, it.Stmts)
-		if err != nil {
-			where := fmt.Sprintf("已执行 %d/%d 条，第 %d 条失败，该文件未记录，需先手工修复", done, len(it.Stmts), done+1)
-			if r.Store.Atomic() {
-				where = fmt.Sprintf("第 %d/%d 条失败，该文件已整体回滚", done+1, len(it.Stmts))
+		if it.Baseline {
+			rec.Source = SourceLegacy
+			if err := r.Store.Insert(rec); err != nil {
+				return res, fmt.Errorf("migrate: %s/%s: 写入旧插件台账导入记录: %w", it.Scope, it.Name, err)
 			}
-			return res, fmt.Errorf("migrate: %s/%s: %s: %w", it.Scope, it.Name, where, err)
+			r.Log.Infof("旧插件台账精确匹配，作为基线导入（未运行 SQL）: time=%s file=%s checksum=%s",
+				rec.AppliedAt.Format(time.RFC3339), key(it.Scope, it.Name), it.Checksum)
+		} else {
+			done, err := r.Store.Apply(rec, it.Stmts)
+			if err != nil {
+				where := fmt.Sprintf("已执行 %d/%d 条，第 %d 条失败，该文件未记录，需先手工修复", done, len(it.Stmts), done+1)
+				if r.Store.Atomic() {
+					where = fmt.Sprintf("第 %d/%d 条失败，该文件已整体回滚", done+1, len(it.Stmts))
+				}
+				return res, fmt.Errorf("migrate: %s/%s: %s: %w", it.Scope, it.Name, where, err)
+			}
 		}
 		res.Applied = append(res.Applied, Applied{Scope: it.Scope, File: it.Name, Baseline: it.Baseline})
 	}

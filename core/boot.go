@@ -398,7 +398,7 @@ func runMigrationCommand(rn *migrate.Runner, o MigrateOptions, out io.Writer) er
 	for _, f := range res.Applied {
 		note := ""
 		if f.Baseline {
-			note = "（表已存在，仅记录）"
+			note = "（旧插件台账精确匹配，仅记录）"
 		}
 		fmt.Fprintf(out, "已执行 %s/%s%s\n", f.Scope, f.File, note)
 	}
@@ -421,7 +421,14 @@ func printStatus(rn *migrate.Runner, out io.Writer) error {
 		case migrate.StateApplied:
 			applied++
 			if s.Manual {
-				fmt.Fprintf(out, "  手工标记  %s  %.12s\n", s.Name, s.Checksum)
+				label := "手工标记"
+				switch s.Source {
+				case migrate.SourceAdopt:
+					label = "显式 adopt"
+				case migrate.SourceLegacy:
+					label = "旧台账导入"
+				}
+				fmt.Fprintf(out, "  %s  %s  %.12s\n", label, s.Name, s.Checksum)
 			} else {
 				fmt.Fprintf(out, "  已执行    %s  %.12s\n", s.Name, s.Checksum)
 			}
@@ -451,7 +458,7 @@ func printDryRun(rn *migrate.Runner, out io.Writer) error {
 	}
 	for _, it := range items {
 		if it.Baseline {
-			fmt.Fprintf(out, "将记录 %s/%s（表已存在，不执行）\n", it.Scope, it.Name)
+			fmt.Fprintf(out, "将记录 %s/%s（旧插件台账精确匹配，不执行）\n", it.Scope, it.Name)
 		} else {
 			fmt.Fprintf(out, "将执行 %s/%s（%d 条语句）\n", it.Scope, it.Name, len(it.Stmts))
 		}

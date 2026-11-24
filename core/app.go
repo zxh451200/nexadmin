@@ -41,6 +41,7 @@ import (
 	"nexadmin/core/config"
 	"nexadmin/core/ctl"
 	"nexadmin/core/i18n"
+	"nexadmin/core/lifecycle"
 	"nexadmin/core/mcp"
 	"nexadmin/core/middleware"
 	"nexadmin/core/migrate"
@@ -103,6 +104,9 @@ type Deps struct {
 	// 非 HTTP 扩展点应在执行前及成功返回前检查；Register / Start 装配期间不要调用。
 	// nil 表示手工装配时未提供 guard，插件可保留原有行为；生产管理器始终注入。
 	PluginActive func() bool
+	// PluginRuntime 是插件本轮 Start 的进程内扩展所有者；事件、跨实例订阅与异步任务必须经它注册。
+	// nil 表示手工装配，不在插件管理器生命周期内的调用方应使用 core/event 与 core/job 的全局 API。
+	PluginRuntime *lifecycle.Runtime
 	// demoAllow 收集演示模式（config demo.enabled）的额外放行接口。nil = 手工构造的
 	// Deps（测试）未装配注册表，DemoAllow 空操作；生产装配始终非 nil（见 router.go）。
 	demoAllow *middleware.DemoRegistry

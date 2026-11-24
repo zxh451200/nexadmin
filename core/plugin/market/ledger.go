@@ -110,6 +110,7 @@ func AddLedger(root, id, version string) error {
 // UpdateStatus 区分正常更新、本地改动和没有可信安装基线的旧插件。
 type UpdateStatus struct {
 	Exists        bool `json:"exists"`
+	Managed       bool `json:"managed"`
 	Modified      bool `json:"modified"`
 	BaselineKnown bool `json:"baselineKnown"`
 }
@@ -129,12 +130,29 @@ func InspectUpdate(root, id string) (UpdateStatus, error) {
 		if entry.ID == id {
 			// 源码被全部删除仍然是一次有本地修改的更新，不应绕过保护。
 			status.Exists = true
+			status.Managed = true
 			status.BaselineKnown = entry.Fingerprints != nil
 			status.Modified = status.BaselineKnown && !maps.Equal(entry.Fingerprints, files)
 			break
 		}
 	}
 	return status, nil
+}
+
+func IsManaged(root, id string) (bool, error) {
+	if !plugin.ValidID(id) {
+		return false, fmt.Errorf("非法的插件 id %q", id)
+	}
+	entries, err := LoadLedger(root)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.ID == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func sourceFingerprints(root, id string) (map[string]string, bool, error) {

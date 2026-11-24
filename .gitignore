@@ -30,6 +30,7 @@ __pycache__/
 .zcode/
 .qoder/
 .tmp/
+/.nexadmin-plugin.lock
 
 # Playwright e2e artifacts
 test-results/

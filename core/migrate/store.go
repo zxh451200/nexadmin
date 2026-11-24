@@ -25,12 +25,23 @@ type Record struct {
 	Version   string
 	Checksum  string
 	AppliedAt time.Time
-	// Source 是记录来源：空表示迁移运行器真实执行；SourceManual 表示管理员手工标记（未执行其中的 SQL）。
+	// Source 是记录来源：空表示迁移运行器真实执行；其余内置来源均表示未执行文件中的 SQL。
 	Source string
 }
 
-// SourceManual 是 `migrate --mark-applied` 写入的来源标记。
-const SourceManual = "manual"
+const (
+	// SourceManual 是 `migrate --mark-applied` 写入的来源标记。
+	SourceManual = "manual"
+	// SourceAdopt 是调用方通过 AdoptBaseline 显式采纳的存量库基线。
+	SourceAdopt = "adopt"
+	// SourceLegacy 是旧 sys_plugin_migration 台账精确命中文件后的自动导入。
+	SourceLegacy = "legacy"
+)
+
+func isUnexecutedSource(source string) bool {
+	// 未知的非空来源也按“未执行”展示，避免把未来来源误报为真实执行。
+	return source != ""
+}
 
 // sourceCol 是版本表里的来源列：可空、无默认值，老版本二进制的 INSERT（不含该列）照常工作。
 const sourceCol = "source"

@@ -115,24 +115,68 @@ func Errorf(format string, a ...any) error { return &UserError{Msg: fmt.Sprintf(
 
 var (
 	regMu    sync.RWMutex
-	registry = map[string]Handler{}
+	registry = map[string][]registration{}
 )
 
+type registration struct {
+	owner string
+	fn    Handler
+}
+
 // Register 注册任务类型处理器（一行调用）。同一类型重复注册时后者覆盖前者，应用在同一进程内重建（测试、向导激活）也安全。
-func Register(typ string, h Handler) {
+func Register(typ string, h Handler) { register(typ, "", h) }
+
+// RegisterOwned 注册属于某个生命周期所有者的任务处理器；所有者停止时调用 UnregisterOwner。
+func RegisterOwned(owner, typ string, h Handler) {
+	if owner == "" {
+		panic("job: RegisterOwned needs an owner")
+	}
+	register(typ, owner, h)
+}
+
+func register(typ, owner string, h Handler) {
 	if typ == "" || h == nil {
 		panic("job: Register needs a type and a handler")
 	}
 	regMu.Lock()
-	registry[typ] = h
-	regMu.Unlock()
+	defer regMu.Unlock()
+	stack := registry[typ]
+	for i, reg := range stack {
+		if reg.owner == owner {
+			stack = append(stack[:i], stack[i+1:]...)
+			break
+		}
+	}
+	registry[typ] = append(stack, registration{owner: owner, fn: h})
+}
+
+// UnregisterOwner 只移除指定所有者的处理器，不影响同类型的内置或其它插件注册。
+func UnregisterOwner(owner string) {
+	regMu.Lock()
+	defer regMu.Unlock()
+	for typ, stack := range registry {
+		for i, reg := range stack {
+			if reg.owner == owner {
+				stack = append(stack[:i], stack[i+1:]...)
+				break
+			}
+		}
+		if len(stack) == 0 {
+			delete(registry, typ)
+		} else {
+			registry[typ] = stack
+		}
+	}
 }
 
 func handlerFor(typ string) (Handler, bool) {
 	regMu.RLock()
 	defer regMu.RUnlock()
-	h, ok := registry[typ]
-	return h, ok
+	stack, ok := registry[typ]
+	if !ok || len(stack) == 0 {
+		return nil, false
+	}
+	return stack[len(stack)-1].fn, true
 }
 
 // Types 返回已注册的任务类型（升序不保证）。

@@ -14,6 +14,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/ctl"
+	"nexadmin/pkg/pluginlint"
 )
 
 const buildTimeout = 20 * time.Minute
@@ -21,6 +22,12 @@ const buildTimeout = 20 * time.Minute
 // Rebuild 重建产物并替换当前二进制：npm build（可选）→ go mod tidy → go build → 原子换文件。
 // 换完不重启，由调用方决定（重启用 Restart）。
 func Rebuild(ctx context.Context, root string, withWeb bool, log func(string)) error {
+	log("检查插件静态契约…")
+	manifests, err := pluginlint.LintSources(root)
+	if err != nil {
+		return fmt.Errorf("插件静态检查失败: %w", err)
+	}
+	log(fmt.Sprintf("插件静态检查通过（%d 个）", len(manifests)))
 	if withWeb {
 		if err := runCmd(ctx, root, log, "构建前端", npmCmd(), npmArgs(filepath.Join(root, "web"), "run", "build")...); err != nil {
 			return fmt.Errorf("前端构建失败: %w", err)

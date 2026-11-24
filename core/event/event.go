@@ -46,7 +46,7 @@ type tenantOwner interface{ EventTenant() idgen.ID }
 type Bus struct {
 	queue   chan Event
 	mu      sync.RWMutex
-	subs    []Subscriber
+	subs    []*subscription
 	log     atomic.Pointer[zap.Logger]
 	dropped atomic.Int64
 	warned  atomic.Int64 // 上次告警的 unix 秒
@@ -67,11 +67,31 @@ func NewBus(size int) *Bus {
 // SetLogger 设置日志（nil = 不输出）。
 func (b *Bus) SetLogger(l *zap.Logger) { b.log.Store(l) }
 
-// Subscribe 注册订阅者。
-func (b *Bus) Subscribe(s Subscriber) {
+type subscription struct {
+	sub Subscriber
+}
+
+// Subscribe 注册订阅者，返回幂等的取消函数。
+func (b *Bus) Subscribe(s Subscriber) func() {
+	sub := &subscription{sub: s}
 	b.mu.Lock()
-	b.subs = append(b.subs, s)
+	b.subs = append(b.subs, sub)
 	b.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			for i, cur := range b.subs {
+				if cur == sub {
+					copy(b.subs[i:], b.subs[i+1:])
+					b.subs[len(b.subs)-1] = nil
+					b.subs = b.subs[:len(b.subs)-1]
+					break
+				}
+			}
+		})
+	}
 }
 
 // Dropped 返回因队列已满被丢弃的事件总数。
@@ -114,10 +134,10 @@ func (b *Bus) loop() {
 		select {
 		case ev := <-b.queue:
 			b.mu.RLock()
-			subs := append([]Subscriber(nil), b.subs...)
+			subs := append([]*subscription(nil), b.subs...)
 			b.mu.RUnlock()
 			for _, s := range subs {
-				b.safeHandle(s, ev)
+				b.safeHandle(s.sub, ev)
 			}
 		case <-b.stop:
 			return

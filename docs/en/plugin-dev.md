@@ -124,16 +124,24 @@ Declare real tenant-scoped business tables only; soft-deleted rows also block de
 
 ### 4.2 Background tasks (optional)
 
-If you need a resident goroutine (a scheduler, a consumer), implement `plugin.Starter`:
+Implement `plugin.Starter` if you need a resident goroutine (a scheduler, a consumer), or need to register process-local events, cross-instance events or asynchronous jobs. A plugin without a `Starter` cannot register jobs; implement `Starter` even if you only need job registration and no background goroutine.
 
 ```go
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
-    go scheduler.Run(ctx) // must not block; ctx is cancelled at process exit
+    go scheduler.Run(ctx) // must not block; ctx is cancelled when this run ends or the process exits
     return nil
 }
 ```
 
 `Start` is called synchronously and must return quickly. A returned error is only logged; it does not affect route mounting.
+
+Before each `Starter.Start`, the plugin manager injects `d.PluginRuntime`, a `*core/lifecycle.Runtime`, for that run. Register runtime extensions through it inside `Start`:
+
+- `d.PluginRuntime.Subscribe(...)`: process-local events.
+- `d.PluginRuntime.SubscribeCluster(d.Bus, ...)`: cross-instance events.
+- `d.PluginRuntime.RegisterJob(type, handler)`: asynchronous jobs.
+
+Do not use the global `event.Subscribe` / `job.Register` APIs; `plugin lint` rejects both. When the run ctx ends, these registrations are revoked automatically and jobs already started through this runtime are cancelled.
 
 ### 4.3 Conventions (violations are rejected in review)
 
@@ -141,7 +149,7 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 - Table prefix: `plg_<id>_`, e.g. `plg_cron_job`.
 - Permission code prefix: `<id>:`, e.g. `cron:list`. Every endpoint needs `core.Perm(...)`.
 - You may only depend on `core/` and `pkg/`. **Do not modify core, do not modify framework, do not import built-in modules or other plugins.**
-- Framework capabilities available in `core.Deps`: `DB`, `Cache`, `Auth`, `Log`, `Config`, the unified notify entry `Notify` (in-app / email / SMS / bot, nil-safe), cross-instance event broadcast `Bus` (nil-safe), shutdown cleanup registration `OnClose`, runtime API docs `APIDoc`, plus the `Public` route group (no login) and the super-admin-only `Admin` group. Do not query other modules' tables directly; if you truly must read a built-in table (like cron's `clean_logs`), use table-name constants and handle a missing table without panicking.
+- Framework capabilities available in `core.Deps`: `DB`, `Cache`, `Auth`, `Log`, `Config`, the unified notify entry `Notify` (in-app / email / SMS / bot, nil-safe), cross-instance event broadcast `Bus` (nil-safe), current-run extensions `PluginRuntime`, shutdown cleanup registration `OnClose`, runtime API docs `APIDoc`, plus the `Public` route group (no login) and the super-admin-only `Admin` group. Do not query other modules' tables directly; if you truly must read a built-in table (like cron's `clean_logs`), use table-name constants and handle a missing table without panicking.
 - Business primary keys use snowflake IDs (`pkg/idgen`), serialized as strings in APIs.
 - Tenant isolation: tenant-scoped tables carry `tenant_id`, and queries must include the current tenant condition.
 - Outbound requests (HTTP callbacks etc.) must guard against SSRF: internal and loopback addresses are forbidden, and timeouts are required. cron's `ssrf.go` is a ready reference.
@@ -276,13 +284,15 @@ zip -r cron-1.0.0.zip cron/        # directory name = plugin id; the package mus
 Verify installation in a clean derived project (substitute the actual package filename and plugin ID below):
 
 ```bash
-go run ./cmd/nexadmin plugin lint <plugin-dir>   # static pre-publish self-check, see below
+go run ./cmd/nexadmin plugin lint cron-1.0.0.zip  # package layout: plugin.yaml + backend/ + web/
 go run ./cmd/nexadmin plugin install cron-1.0.0.zip
+# Inside a framework or derived source project, lint by plugin ID:
+go run ./cmd/nexadmin plugin lint --layout source cron
 go build ./... && go vet ./... && go test ./plugins/<id>/...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 
-`plugin lint` never executes plugin code. It statically checks: the Go `plugin.Register` ID/Version/Edition match the manifest (string constants and `plugin.Free/Pro` supported; dynamic registration is refused); the `export const routes` path/perm pairs correspond one-to-one to the manifest menus; a non-empty mock file exists; the zh/en locale key sets are identical and cover every static `t(...)`/`i18nKey` and menu title; when migrations exist, the mysql/mariadb/postgres dialects carry the same set of file names. It does not type-check TypeScript — still build and test before publishing.
+`plugin lint` never executes plugin code and runs automatically during install, packaging and admin rebuilds. It checks valid SemVer; Go `plugin.Register` ID/Name/Version/Edition against the manifest (string constants and `plugin.Free/Pro` supported; dynamic registration refused); entry `init` functions limited to static registration, with global event subscriptions and job registration refused in favor of `d.PluginRuntime`; static `export const routes` paths/permissions against manifest menus (hidden auxiliary routes require `hidden: true`, no menu and plugin-owned permissions); optional mock files, which must be non-empty when present; identical zh/en locale key sets covering static `t(...)`/`i18nKey` and menu titles, with dynamic keys restricted to fixed literal namespaces; and identical mysql/mariadb/postgres migration filename sets. `common.*`, `dataTable.*` and `localeForm.*` come from the host locales. It does not type-check TypeScript — still build and test before publishing.
 
 Re-installing over an existing plugin uses `go run ./cmd/nexadmin plugin install --force <dir-or-zip>`. The three relaxation switches are independent of each other and must all come before the path (the install subcommand uses standard `flag.Parse` and does not parse options after positional args):
 
@@ -292,7 +302,7 @@ Re-installing over an existing plugin uses `go run ./cmd/nexadmin plugin install
 
 To repackage an installed plugin as a release bundle: `go run ./cmd/nexadmin plugin pack [--out <path.zip>] <id>` (produces a zip of `plugin.yaml + backend/ + web/`, the inverse of install; `--out` also precedes positional args). `release pack` packages the framework itself. `plugin list` reads the on-disk manifest and offline licenses — it does not prove that the Go blank import, migrations and runtime mounting succeeded; also check `plugins/plugins.go`, the startup log and the runtime `GET /api/v1/plugins`.
 
-The install command rejects zip-slip archives and caps the extracted file count and total size. Uninstall and disabling:
+The install command rejects zip-slip archives and caps the extracted file count and total size. Install, removal and rebuild are serialized across processes through `.nexadmin-plugin.lock` in the project root, with a two-minute wait limit. Only marketplace plugins recorded in the install ledger may be overwritten or removed through the marketplace; bundled project sources are protected from both operations. A legacy manually installed plugin absent from the ledger can only be removed explicitly with the CLI's `plugin remove --allow-unmanaged <id>`; the admin UI has no bypass. Uninstall and disabling:
 
 - `plugin remove <id>`: deletes `plugins/<id>/`, `web/src/plugins/<id>/` and removes the import from `plugins.go`; **data tables and the license file are kept** — after reinstall the data comes back as it was. Recompile and restart to take effect.
 - `plugin remove --purge <id>`: on top of remove, connects to the database and cleans up — drops tables with the `plg_<id>_%` prefix (platform plugins clean the platform database; `migration_target: tenant` plugins clean each tenant business database) and deletes `sys_menu` rows by the manifest's menu codes; if the manifest is missing, tables are still cleaned by prefix and menus must be handled manually. The license file is kept. If the database cannot be cleaned the command aborts without deleting files, and can be retried.
@@ -463,20 +473,21 @@ Multiple public keys are supported: the built-in key plus keys appended in `conf
 - The plugin's own routes — `gate` / `admit` decide from runtime state; after disabling, requests return 403 with a reason
 - Availability in `GET /plugins/active`
 - Sidebar menu visibility — `MenuVisible` uses the same criterion as `/plugins/active`, so no entry is left that leads to a 403
+- Process-local/cross-instance event subscriptions and asynchronous job handlers registered through the current run's `PluginRuntime` — revoked when the local node is disabled, with started jobs cancelled
+
+This revokes runtime registrations; it is not plugin-code hot unloading and does not mean background workers restart automatically.
 
 **Requires a restart**:
 
 - Established WebSocket / SSE connections — guards are appended, not removed
-- Event subscriptions — `core/event` has only `Subscribe`, no `Unsubscribe`
-- Job registration — runtime deregistration in `core/job` is not a public capability
 - Service singletons created with `sync.Once` inside the plugin
-- Background workers — unless the Module implements `plugin.RestartableStarter`
+- Background workers that must be relaunched after disabling, unless the Module implements `plugin.RestartableStarter`
 
 The `RestartableStarter` contract: when `Start` returns it must provide `Done()`; after ctx cancellation all tasks confirm their exit before the framework calls `Start` again with a fresh ctx on re-enable.
 
 **No official plugin implements it yet**, so a plugin with a worker that is disabled and then re-enabled requires a restart: re-enabling sets `needRestart=true`, and routes and menus stay unavailable in the meantime — the framework does not pretend it is alive.
 
-The disabled list is a node-local file (`data/licenses/disabled.json`); cluster nodes do not sync it automatically: either toggle node by node, or use the `disabled_plugins` config distributed with your config. `nexadmin plugin list` reads only disk and config, not this overlay.
+The revocation above applies only to the current node. The operator overlay in multi-node deployments still does not sync automatically: the disabled list is a node-local file (`data/licenses/disabled.json`), so either toggle node by node or use the `disabled_plugins` config distributed with your config. `nexadmin plugin list` reads only disk and config, not this overlay.
 
 ### Hot mounting
 

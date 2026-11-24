@@ -466,10 +466,22 @@ func HasWeb(src string) bool {
 	return false
 }
 
-// Remove 移除插件文件并更新 plugins.go；purge=true 时先 DROP 插件表、删菜单。
-func Remove(root, id string, purge bool, out io.Writer) error {
+type RemoveOptions struct {
+	Purge          bool
+	AllowUnmanaged bool
+}
+
+// Remove 只允许移除安装台账管理的插件；AllowUnmanaged 用于迁移旧版手工安装的源码。
+func Remove(root, id string, opts RemoveOptions, out io.Writer) error {
 	if !plugin.ValidID(id) {
 		return fmt.Errorf("非法的插件 id %q", id)
+	}
+	managed, err := IsManaged(root, id)
+	if err != nil {
+		return err
+	}
+	if !managed && !opts.AllowUnmanaged {
+		return fmt.Errorf("插件 %s 不在安装台账中，属于内置或旧版手工安装的源码，禁止通过市场删除", id)
 	}
 	mod, err := modulePath(root)
 	if err != nil {
@@ -478,10 +490,10 @@ func Remove(root, id string, purge bool, out io.Writer) error {
 	dstBackend := filepath.Join(root, "plugins", id)
 	dstWeb := filepath.Join(root, "web", "src", "plugins", id)
 	installed := exists(dstBackend) || exists(dstWeb)
-	if !installed && !purge {
+	if !installed && !opts.Purge {
 		return fmt.Errorf("插件 %s 未安装", id)
 	}
-	if purge {
+	if opts.Purge {
 		// 先清数据库再删文件：数据库清不掉就中止，文件留在原地可以重试。
 		if err := purgePluginData(root, id, out); err != nil {
 			return err
@@ -507,7 +519,7 @@ func Remove(root, id string, purge bool, out io.Writer) error {
 	if err := RemoveLedger(root, id); err != nil {
 		return fmt.Errorf("更新安装台账失败: %w", err)
 	}
-	if purge {
+	if opts.Purge {
 		fmt.Fprintf(out, "插件 %s 已移除并清理数据库（表已 DROP、菜单已删除；授权文件 data/licenses/%s.lic 保留，重装可复用）。请重新编译并重启。\n", id, id)
 	} else {
 		fmt.Fprintf(out, "插件 %s 已移除（数据表与授权文件保留）。请重新编译并重启。\n", id)
