@@ -922,16 +922,17 @@ function ConvListItem({
   return <QueueRow selected={active} onSelect={onSelect} checkbox={checkbox} accent={conv.unread > 0}>{row}</QueueRow>
 }
 
-function systemLabel(m: ImMessage, t: (key: string) => string): string {
-  if (m.meta) {
+function SystemLabel({ message }: { message: ImMessage }) {
+  const { t } = useTranslation()
+  if (message.meta) {
     try {
-      const code = (JSON.parse(m.meta) as { code?: string }).code
+      const code = (JSON.parse(message.meta) as { code?: string }).code
       if (code) return t(`plugin_im.system.${code}`)
     } catch {
       // meta 不是 JSON 时回落到 content
     }
   }
-  return m.content
+  return message.content
 }
 
 /** 消息流的日期分隔：细线夹日期，与系统事件胶囊区分开。 */
@@ -1418,7 +1419,7 @@ function ChatPane({
               <Fragment key={m.id}>
                 {separator}
                 <SystemPill>
-                  {systemLabel(m, (key) => t(key))} · {formatTime(m.createdAt, i18n.language)}
+                  <SystemLabel message={m} /> · {formatTime(m.createdAt, i18n.language)}
                 </SystemPill>
               </Fragment>
             )

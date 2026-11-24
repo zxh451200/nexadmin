@@ -88,6 +88,18 @@ function RuleRow({ rule, refs, onChange, onRemove }: { rule: Leaf; refs: FormFie
   const { t } = useTranslation()
   const target = refs.find((f) => f.key === rule.field)
   const ops = target ? OPS_BY_TYPE[target.type] : []
+  const opLabels: Record<CondOp, string> = {
+    eq: t('plugin_formbuilder.ops.eq'),
+    ne: t('plugin_formbuilder.ops.ne'),
+    in: t('plugin_formbuilder.ops.in'),
+    contains: t('plugin_formbuilder.ops.contains'),
+    empty: t('plugin_formbuilder.ops.empty'),
+    notEmpty: t('plugin_formbuilder.ops.notEmpty'),
+    gt: t('plugin_formbuilder.ops.gt'),
+    gte: t('plugin_formbuilder.ops.gte'),
+    lt: t('plugin_formbuilder.ops.lt'),
+    lte: t('plugin_formbuilder.ops.lte'),
+  }
   return (
     <div className="flex flex-col gap-2 md:flex-row md:items-start">
       <Select
@@ -115,7 +127,7 @@ function RuleRow({ rule, refs, onChange, onRemove }: { rule: Leaf; refs: FormFie
         <SelectContent>
           {ops.map((op) => (
             <SelectItem key={op} value={op as string}>
-              {t(`plugin_formbuilder.ops.${op}`)}
+              {op ? opLabels[op] : null}
             </SelectItem>
           ))}
         </SelectContent>
