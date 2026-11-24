@@ -97,6 +97,8 @@ export type LocaleFormAction =
   | { type: 'publish'; code: string | null; on: boolean }
   /** on=true 记为该语言机翻未校对；on=false 表示人工已确认 */
   | { type: 'review'; code: string; on: boolean }
+  /** 保存成功后清脏标记：本地状态就是刚写进库的内容，别再拦一次关窗 */
+  | { type: 'saved' }
 
 export function blank(target: Record<string, string> | undefined, key: string): boolean {
   return (target?.[key] ?? '').trim() === ''
@@ -153,6 +155,9 @@ export function localeFormReducer(s: LocaleFormState, a: LocaleFormAction): Loca
       if (Boolean(s.published[a.code]) === a.on) return s
       return { ...s, dirty: true, published: { ...s.published, [a.code]: a.on } }
     }
+
+    case 'saved':
+      return s.dirty ? { ...s, dirty: false } : s
 
     case 'review': {
       if (a.on) {

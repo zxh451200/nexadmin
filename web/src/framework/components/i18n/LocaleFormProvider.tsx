@@ -67,6 +67,8 @@ export interface LocaleFormApi {
   confirmReview: (code?: string) => void
   serialize: () => { i18nJson: string; publishedJson: string }
   dirty: boolean
+  /** 保存成功后清脏：长驻表单（站点设置）拿它跟共用字段的脏标记合并判断未保存状态 */
+  markSaved: () => void
 }
 
 const LocaleFormContext = createContext<LocaleFormApi | null>(null)
@@ -151,6 +153,8 @@ export function LocaleFormProvider({
         publishedJson: marshalFlags(state.published, defaultLocale),
       }),
       dirty: state.dirty,
+      /** 保存成功后由调用方（长驻表单，如站点设置）清脏；弹窗类实体随关闭重置，不需要 */
+      markSaved: () => dispatch({ type: 'saved' }),
     }
   }, [active, defaultLocale, isSource, locales, schema, setActive, specs, state, t, translate])
 

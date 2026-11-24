@@ -31,6 +31,7 @@ import {
 import { ImportDialog } from './ImportDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserFormDialog } from './UserFormDialog'
+import { formatTime } from './format'
 
 const iconBtn = 'h-11 w-11 md:h-9 md:w-9'
 const isLocked = (u: User) => !!u.locked && (!u.lockedUntil || new Date(u.lockedUntil).getTime() > Date.now())
@@ -191,7 +192,11 @@ export default function UserPage() {
       key: 'createdAt',
       title: t('user.col.createdAt'),
       sortKey: 'created_at',
-      render: (u) => <span className="num">{new Date(u.createdAt).toLocaleString(i18n.language)}</span>,
+      render: (u) => {
+        // 与全站列表同一套格式（到分钟、2 位补零）；toLocaleString 会带上秒、且空值渲染成 Invalid Date。
+        const v = formatTime(u.createdAt, i18n.language)
+        return v ? <span className="num">{v}</span> : <span className="text-muted-foreground">-</span>
+      },
     },
   ]
 
@@ -303,7 +308,15 @@ export default function UserPage() {
         rowActions={(u) => (
           <>
             <Can perm="user:update">
-              <Button type="button" variant="ghost" size="icon" className={iconBtn} aria-label={t('common.edit')} onClick={() => openForm(u)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={iconBtn}
+                aria-label={t('common.edit')}
+                title={t('common.edit')}
+                onClick={() => openForm(u)}
+              >
                 <Pencil className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Can>
@@ -314,6 +327,7 @@ export default function UserPage() {
                 size="icon"
                 className={iconBtn}
                 aria-label={t('user.resetPassword.action')}
+                title={t('user.resetPassword.action')}
                 onClick={() => setResetTarget(u)}
               >
                 <KeyRound className="h-4 w-4" aria-hidden="true" />
@@ -343,6 +357,7 @@ export default function UserPage() {
                   size="icon"
                   className={`${iconBtn} text-destructive`}
                   aria-label={t('common.delete')}
+                  title={t('common.delete')}
                   onClick={() => remove([u.id], t('user.deleteOne', { name: u.nickname }))}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />

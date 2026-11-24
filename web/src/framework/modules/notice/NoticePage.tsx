@@ -230,27 +230,42 @@ export default function NoticePage() {
         emptyText={t('notice.empty')}
         rowActions={(n) => (
           <>
-            <Button variant="ghost" size="icon" aria-label={t('notice.stats.action')} disabled={n.status === 'draft'} onClick={() => setStatsFor(n)}>
+            {/* 纯图标按钮：aria-label 给读屏，title 给鼠标——桌面用户悬停才知道这个图标是什么 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('notice.stats.action')}
+              title={t('notice.stats.action')}
+              disabled={n.status === 'draft'}
+              onClick={() => setStatsFor(n)}
+            >
               <BarChart3 aria-hidden="true" />
             </Button>
             <Can perm="notice:update">
-              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(n)}>
+              <Button variant="ghost" size="icon" aria-label={t('common.edit')} title={t('common.edit')} onClick={() => openForm(n)}>
                 <Pencil aria-hidden="true" />
               </Button>
             </Can>
             <Can perm="notice:publish">
               {n.status === 'published' ? (
-                <Button variant="ghost" size="icon" aria-label={t('notice.revoke')} onClick={() => onRevoke(n)}>
+                <Button variant="ghost" size="icon" aria-label={t('notice.revoke')} title={t('notice.revoke')} onClick={() => onRevoke(n)}>
                   <Undo2 aria-hidden="true" />
                 </Button>
               ) : (
-                <Button variant="ghost" size="icon" aria-label={t('notice.publish')} onClick={() => onPublish(n)}>
+                <Button variant="ghost" size="icon" aria-label={t('notice.publish')} title={t('notice.publish')} onClick={() => onPublish(n)}>
                   <Send aria-hidden="true" />
                 </Button>
               )}
             </Can>
             <Can perm="notice:delete">
-              <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => onDelete([n.id])}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive"
+                aria-label={t('common.delete')}
+                title={t('common.delete')}
+                onClick={() => onDelete([n.id])}
+              >
                 <Trash2 aria-hidden="true" />
               </Button>
             </Can>
