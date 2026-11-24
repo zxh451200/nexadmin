@@ -30,7 +30,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core"
-	"nexadmin/core/job"
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
@@ -90,8 +89,6 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/sources/:id/test-login", core.Perm("identity:test"), h.testLogin)
 	g.POST("/sources/:id/sync", core.Perm("identity:sync"), h.syncNow)
 	g.GET("/sources/:id/sync", core.Perm("identity:sync"), h.syncStatus)
-	job.Register(directoryJobType, svc.runDirectorySync)
-
 	if d.Public == nil {
 		return
 	}
@@ -118,6 +115,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 // Start 实现 plugin.Starter：把 LDAP 校验器注册到 core/auth。非阻塞。
 func (m *module) Start(_ context.Context, d *core.Deps) error {
 	svc := m.service(d)
+	d.PluginRuntime.RegisterJob(directoryJobType, svc.runDirectorySync)
 	var err error
 	m.startOnce.Do(func() {
 		err = d.Auth.RegisterExternalAuthenticator(&ldapAuthenticator{svc: svc, dial: svc.dial, log: d.Log})

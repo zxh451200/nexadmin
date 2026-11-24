@@ -17,7 +17,6 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
-	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/storage"
@@ -34,7 +33,6 @@ func init() {
 type module struct {
 	once sync.Once
 	svc  *Service
-	sub  sync.Once
 	// rec 是官网访问统计的采集器：Register 装配（挂 pub 中间件），Start 起 flusher。
 	rec *viewRecorder
 }
@@ -202,24 +200,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
 
-	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
-	job.Register(jobTypeProductExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunProductExportJob(ctx, j, report)
-	})
-	// 新闻 / 留言异步导出：与商品导出同一套机制（列与页面列表一致，进度在导出中心）。
-	job.Register(jobTypePostExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunPostExportJob(ctx, j, report)
-	})
-	job.Register(jobTypeMessageExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunMessageExportJob(ctx, j, report)
-	})
 	// 订单 / FAQ 异步导出：与商品/新闻/留言同一套机制（列与页面列表一致，进度在导出中心）。
-	job.Register(jobTypeOrderExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunSiteOrderExportJob(ctx, j, report)
-	})
-	job.Register(jobTypeFaqExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunFaqExportJob(ctx, j, report)
-	})
 	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
 	// 官网不再重复提供一份，否则又变成两份互不可见的清单。
@@ -381,6 +362,11 @@ func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
 // 并挂上新留言通知（站内信 + 可选邮件抄送）。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
+	d.PluginRuntime.RegisterJob(jobTypeProductExport, svc.RunProductExportJob)
+	d.PluginRuntime.RegisterJob(jobTypePostExport, svc.RunPostExportJob)
+	d.PluginRuntime.RegisterJob(jobTypeMessageExport, svc.RunMessageExportJob)
+	d.PluginRuntime.RegisterJob(jobTypeOrderExport, svc.RunSiteOrderExportJob)
+	d.PluginRuntime.RegisterJob(jobTypeFaqExport, svc.RunFaqExportJob)
 	// 访问统计 flusher：批量落库浏览行，ctx 取消时冲掉余量退出（与 notifier 同一生命周期，
 	// 每轮 Start 一个 flusher，旧 flusher 随旧 ctx 退出）。
 	if m.rec != nil {
@@ -393,19 +379,15 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 		ensureSeedBackfill(ctx, svc, d.Log)
 		ensureSeedI18n(ctx, svc, d.Log)
 	}
-	// 只订阅一次：重复挂载会把同一个事件挂两遍，一条留言就发多封通知。
-	m.sub.Do(func() {
-		n := newNotifier(ctx, d, svc)
-		if n == nil {
-			return
-		}
-		event.Subscribe(event.SubscriberFunc(n.handle))
+	n := newNotifier(ctx, d, svc)
+	if n != nil {
+		d.PluginRuntime.Subscribe(event.SubscriberFunc(n.handle))
 		go n.run()
-		// 站点订单的支付结果：订阅 pay.* 按 bizType 过滤翻转本地状态；
-		// 事件丢失靠管理端 by-biz 补查（SyncSiteOrder）收敛。
-		event.Subscribe(event.SubscriberFunc(func(e event.Event) {
-			svc.handlePayEvent(e)
-		}))
-	})
+	}
+	// 站点订单的支付结果：订阅 pay.* 按 bizType 过滤翻转本地状态；
+	// 事件丢失靠管理端 by-biz 补查（SyncSiteOrder）收敛。
+	d.PluginRuntime.Subscribe(event.SubscriberFunc(func(e event.Event) {
+		svc.handlePayEvent(e)
+	}))
 	return nil
 }

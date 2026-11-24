@@ -15,7 +15,6 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
-	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
@@ -79,7 +78,6 @@ func (*module) TenantTables() []tenant.Table {
 // Register 注册管理端与公开路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)
-	job.Register(jobTypeOrderExport, svc.RunOrderExportJob) // 导出中心任务处理器
 	h := &handler{svc: svc}
 
 	g := r.Group("/plugins/pay")
@@ -157,6 +155,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 // 不在启动期代种——首次使用在管理端「渠道配置」新建一个 mock 渠道即可联调。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	s := m.service(d)
+	d.PluginRuntime.RegisterJob(jobTypeOrderExport, s.RunOrderExportJob)
 	go s.runSweeper(ctx)
 	go s.runOutboxDispatcher(ctx)
 	return nil

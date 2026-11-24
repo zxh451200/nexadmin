@@ -8,17 +8,19 @@
 package formbuilder
 
 import (
+	"context"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core"
-	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
 
 // 建表由运行时执行 plugins/formbuilder/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
+var _ plugin.Starter = (*module)(nil)
+
 func init() {
 	plugin.Register(plugin.Plugin{
 		ID: "formbuilder", Name: "表单构建器", Version: "1.0.0", Edition: plugin.Pro,
@@ -49,8 +51,12 @@ func (*module) TenantTables() []tenant.Table {
 // Register 注册路由。r 已经是 /api/v1 且默认要求登录。固定路径写在 /:id 之前。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)
-	job.Register(JobType, svc.exportJob) // 导出中心任务处理器
 	routes(r, &handler{svc: svc})
+}
+
+func (m *module) Start(_ context.Context, d *core.Deps) error {
+	d.PluginRuntime.RegisterJob(JobType, m.service(d).exportJob)
+	return nil
 }
 
 // routes 注册全部接口（与 Register 分开，便于测试直接挂载到 gin 路由组上）。

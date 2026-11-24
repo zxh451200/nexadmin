@@ -17,7 +17,6 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
-	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/storage"
 )
@@ -52,7 +51,6 @@ func (z zapLog) Error(msg string, kv ...any) { z.l.Sugar().Errorw(msg, kv...) }
 
 type module struct {
 	once    sync.Once
-	sub     sync.Once
 	wsGuard sync.Once
 	svc     *Service
 }
@@ -88,11 +86,6 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	h := &handler{svc: svc, tickets: newStreamTicket(30 * time.Second), cache: d.Cache, store: svc.Storage()}
 	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
-	// 会话异步导出的任务体：worker 流式写双 sheet xlsx，进度与下载在导出中心（见 exportjob.go）。
-	// 注册是覆盖写，热挂载下幂等。
-	job.Register(jobTypeConversationExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return svc.RunConversationExportJob(ctx, j, report)
-	})
 	h.Register(r, d)
 }
 
@@ -100,17 +93,15 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 // 与空闲会话自动关闭巡检。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
-	m.sub.Do(func() {
-		d.Bus.On(busKind, svc.Deliver, nil)
-		go autoCloseLoop(ctx, svc)
-		go retentionLoop(ctx, svc)
-		n := newNotifier(ctx, d)
-		if n == nil {
-			return
-		}
-		event.Subscribe(event.SubscriberFunc(n.handle))
+	d.PluginRuntime.RegisterJob(jobTypeConversationExport, svc.RunConversationExportJob)
+	d.PluginRuntime.SubscribeCluster(d.Bus, busKind, svc.Deliver, nil)
+	go autoCloseLoop(ctx, svc)
+	go retentionLoop(ctx, svc)
+	n := newNotifier(ctx, d)
+	if n != nil {
+		d.PluginRuntime.Subscribe(event.SubscriberFunc(n.handle))
 		go n.run()
-	})
+	}
 	return nil
 }
 

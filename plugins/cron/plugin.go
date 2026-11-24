@@ -12,7 +12,6 @@ import (
 	"go.uber.org/zap"
 
 	"nexadmin/core"
-	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
@@ -46,7 +45,6 @@ func (*module) TenantTables() []tenant.Table {
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)
-	job.Register(jobTypeLogExport, svc.runLogExportJob) // 导出中心任务处理器
 	h := &handler{svc: svc}
 	g := r.Group("/plugins/cron")
 	g.GET("/handlers", core.Perm("cron:list"), h.handlers)
@@ -76,6 +74,7 @@ const logRetentionDays = 90
 // 非阻塞，ctx 结束时调度循环退出。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	s := m.service(d)
+	d.PluginRuntime.RegisterJob(jobTypeLogExport, s.runLogExportJob)
 	s.EnableAlerts(ctx, d.Notify)
 	go s.Run(ctx)
 	go sweepLogsLoop(ctx, s)

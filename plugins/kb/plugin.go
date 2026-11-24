@@ -61,7 +61,7 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	if b == nil {
 		return nil
 	}
-	b.subscribe()
+	b.subscribe(d.PluginRuntime)
 	go b.run()
 	return nil
 }

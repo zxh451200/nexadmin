@@ -16,7 +16,6 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
-	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/storage"
 	"nexadmin/core/tenant"
@@ -98,17 +97,13 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: svc, store: svc.Storage(), log: d.Log}
 	// WS 订阅守卫：ticket: 前缀的准入判定（匿名拒绝 / 工单存在 / ticket:list），见 ws_guard.go。
 	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
-	// 工单异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心（见 exportjob.go）。
-	// 注册是覆盖写，热挂载下幂等。
-	job.Register(jobTypeTicketExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return svc.RunExportJob(ctx, j, report)
-	})
 	h.Register(r, d)
 }
 
 // Start 实现 plugin.Starter：载入 SLA 策略，并启动清扫（每分钟标记首响/解决超时）。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	s := m.service(d)
+	d.PluginRuntime.RegisterJob(jobTypeTicketExport, s.RunExportJob)
 	if st, err := s.LoadSLA(ctx); err != nil {
 		s.logWarn("ticket: load SLA policy failed, using defaults", "err", err.Error())
 	} else {
