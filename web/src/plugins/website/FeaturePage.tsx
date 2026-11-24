@@ -25,6 +25,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { EditorSchemaGate } from './EditorSchemaGate'
+import { ThemeCapNote, useThemeCap } from './ThemeCapNotice'
 import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
@@ -249,6 +250,7 @@ export default function FeaturePage() {
   useI18nSchema('feature')
   const { data: features = [], isLoading } = useFeatures()
   const { data: icons = [] } = useFeatureIcons()
+  const { capOk, themeLabel } = useThemeCap()
   const remove = useDeleteFeature()
   const removeBatch = useDeleteFeatures()
   const [formOpen, setFormOpen] = useState(false)
@@ -292,6 +294,9 @@ export default function FeaturePage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_website.feature.title')} description={t('plugin_website.feature.desc')} />
+      {capOk('features') ? null : (
+        <ThemeCapNote text={t('plugin_website.settings.capUnsupported', { theme: themeLabel, what: t('plugin_website.feature.title') })} />
+      )}
       <DataTable
         columns={columns}
         data={features}

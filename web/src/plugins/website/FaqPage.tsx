@@ -29,6 +29,7 @@ import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { EditorSchemaGate } from './EditorSchemaGate'
+import { ThemeCapNote, useThemeCap } from './ThemeCapNotice'
 import TranslationStatus from './TranslationStatus'
 import {
   createFaqExportJob,
@@ -260,6 +261,7 @@ export default function FaqPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { start: startExportJob } = useAsyncJob()
+  const { capOk, themeLabel } = useThemeCap()
   // 预取字段 schema：点新增/编辑时直接命中缓存，不再先闪一个空表单。
   useI18nSchema('faq')
   // FAQ 是首页板块条目，量级小：整表拉取（服务端单页上限 200），不做服务端分页——
@@ -311,24 +313,24 @@ export default function FaqPage() {
     }
   }
 
-  const onDelete = async (rows: FaqItem[]) => {
+  // 按 id 删：勾选可以跨页，用当前页的行反查只会删掉本页那几条。
+  const onDelete = async (ids: string[]) => {
+    const name = ids.length === 1 ? (data?.list.find((r) => r.id === ids[0])?.question ?? '') : ''
     const ok = await confirm({
       destructive: true,
-      description: rows.length === 1
-        ? t('plugin_website.faq.deleteConfirm', { question: rows[0].question })
-        : t('plugin_website.faq.deleteBatchConfirm', { count: rows.length }),
+      description: name
+        ? t('plugin_website.faq.deleteConfirm', { question: name })
+        : t('plugin_website.faq.deleteBatchConfirm', { count: ids.length }),
     })
     if (!ok) return
     try {
-      await remove.mutateAsync(rows.map((r) => r.id))
-      setSelected([])
+      await remove.mutateAsync(ids)
+      setSelected((s) => s.filter((id) => !ids.includes(id)))
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
     }
   }
-
-  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<FaqItem>[] = [
     {
@@ -366,6 +368,9 @@ export default function FaqPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_website.faq.title')} description={t('plugin_website.faq.description')} />
+      {capOk('faq') ? null : (
+        <ThemeCapNote text={t('plugin_website.settings.capUnsupported', { theme: themeLabel, what: t('plugin_website.faq.title') })} />
+      )}
       <FilterBar
         onSearch={() => {
           setFilters({ keyword: draft.keyword, enabled: draft.enabled })
@@ -426,7 +431,7 @@ export default function FaqPage() {
         selection={{ selected, onChange: setSelected }}
         batchActions={() => (
           <Can perm="website:faq">
-            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selected)}>
               <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -437,7 +442,7 @@ export default function FaqPage() {
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openEdit(row)}>
               <Pencil aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
+            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
               <Trash2 aria-hidden="true" />
             </Button>
           </Can>

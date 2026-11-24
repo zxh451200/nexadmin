@@ -44,6 +44,28 @@ type Theme struct {
 	FS fs.FS `json:"-"`
 	// seed 可空：导入该主题的演示内容（见 DemoData），设置页按钮触发。
 	seed func(ctx context.Context, s *Service, log *zap.Logger) (DemoReport, error)
+	// caps 是这套主题会渲染的站点设置能力（见 ThemeCap* 常量），nil = 未声明。
+	// 未声明按「全部支持」处理：第三方主题不写 caps 时管理端不会把任何设置项灰掉，
+	// 保持升级前后的行为一致；只有明确声明了，才按缺项灰化。
+	caps []string
+}
+
+// 站点设置能力：某些主题不渲染某些设置项（友情链接、币种选择器、办公地点…）。
+// 管理端据此把「填了也不会出现在官网上」的项灰掉并说明原因，而不是留一个输入框让人白填。
+const (
+	ThemeCapFriendLinks = "friendLinks"
+	ThemeCapCurrency    = "currency"
+	ThemeCapOffices     = "offices"
+	ThemeCapMarket      = "market"
+	ThemeCapFeatures    = "features"
+	ThemeCapFAQ         = "faq"
+)
+
+// defaultThemeCaps 是内置主题的能力集：它是框架自己的官网，全部设置项都会渲染。
+// 新增设置项且内置主题支持时记得同步加进来，否则管理端会在默认主题下把它灰掉。
+var defaultThemeCaps = []string{
+	ThemeCapFriendLinks, ThemeCapCurrency, ThemeCapOffices,
+	ThemeCapMarket, ThemeCapFeatures, ThemeCapFAQ,
 }
 
 var (
@@ -52,9 +74,33 @@ var (
 	themeReg = map[string]*Theme{}
 )
 
+// normalizeThemeCaps 去空白、去重。nil = 调用方没传（未声明，管理端不限制），
+// 非 nil 的空切片 = 明确声明「一项都不支持」（例如 torkon 不渲染下面任何一项设置），
+// 两者语义不同，不能合并成同一个返回值。
+// 不校验取值：插件作者写了自己认识的新能力也能透传下去，只是管理端不认。
+func normalizeThemeCaps(in []string) []string {
+	if in == nil {
+		return nil
+	}
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, c := range in {
+		c = strings.TrimSpace(c)
+		if c == "" || seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	// in 非 nil 时 out 也是非 nil（make 出来的），空切片要保留「明确声明不支持任何一项」
+	// 的语义，不能塌成 nil，否则管理端会把第三方主题当成「全部支持」。
+	return out
+}
+
 // RegisterTheme 注册一套主题。fsys 根下必须有 tpl/layout.tmpl；缺页面模板的页面
 // 渲染时回退 default。重复 ID 或模板解析失败直接报错（插件作者在开发期就该发现）。
-func RegisterTheme(id, label, version string, fsys fs.FS, seed func(ctx context.Context, s *Service, log *zap.Logger) (DemoReport, error)) error {
+// caps 可选：传主题会渲染的站点设置能力（ThemeCap*）；不传 = 未声明，管理端不做限制。
+func RegisterTheme(id, label, version string, fsys fs.FS, seed func(ctx context.Context, s *Service, log *zap.Logger) (DemoReport, error), caps ...string) error {
 	id = strings.TrimSpace(id)
 	if !themeIDRe.MatchString(id) {
 		return fmt.Errorf("theme id %q 非法（小写字母开头，字母/数字/连字符，2-48 位）", id)
@@ -70,7 +116,7 @@ func RegisterTheme(id, label, version string, fsys fs.FS, seed func(ctx context.
 	if _, dup := themeReg[id]; dup {
 		return fmt.Errorf("theme %s 重复注册", id)
 	}
-	t := &Theme{ID: id, Label: label, Version: version, FS: fsys, seed: seed}
+	t := &Theme{ID: id, Label: label, Version: version, FS: fsys, seed: seed, caps: normalizeThemeCaps(caps)}
 	pack, err := buildThemePack(t)
 	if err != nil {
 		return err

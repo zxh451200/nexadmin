@@ -206,7 +206,7 @@
 {{template "content" .}}
 </main>
 <footer class="site-footer">
-  <div class="container footer-grid{{if .FriendLinks}} footer-grid-wide{{end}}">
+  <div class="container footer-grid{{if .FriendLinks}} footer-grid-wide{{end}}{{if .FooterNavs}} footer-grid-nav{{end}}">
     <div class="footer-brand">
       <a class="brand" href="{{.Home}}">
         {{if .LogoURL}}<img class="brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="brand-mark" aria-hidden="true">{{initial .SiteName}}</span>{{end}}
@@ -214,6 +214,16 @@
       </a>
       {{if .SiteDesc}}<p class="footer-desc">{{.SiteDesc}}</p>{{end}}
     </div>
+    {{if .FooterNavs}}
+    {{/* 页脚导航（后台「导航管理」切到「页脚」）：顶级项 = 一列标题，子项 = 该列链接。
+         一条都没配时回退下面内置的产品/文档/资源三列，老站点不改数据外观不变。 */}}
+    {{range .FooterNavs}}
+    <nav class="footer-col" aria-label="{{.Label}}">
+      <h4>{{.Label}}</h4>
+      {{range .Children}}<a href="{{$.URL .Href}}"{{if or (hasPrefix .Href "http") (hasPrefix .Href "mailto:")}} target="_blank" rel="noopener noreferrer nofollow"{{end}}>{{.Label}}</a>{{end}}
+    </nav>
+    {{end}}
+    {{else}}
     <nav class="footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
@@ -236,6 +246,7 @@
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
       <a href="/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>
     </nav>
+    {{end}}
     {{end}}
     {{if .FriendLinks}}
     <nav class="footer-col" aria-label="{{.T "layout.friends"}}">

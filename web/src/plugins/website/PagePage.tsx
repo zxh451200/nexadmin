@@ -239,22 +239,21 @@ export default function PagePage() {
   const [editing, setEditing] = useState<SitePage | null>(null)
 
   const rows = data?.list ?? []
-  const selectedRows = rows.filter((r) => selected.includes(r.id))
 
-  const onDelete = async (rowsToDelete: SitePage | SitePage[]) => {
-    const list = Array.isArray(rowsToDelete) ? rowsToDelete : [rowsToDelete]
-    const description = Array.isArray(rowsToDelete)
-      ? t('plugin_website.page.deleteBatchConfirm', { count: list.length })
-      : t('plugin_website.page.deleteConfirm', { name: list[0].title })
-    if (await confirm({ destructive: true, description })) {
-      try {
-        if (Array.isArray(rowsToDelete)) await removeBatch.mutateAsync(list.map((r) => r.id))
-        else await remove.mutateAsync(list[0].id)
-        toast.success(t('common.operateSuccess'))
-        setSelected((s) => s.filter((id) => !list.some((r) => r.id === id)))
-      } catch {
-        toast.error(t('common.operateFailed'))
-      }
+  // 按 id 删：勾选可以跨页，用当前页的行反查只会删掉本页那几条。
+  const onDelete = async (ids: string[]) => {
+    const title = ids.length === 1 ? (rows.find((r) => r.id === ids[0])?.title ?? '') : ''
+    const description = title
+      ? t('plugin_website.page.deleteConfirm', { name: title })
+      : t('plugin_website.page.deleteBatchConfirm', { count: ids.length })
+    if (!(await confirm({ destructive: true, description }))) return
+    try {
+      if (ids.length === 1) await remove.mutateAsync(ids[0])
+      else await removeBatch.mutateAsync(ids)
+      toast.success(t('common.operateSuccess'))
+      setSelected((s) => s.filter((id) => !ids.includes(id)))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -296,12 +295,13 @@ export default function PagePage() {
   const saveNav = useSaveNav()
   const onAddToNav = async (row: SitePage) => {
     const href = `/p/${row.slug}`
-    if (navs.some((n) => n.href === href)) {
+    // 只看页头导航：同一个页面同时挂在页脚不算「已在导航里」，否则加不进页头。
+    if (navs.some((n) => n.position !== 'footer' && n.href === href)) {
       toast.info(t('plugin_website.page.navExists'))
       return
     }
     try {
-      await saveNav.mutateAsync({ data: { parentId: '0', label: row.title, description: '', href, sort: 0, enabled: true, i18nJson: '' } })
+      await saveNav.mutateAsync({ data: { parentId: '0', label: row.title, description: '', href, position: 'header', sort: 0, enabled: true, i18nJson: '' } })
       toast.success(t('plugin_website.page.navAdded'))
     } catch {
       toast.error(t('common.operateFailed'))
@@ -387,7 +387,7 @@ export default function PagePage() {
             <Button variant="outline" size="sm" onClick={() => void applyStatus(ids, 'draft')}>
               {t('plugin_website.page.offlineBatch')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+            <Button variant="destructive" size="sm" onClick={() => void onDelete(ids)}>
               <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -425,7 +425,7 @@ export default function PagePage() {
                 <ListPlus aria-hidden="true" />
               </Button>
             </Can>
-            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(row)}>
+            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
               <Trash2 aria-hidden="true" />
             </Button>
           </Can>

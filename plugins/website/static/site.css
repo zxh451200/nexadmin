@@ -311,8 +311,9 @@ html[data-scheme="light"] .brand-mark {
 .nav-sub li:focus-within > .nav-sub { display: block; }
 
 /* 二级面板（对标 Linear 的 Resources）：左边卡片区「标题 + 一句话说明」，右边纯链接列。
-   卡片区为空（子项都没填说明）时两列各自 :empty 收起，面板退化成原来那根窄下拉，
-   宽度不超过 200px——老数据不改也不会突然糊出一大块。 */
+   卡片区为空（子项都没填说明）时收起来，面板退化成原来那根窄下拉——老数据不改也不会突然糊出一大块。
+   判空只能用 :has(> li)：模板里的 {{range}} 会往 <ul> 里留下换行/缩进这些空白文本节点，
+   :empty 对空白节点不成立，空列照样占着 400px 把面板撑成一大片空白（2026-11-23 实测）。 */
 .nav-panel {
   position: absolute;
   top: calc(100% + 6px);
@@ -340,11 +341,11 @@ html[data-scheme="light"] .brand-mark {
   gap: 2px;
   width: 400px;
 }
-.nav-panel-cards:empty { display: none; }
 .nav-panel-links { display: flex; flex-direction: column; gap: 2px; min-width: 168px; }
-.nav-panel-links:empty { display: none; }
+.nav-panel-cards:not(:has(> li)) { display: none; }
+.nav-panel-links:not(:has(> li)) { display: none; }
 /* 两区同时存在时，链接列靠一条极淡的分隔线站住自己的位置 */
-.nav-panel-cards:not(:empty) + .nav-panel-links:not(:empty) {
+.nav-panel-cards:has(> li) + .nav-panel-links:has(> li) {
   padding-inline-start: 10px;
   border-inline-start: 1px solid var(--border);
 }
@@ -2000,6 +2001,9 @@ html[data-scheme="light"] .shot-light { display: block; }
 
 /* 页脚：社交图标 / 二维码 / 电话 / 多一列友情链接 */
 .footer-grid-wide { grid-template-columns: 260px repeat(5, minmax(0, 1fr)); }
+/* 页脚导航在后台可配（导航管理 → 页脚）：列数不再固定，品牌块 260px 之外按列数等分，
+   列多了自动换行；窄屏由下面的 .footer-grid 媒体查询接管成两栏。 */
+.footer-grid-nav { grid-template-columns: 260px repeat(auto-fit, minmax(140px, 1fr)); }
 .footer-tel { font-variant-numeric: tabular-nums; }
 .footer-social { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 2px 0 0; list-style: none; }
 .footer-social a {

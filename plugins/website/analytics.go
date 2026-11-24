@@ -478,9 +478,11 @@ func (h *handler) analyticsData(c *gin.Context, tz *time.Location) (*AnalyticsOu
 	}
 
 	// 设备画像：浏览器 / 操作系统各取 top5（按去重会话），与来源榜同口径。
-	// 列名直接映射中间结构（不 AS key：KEY 在 MySQL 是保留字别名要转义）。
+	// SQL 里把分组列别名成 k（KEY 在 MySQL 是保留字，做别名要反引号，PG 又不认同一套转义），
+	// 结构体字段必须也叫 K 才对得上：GORM 的 Scan 按列名映射字段，叫 Browser 会静默留空，
+	// 前端就只剩光条没有名字（2026-11-23 实测「浏览器/操作系统」两组标签全空）。
 	var browserRows []struct {
-		Browser  string
+		K        string
 		Sessions int64
 	}
 	if err := h.svc.db.WithContext(ctx).
@@ -490,10 +492,10 @@ func (h *handler) analyticsData(c *gin.Context, tz *time.Location) (*AnalyticsOu
 	}
 	out.Browsers = make([]AnalyticsDevice, 0, len(browserRows))
 	for _, r := range browserRows {
-		out.Browsers = append(out.Browsers, AnalyticsDevice{Key: r.Browser, Sessions: r.Sessions})
+		out.Browsers = append(out.Browsers, AnalyticsDevice{Key: r.K, Sessions: r.Sessions})
 	}
 	var osRows []struct {
-		OS       string
+		K        string
 		Sessions int64
 	}
 	if err := h.svc.db.WithContext(ctx).
@@ -503,7 +505,7 @@ func (h *handler) analyticsData(c *gin.Context, tz *time.Location) (*AnalyticsOu
 	}
 	out.OSes = make([]AnalyticsDevice, 0, len(osRows))
 	for _, r := range osRows {
-		out.OSes = append(out.OSes, AnalyticsDevice{Key: r.OS, Sessions: r.Sessions})
+		out.OSes = append(out.OSes, AnalyticsDevice{Key: r.K, Sessions: r.Sessions})
 	}
 
 	// 入口页：每个会话的首个浏览页（ROW_NUMBER 窗口函数，MySQL 8/MariaDB/PG 通用）

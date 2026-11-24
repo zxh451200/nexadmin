@@ -102,7 +102,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		Offices:         parseOffices(set.OfficesJSON),
 		Faqs:            faqs,
 		Consent:         set.ContactConsent, ConsentURL: set.ContactConsentURL,
-		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
+		Navs: data.Navs, FooterNavs: data.FooterNavs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),
 		Lang: languageOr(lang), Languages: Languages(),
 		// 文档随二进制内嵌，始终可用；顶层导航与移动菜单都展示入口。

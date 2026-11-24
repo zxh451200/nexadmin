@@ -53,9 +53,9 @@ const settings: SiteSettings = {
 }
 
 let navs: NavItem[] = [
-  { id: id(1), parentId: '0', label: '能力', description: '', href: '#features', sort: 10, enabled: true, i18nJson: '' },
-  { id: id(2), parentId: '0', label: '新闻', description: '', href: '/news', sort: 20, enabled: true, i18nJson: '' },
-  { id: id(3), parentId: '0', label: '关于', description: '', href: '/p/about', sort: 30, enabled: true, i18nJson: '' },
+  { id: id(1), parentId: '0', label: '能力', description: '', href: '#features', position: 'header', sort: 10, enabled: true, i18nJson: '' },
+  { id: id(2), parentId: '0', label: '新闻', description: '', href: '/news', position: 'header', sort: 20, enabled: true, i18nJson: '' },
+  { id: id(3), parentId: '0', label: '关于', description: '', href: '/p/about', position: 'header', sort: 30, enabled: true, i18nJson: '' },
 ]
 
 let features: FeatureItem[] = [
@@ -468,10 +468,11 @@ defineMock([
     handler: () => ({
       theme: settings.theme ?? '',
       items: [
-        { id: 'default', label: '默认主题', version: '', hasDemo: false, active: (settings.theme ?? '') === '' },
-        { id: 'torkon', label: 'TORKON 工业工具', version: '1.0.0', hasDemo: true, active: settings.theme === 'torkon' },
-        { id: 'auvex', label: 'AUVEX 数控机床', version: '1.0.0', hasDemo: true, active: settings.theme === 'auvex' },
-        { id: 'solaris', label: 'SOLARIS 储能系统', version: '1.0.0', hasDemo: true, active: settings.theme === 'solaris' },
+        { id: 'default', label: '默认主题', version: '', hasDemo: false, active: (settings.theme ?? '') === '',
+          caps: ['friendLinks', 'currency', 'offices', 'market', 'features', 'faq'] },
+        { id: 'torkon', label: 'TORKON 工业工具', version: '1.0.0', hasDemo: true, active: settings.theme === 'torkon', caps: [] },
+        { id: 'auvex', label: 'AUVEX 数控机床', version: '1.0.0', hasDemo: true, active: settings.theme === 'auvex', caps: ['features'] },
+        { id: 'solaris', label: 'SOLARIS 储能系统', version: '1.0.0', hasDemo: true, active: settings.theme === 'solaris', caps: ['currency', 'offices', 'features', 'faq'] },
       ],
     }),
   },
@@ -516,7 +517,7 @@ defineMock([
     method: 'POST',
     url: '/plugins/website/navs',
     handler: ({ body }) => {
-      const row: NavItem = { id: id(100 + navs.length), parentId: String(body.parentId ?? '0'), label: body.label, description: body.description ?? '', href: body.href, sort: body.sort ?? 0, enabled: !!body.enabled, i18nJson: body.i18nJson ?? '' }
+      const row: NavItem = { id: id(100 + navs.length), parentId: String(body.parentId ?? '0'), label: body.label, description: body.description ?? '', href: body.href, position: body.position ?? 'header', sort: body.sort ?? 0, enabled: !!body.enabled, i18nJson: body.i18nJson ?? '' }
       navs = [...navs, row]
       return row
     },

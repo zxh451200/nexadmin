@@ -18,6 +18,7 @@ import {
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
+import { Segmented } from '@/framework/components/Segmented'
 import { SimpleSelect, type SimpleSelectOption } from '@/framework/components/SimpleSelect'
 import { TreeTable } from '@/framework/components/TreeTable'
 import type { Column } from '@/framework/components/table/types'
@@ -45,6 +46,9 @@ import {
 interface NavNode extends NavItem {
   children?: NavNode[]
 }
+
+/** 导航槽位：页头 / 页脚（与后端 NavPosition 同值）。 */
+type NavSlot = 'header' | 'footer'
 
 /** 「自定义链接」占位值：选中时展示输入框，提交时用输入值代替。 */
 const CUSTOM_HREF = '__custom__'
@@ -138,6 +142,7 @@ function countNavs(nodes: NavNode[]): number {
  */
 function NavFormBody({
   onOpenChange, editing, tree, defaultParentId, pages, pagesComplete,
+  position,
 }: {
   onOpenChange: (v: boolean) => void
   editing: NavItem | null
@@ -146,6 +151,8 @@ function NavFormBody({
   pages: SitePage[]
   /** 页面清单是否已全部载入（total ≤ 本地 list 长度）；没载全时 /p/slug 的本地存在性检查跳过。 */
   pagesComplete: boolean
+  /** 当前编辑的槽位：新建顶级项落在这里；挂到父级时后端会覆盖成父级的槽位。 */
+  position: NavSlot
 }) {
   const { t } = useTranslation()
   const save = useSaveNav()
@@ -251,6 +258,7 @@ function NavFormBody({
         data: {
           parentId,
           href: finalHref,
+          position,
           sort,
           enabled,
           // 行上的裸列永远存原文；nav 不可按语言发布，只回传 i18nJson
@@ -353,7 +361,7 @@ function NavFormBody({
 }
 
 function NavFormDialog({
-  onOpenChange, editing, tree, defaultParentId, pages, pagesComplete,
+  onOpenChange, editing, tree, defaultParentId, pages, pagesComplete, position,
 }: {
   onOpenChange: (v: boolean) => void
   editing: NavItem | null
@@ -361,6 +369,8 @@ function NavFormDialog({
   defaultParentId: string
   pages: SitePage[]
   pagesComplete: boolean
+  /** 当前编辑的槽位（页头/页脚）：新建顶级项落在这里，子项由后端跟随父级 */
+  position: NavSlot
 }) {
   const { data: languages = [] } = useLanguages()
   const { data: schema, isError, refetch } = useI18nSchema('nav')
@@ -391,6 +401,7 @@ function NavFormDialog({
         defaultParentId={defaultParentId}
         pages={pages}
         pagesComplete={pagesComplete}
+        position={position}
       />
     </LocaleFormProvider>
   )
@@ -414,8 +425,12 @@ export default function NavPage() {
   const [editing, setEditing] = useState<NavItem | null>(null)
   const [parentId, setParentId] = useState('0')
   const [selected, setSelected] = useState<string[]>([])
+  // 页头 / 页脚两个槽位分开编辑：同一份导航数据，页脚按「顶级项 = 一列标题」渲染。
+  // 历史行没有 position（迁移前的空串）时按页头处理，与后端 navPositionOf 同口径。
+  const [slot, setSlot] = useState<NavSlot>('header')
 
-  const tree = useMemo(() => buildNavTree(navs), [navs])
+  const scoped = useMemo(() => navs.filter((n) => (n.position === 'footer' ? 'footer' : 'header') === slot), [navs, slot])
+  const tree = useMemo(() => buildNavTree(scoped), [scoped])
 
   // 行深度：已到层级上限的行不能再挂子级（后端会拒），「新增子导航」按钮按深度隐藏。
   const maxDepth = useNavMaxDepth()
@@ -492,6 +507,23 @@ export default function NavPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_website.nav.title')} description={t('plugin_website.nav.desc', { max: maxDepth })} />
+      <div className="flex flex-col gap-2">
+        <Segmented
+          ariaLabel={t('plugin_website.nav.position')}
+          value={slot}
+          onChange={(v) => {
+            setSlot(v === 'footer' ? 'footer' : 'header')
+            setSelected([])
+          }}
+          options={[
+            { value: 'header', label: t('plugin_website.nav.positionHeader') },
+            { value: 'footer', label: t('plugin_website.nav.positionFooter') },
+          ]}
+        />
+        {slot === 'footer' ? (
+          <p className="text-xs text-muted-foreground">{t('plugin_website.nav.footerHint')}</p>
+        ) : null}
+      </div>
       <TreeTable<NavNode>
         columns={columns}
         data={tree}
@@ -499,7 +531,7 @@ export default function NavPage() {
         defaultExpandAll
         maxDepth={maxDepth}
         columnSettingsKey="plugin-website-navs"
-        emptyText={t('plugin_website.empty')}
+        emptyText={slot === 'footer' ? t('plugin_website.nav.footerEmpty') : t('plugin_website.empty')}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="website:nav">
@@ -557,6 +589,7 @@ export default function NavPage() {
           defaultParentId={parentId}
           pages={pagesList}
           pagesComplete={pagesComplete}
+          position={slot}
         />
       )}
     </PageContainer>

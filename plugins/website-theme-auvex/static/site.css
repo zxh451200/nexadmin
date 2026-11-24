@@ -334,6 +334,8 @@ p { margin: 0; }
 /* ---- 页脚 ---- */
 .au-footer { background: #080d12; border-top: 1px solid rgba(255, 255, 255, .07); color: #93a1ae; font-size: 12.8px; }
 .au-footer-grid { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1.1fr; gap: 34px; padding-top: 54px; padding-bottom: 38px; }
+/* 页脚导航在后台可配：品牌块固定比例，其余列按实际列数自适应 */
+.au-footer-grid-nav { grid-template-columns: 1.7fr repeat(auto-fit, minmax(140px, 1fr)); }
 .au-footer-brand .au-brand-logo { height: 30px; filter: brightness(0) invert(1); }
 .au-footer-brand p { margin-top: 14px; max-width: 30ch; line-height: 1.7; }
 .au-social { list-style: none; display: flex; gap: 8px; margin: 18px 0 0; padding: 0; }

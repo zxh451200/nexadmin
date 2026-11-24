@@ -158,12 +158,14 @@ function useCurrencyOptions(): Option[] {
  * 界面文案在译文里给了中文名时显示「value · 中文名」，随界面语言变。
  * 译文缺失或与值相同（英文界面）就只显示英文值，不会出现「T/T · T/T」。
  */
-function useEnumOptions(values: readonly string[], keyPrefix: string): Option[] {
+function useEnumOptions(values: readonly string[], keyPrefix: 'plugin_website.port' | 'plugin_website.payment'): Option[] {
   const { t, i18n } = useTranslation()
   return useMemo(
     () =>
       values.map((v) => {
-        const local = t(`${keyPrefix}.${v}`, { defaultValue: v })
+        const local = keyPrefix === 'plugin_website.port'
+          ? t(`plugin_website.port.${v}`, { defaultValue: v })
+          : t(`plugin_website.payment.${v}`, { defaultValue: v })
         return { value: v, label: local && local !== v ? `${v} · ${local}` : v }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- values/keyPrefix 是模块级常量，t 随语言变化已覆盖重算时机
@@ -196,13 +198,15 @@ function useUnitOptions(): Option[] {
  * 公开页按整棵子树聚合，挂父级与挂末级在归档页看到的结果一致，无需限制。
  */
 function CategoryPicker({
-  value, onChange, categories, disabled, className,
+  value, onChange, categories, disabled, className, showChildHint,
 }: {
   value: string[]
   onChange: (ids: string[]) => void
   categories: CatNode[]
   disabled?: boolean
   className?: string
+  /** 标出「这类目还有子类」：只在发布/编辑表单里开。筛选栏选父类是有意收窄范围，不需要这层解释。 */
+  showChildHint?: boolean
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -227,6 +231,11 @@ function CategoryPicker({
     return categories.filter((c) => keep.has(c.id))
   }, [categories, byId, kw])
   const options: Option[] = shown.map((c) => {
+    // 有子类的行标一句「含子类」：商品允许挂在父类目上（类目是分组，不强制叶子），
+    // 但父类目的计数是子树口径（含后代），不标出来容易被当成「这一类只有这么点货」。
+    const hasKids = !!c.children?.length
+    // 可见角标只给表单用；hover 说明在筛选栏也要保留（选父类做筛选时，知道它含多少货有用）
+    const showHint = showChildHint && hasKids
     return {
       value: c.id,
       label: c.title,
@@ -245,10 +254,15 @@ function CategoryPicker({
             ) : null}
             <span className="truncate" title={c.title}>{c.title}</span>
           </span>
+          {showHint ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground/80">
+              {t('plugin_website.product.categoryHasChildren')}
+            </span>
+          ) : null}
           {/* 计数是子树口径（含后代），和筛选结果条数一致；有子类目的行补一句说明，免得被当成「直挂数」 */}
           <span
             className="num ms-auto text-xs text-muted-foreground"
-            title={c.children?.length ? t('plugin_website.product.categoryCountIncl', { count: c.productCount }) : undefined}
+            title={hasKids ? t('plugin_website.product.categoryCountIncl', { count: c.productCount }) : undefined}
           >
             {c.productCount}
           </span>
@@ -257,8 +271,13 @@ function CategoryPicker({
     }
   })
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
-  // 触发器按树形顺序显示已选名称，与清单里的视觉一致。
-  const selectedTitles = categories.filter((c) => value.includes(c.id)).map((c) => c.title)
+  // 触发器按树形顺序显示已选名称，与清单里的视觉一致；带子类的补后缀，
+  // 让「我挂在大类上」这件事在保存前就看得见，而不是保存后到前台才发现混排。
+  const selectedTitles = categories
+    .filter((c) => value.includes(c.id))
+    .map((c) => (showChildHint && c.children?.length
+      ? t('plugin_website.product.categoryWithChildren', { name: c.title })
+      : c.title))
   return (
     <PickerShell
       open={open}
@@ -304,7 +323,7 @@ function ImagesField({
   const { t } = useTranslation()
   const atLimit = images.length >= IMAGES_MAX
   return (
-    <SharedGroup labelKey="plugin_website.product.images">
+    <SharedGroup label={t('plugin_website.product.images')}>
       <Uploader
         kind="image"
         visibility="public"
@@ -530,7 +549,7 @@ function ProductFormBody({
               <span className="truncate text-xs text-muted-foreground">{productPath}</span>
             </SharedFieldShell>
             <SharedFieldShell labelKey="plugin_website.product.categories">
-              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} />
+              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} showChildHint />
             </SharedFieldShell>
           </div>
         </FormSection>
@@ -675,7 +694,7 @@ function ProductFormBody({
             disabled={sharedDisabled}
           />
         </SharedFieldShell>
-        <SharedGroup labelKey="plugin_website.product.specs">
+        <SharedGroup label={t('plugin_website.product.specs')}>
           <SpecsEditor specs={specs} onChange={setSpecs} disabled={sharedDisabled} />
         </SharedGroup>
         </FormSection>
@@ -737,14 +756,14 @@ function ProductFormBody({
 
 /** 分组外壳：与 SharedFieldShell 同款标签行，但外层是 div（组里第一颗控件不能被 label 认领）。
  * action 挂在标签行右端（如图集的「从文件库选择」），不占内容区高度。 */
-function SharedGroup({ labelKey, action, children }: { labelKey: string; action?: ReactNode; children: ReactNode }) {
+function SharedGroup({ label, action, children }: { label: ReactNode; action?: ReactNode; children: ReactNode }) {
   const { t } = useTranslation()
   const { isSource } = useLocaleForm()
   return (
     <div className="flex flex-col gap-1 text-sm">
       <div className="flex min-h-7 items-center justify-between gap-2">
         <span className={cn('inline-flex items-center gap-1.5', !isSource && 'text-muted-foreground')}>
-          <span className="inline-flex items-baseline">{t(labelKey)}</span>
+          <span className="inline-flex items-baseline">{label}</span>
           {!isSource ? (
             <span className="rounded border px-1 text-[10px] font-semibold">{t('localeForm.sharedTag')}</span>
           ) : null}
@@ -985,19 +1004,21 @@ export default function ProductPage() {
     setFormOpen(true)
   }
 
-  const onDelete = async (rows: SiteProduct[]) => {
+  // 按 id 删：勾选可以跨页，用当前页的行反查只会删掉本页那几条。
+  const onDelete = async (ids: string[]) => {
+    const name = ids.length === 1 ? (data?.list.find((r) => r.id === ids[0])?.title ?? '') : ''
     if (
       await confirm({
         destructive: true,
-        description: rows.length === 1
-          ? t('plugin_website.product.deleteConfirm', { name: rows[0].title })
-          : t('plugin_website.product.deleteBatchConfirm', { count: rows.length }),
+        description: name
+          ? t('plugin_website.product.deleteConfirm', { name })
+          : t('plugin_website.product.deleteBatchConfirm', { count: ids.length }),
       })
     ) {
       try {
-        if (rows.length === 1) await remove.mutateAsync(rows[0].id)
-        else await removeBatch.mutateAsync(rows.map((r) => r.id))
-        setSelected([])
+        if (ids.length === 1) await remove.mutateAsync(ids[0])
+        else await removeBatch.mutateAsync(ids)
+        setSelected((s) => s.filter((id) => !ids.includes(id)))
         toast.success(t('common.operateSuccess'))
       } catch {
         // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
@@ -1054,8 +1075,6 @@ export default function ProductPage() {
       setExporting(false)
     }
   }
-
-  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<SiteProduct>[] = [
     {
@@ -1257,7 +1276,7 @@ export default function ProductPage() {
             <Button variant="outline" size="sm" onClick={() => void applyStatus(ids, 'offline')}>
               {t('plugin_website.product.offlineBatch')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+            <Button variant="destructive" size="sm" onClick={() => void onDelete(ids)}>
               <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -1281,7 +1300,7 @@ export default function ProductPage() {
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openAt(row)}>
               <Pencil aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
+            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
               <Trash2 aria-hidden="true" />
             </Button>
           </Can>

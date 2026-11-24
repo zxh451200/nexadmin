@@ -248,11 +248,30 @@ type Nav struct {
 	// Description 是二级菜单里跟在标题下的一句话说明；为空时面板退化成纯链接列。
 	Description string `gorm:"size:200;not null;default:''" json:"description"`
 	Href        string `gorm:"size:255;not null" json:"href"`
-	Sort        int    `json:"sort"`
-	Enabled     bool   `json:"enabled"`
-	I18nJSON    string `gorm:"type:text" json:"i18nJson"`
+	// Position 是导航所在的槽位：header=顶部导航，footer=页脚导航。
+	// 页脚按「顶级项 = 一列（标题）、子项 = 该列的链接」渲染，与顶部导航共用同一棵树、
+	// 同一套排序与译文；不另建一张表，是为了让运营只在一个地方维护导航。
+	Position string `gorm:"size:16;not null;default:'header'" json:"position"`
+	Sort     int    `json:"sort"`
+	Enabled  bool   `json:"enabled"`
+	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// Children 只在公开页装配树时填充，不入库。
 	Children []Nav `gorm:"-" json:"children,omitempty"`
+}
+
+// 导航槽位取值。空的 position（迁移前的历史行、手工 SQL 插入）一律按 header 处理——
+// 宁可落到顶部导航，也不要让站点因为一个空字符串丢掉整条导航。
+const (
+	NavPositionHeader = "header"
+	NavPositionFooter = "footer"
+)
+
+// navPositionOf 把任意输入归一成合法槽位：只认 footer，其余都是 header。
+func navPositionOf(raw string) string {
+	if strings.EqualFold(strings.TrimSpace(raw), NavPositionFooter) {
+		return NavPositionFooter
+	}
+	return NavPositionHeader
 }
 
 // NavParentID 是导航上级引用：落库仍是 uint64，JSON 用字符串避免大 ID 在浏览器丢精度；
@@ -433,7 +452,8 @@ type ProductCategory struct {
 	Sort     int         `json:"sort"`
 	// I18nJSON 存类目名的非默认语言译文；缺译回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
-	// ProductCount 是该类目（不含子类目）下的商品数：保存时回填，不落库。
+	// ProductCount 是该类目连同全部后代类目下的商品数（子树口径，与前台归档页条数一致）：
+	// 装配类目树时回填，不落库。商品允许直挂父类目，所以这个数不等于「直挂数」。
 	ProductCount int64 `gorm:"-" json:"productCount"`
 	// Children 只在树装配时填充，不入库。
 	Children []ProductCategory `gorm:"-" json:"children,omitempty"`

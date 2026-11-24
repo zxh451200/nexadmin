@@ -564,7 +564,10 @@ type siteView struct {
 	Route           string // 去掉语言前缀的站内路径，用于导航高亮与语言切换
 	Query           string // 原始 query，语言切换时保留筛选
 	Navs            []Nav
-	Features        []Feature
+	// FooterNavs 是页脚导航树：顶级项 = 一列（标题）、子项 = 该列链接。
+	// 为空时模板回退内置页脚列（老站点不改数据就不会变样）。
+	FooterNavs []Nav
+	Features   []Feature
 	Title           string
 	Desc            string
 	// SeoTitle 是内容级的完整 meta 标题覆盖：空 = 用 Title（「标题 - 站点名」的组合交给装配方）。

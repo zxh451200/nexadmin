@@ -45,8 +45,12 @@ func (*module) Name() string { return "website-theme-torkon" }
 // Register 无管理端路由：主题的一切交互都发生在 website 插件的设置页。
 func (*module) Register(*gin.RouterGroup, *core.Deps) {}
 
+// torkonThemeCaps 明确声明「一项都不支持」：这套主题是产品目录式门面，友情链接、币种、
+// 办公地点、特性卡片、FAQ、插件市场入口都不渲染。空切片 ≠ nil（nil 是未声明、不限制）。
+var torkonThemeCaps = []string{}
+
 func init() {
-	if err := website.RegisterTheme("torkon", "TORKON 工业工具", "1.0.0", contentFS, seedDemo); err != nil {
+	if err := website.RegisterTheme("torkon", "TORKON 工业工具", "1.0.0", contentFS, seedDemo, torkonThemeCaps...); err != nil {
 		// 模板坏了必须立刻暴露（编译期就能修），静默降级会让公开站悄悄退回默认主题。
 		panic(err)
 	}

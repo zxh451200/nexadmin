@@ -54,7 +54,9 @@
       "officesHint": "Shown as location cards and maps on the contact page. Map vendor follows the visitor language (zh → Tianditu, others → Google); keys live in System Settings → Map services.",
       "officeAdd": "Add location",
       "officeDrag": "Drag to reorder this office",
-      "officesEmpty": "No offices yet — use \"Add location\" to create the first one."
+      "officesEmpty": "No offices yet — use \"Add location\" to create the first one.",
+      "capUnsupported": "The current theme “{{theme}}” does not render “{{what}}”, so saving it will not show up on the site.",
+      "capCurrency": "Currency conversion"
     },
     "social": {
       "github": "GitHub",
@@ -88,6 +90,7 @@
       "email": "Email",
       "phone": "Phone",
       "ip": "IP address",
+      "source": "Source",
       "content": "Message",
       "createdAt": "Time",
       "detailTitle": "Message details",
@@ -138,7 +141,12 @@
       "errUnknownHint1": "Pick an existing page from the “Link target” list above.",
       "errUnknownHint2": "To add a page, create it under “Pages” first, then pick it here.",
       "errPageMissing": "Page /p/{{slug}} does not exist yet.",
-      "errPageMissingHint": "Create a page with this slug under “Pages”, then pick it here."
+      "errPageMissingHint": "Create a page with this slug under “Pages”, then pick it here.",
+      "position": "Navigation location",
+      "positionHeader": "Header",
+      "positionFooter": "Footer",
+      "footerHint": "Footer navigation: each top-level item becomes a column (a heading plus its child links); only two levels are used, deeper branches are not rendered. With nothing configured the site keeps the theme’s built-in footer; once configured it replaces the built-in link columns — brand block, contact details, and friend links stay as they are.",
+      "footerEmpty": "No footer navigation yet — the site is using the theme’s built-in footer"
     },
     "feature": {
       "title": "Features",
@@ -265,6 +273,8 @@
       "categoryNoMatch": "No matching categories",
       "categoriesEmpty": "No categories yet — create one under \"Product categories\" first",
       "categoryCountIncl": "{{count}} products including subcategories",
+      "categoryHasChildren": "incl. subs",
+      "categoryWithChildren": "{{name}} (incl. subcategories)",
       "coverUpload": "Upload main image",
       "coverHint": "Suggested 800×800; also used as the social share preview",
       "images": "Gallery",
@@ -484,7 +494,7 @@
       "faviconUrl": "Browser icon (favicon)",
       "ogImageUrl": "Default share image",
       "siteOrigin": "Canonical origin",
-"headCode": "Custom <head> code (analytics scripts)",
+      "headCode": "Custom <head> code (analytics scripts)",
       "titleSuffix": "Title suffix",
       "homeSlug": "Set as homepage",
       "homeTitle": "Home headline",
@@ -502,6 +512,7 @@
       "navLabel": "Label",
       "navDesc": "Description",
       "navHref": "Href",
+      "officeName": "Office name",
       "featureTitle": "Title",
       "featureDesc": "Description",
       "featureIcon": "Icon",
@@ -555,7 +566,7 @@
       "faviconUrl": "64×64 or 128×128 square PNG recommended (browser tabs render only 16–32px; {{types}}, ≤{{max}}); leave empty for the built-in favicon.svg",
       "ogImageUrl": "Fallback share image when content has none, 1200×630 recommended; leave empty to use the built-in one",
       "siteOrigin": "The canonical origin with scheme (e.g. https://www.example.com): sitemap, robots, JSON-LD and on-page canonical URLs prefer it. Required for multi-domain setups or proxies that do not pass Host/scheme headers; leave empty to derive from the request",
-"headCode": "Injected as-is into every page's <head> (GA / Baidu Analytics / site verification); configurable only by site-settings admins who own the script content, limited to 5000 characters",
+      "headCode": "Injected as-is into every page's <head> (GA / Baidu Analytics / site verification); configurable only by site-settings admins who own the script content, limited to 5000 characters",
       "titleSuffix": "Appended after page titles, replacing \" - SiteName\"; leave empty to use the site name",
       "theme": "Themes come from theme plugins and take effect right after saving; when a theme plugin is uninstalled the site falls back to the default theme without downtime",
       "demoImport": "Writes the brand's sample products and news (insert-only), and replaces brand identity (site name / home copy / navigation / feature cards); safe to repeat",

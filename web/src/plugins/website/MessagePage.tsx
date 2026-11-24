@@ -99,25 +99,27 @@ export default function MessagePage() {
     }
   }
 
-  const onDelete = async (rows: SiteMessage[]) => {
+  // 按 id 删，不按「当前页的行」删：勾选可以跨页，拿 data.list 反查只会删到当前页那几条，
+  // 界面却按总数提示成功。单条确认文案里的名字从当前页取，取不到就退回按条数提示。
+  const onDelete = async (ids: string[]) => {
+    const name = ids.length === 1 ? (data?.list.find((r) => r.id === ids[0])?.name ?? '') : ''
     const ok = await confirm({
       destructive: true,
-      description: rows.length === 1
-        ? t('plugin_website.message.deleteConfirm', { name: rows[0].name })
-        : t('plugin_website.message.deleteBatchConfirm', { count: rows.length }),
+      description: name
+        ? t('plugin_website.message.deleteConfirm', { name })
+        : t('plugin_website.message.deleteBatchConfirm', { count: ids.length }),
     })
     if (!ok) return
     try {
-      await remove.mutateAsync(rows.map((r) => r.id))
-      if (detail && rows.some((r) => r.id === detail.id)) setDetail(null)
-      setSelected([])
+      await remove.mutateAsync(ids)
+      if (detail && ids.includes(detail.id)) setDetail(null)
+      setSelected((s) => s.filter((id) => !ids.includes(id)))
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
     }
   }
 
-  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
   // 详情弹窗读实时那一行：标已读后列表刷新，弹窗里的状态徽标跟着变，而不是停在你点开的旧值上。
   const view = detail ? (data?.list.find((r) => r.id === detail.id) ?? detail) : null
   // 推荐按需拉：打开详情才请求，超时未处理的线索在弹窗里直接给出可回推的商品。
@@ -243,7 +245,7 @@ export default function MessagePage() {
               <CheckCheck aria-hidden="true" />
               {t('plugin_website.message.markHandled')}
             </Button>
-            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(ids)}>
               <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -271,7 +273,7 @@ export default function MessagePage() {
                 <Inbox className="size-4" aria-hidden="true" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
+            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
               <Trash2 className="size-4" aria-hidden="true" />
             </Button>
           </Can>
@@ -290,110 +292,136 @@ export default function MessagePage() {
             </Button>
           }
         >
-          <dl className="flex flex-col gap-3 text-sm">
-            <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.status')}</dt>
-              <dd>{statusBadge(view.status)}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.name')}</dt>
-              <dd className="min-w-0 wrap-break-word">{view.name}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.contact')}</dt>
-              <dd className="min-w-0 wrap-break-word">
-                <a className="underline" href={`mailto:${view.email}`}>{view.email}</a>
-                {view.phone ? <span className="text-muted-foreground"> · {view.phone}</span> : null}
-              </dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.createdAt')}</dt>
-              <dd className="num">{formatTime(view.createdAt, i18n.language)}</dd>
-            </div>
-            {view.sourceProduct ? (
+          <div className="flex flex-col gap-4 text-sm">
+            <dl className="flex flex-col gap-3">
               <div className="flex gap-2">
-                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.sourceProduct')}</dt>
-                <dd className="min-w-0">
-                  <a
-                    className="inline-flex items-center gap-1 underline"
-                    href={view.sourceProduct.path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <span className="wrap-break-word">{view.sourceProduct.title}</span>
-                    <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
-                  </a>
+                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.status')}</dt>
+                <dd>{statusBadge(view.status)}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.name')}</dt>
+                <dd className="min-w-0 wrap-break-word">{view.name}</dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.contact')}</dt>
+                <dd className="min-w-0 wrap-break-word">
+                  <a className="underline" href={`mailto:${view.email}`}>{view.email}</a>
+                  {view.phone ? <span className="text-muted-foreground"> · {view.phone}</span> : null}
                 </dd>
               </div>
-            ) : null}
-            {typeof view.cardConsent === 'boolean' ? (
               <div className="flex gap-2">
-                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.cardConsent')}</dt>
-                <dd>
-                  <Badge variant={view.cardConsent ? 'success' : 'outline'}>
-                    {view.cardConsent
-                      ? t('plugin_website.message.cardConsentYes')
-                      : t('plugin_website.message.cardConsentNo')}
-                  </Badge>
-                </dd>
+                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.createdAt')}</dt>
+                <dd className="num">{formatTime(view.createdAt, i18n.language)}</dd>
               </div>
-            ) : null}
+              {view.sourceProduct ? (
+                <div className="flex gap-2">
+                  <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.sourceProduct')}</dt>
+                  <dd className="min-w-0">
+                    <a
+                      className="inline-flex items-center gap-1 underline"
+                      href={view.sourceProduct.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span className="wrap-break-word">{view.sourceProduct.title}</span>
+                      <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+                    </a>
+                  </dd>
+                </div>
+              ) : null}
+              {typeof view.cardConsent === 'boolean' ? (
+                <div className="flex gap-2">
+                  <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.cardConsent')}</dt>
+                  <dd>
+                    <Badge variant={view.cardConsent ? 'success' : 'outline'}>
+                      {view.cardConsent
+                        ? t('plugin_website.message.cardConsentYes')
+                        : t('plugin_website.message.cardConsentNo')}
+                    </Badge>
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {/* 留言正文单独成块：贴边的一整段字，比塞进「标签: 值」的网格里更像来信本身 */}
             <div className="whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3">{view.content}</div>
+
             {view.attachments?.length ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground">{t('plugin_website.message.attachments')}</span>
-                <ul className="flex flex-col gap-1">
-                  {view.attachments.map((f) => (
-                    <li key={f.token}>
-                      <a
-                        className="inline-flex max-w-full items-center gap-1.5 underline"
-                        href={`/website/inquiry/attachments/${f.token}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Paperclip className="size-3.5 shrink-0" aria-hidden="true" />
-                        <span className="truncate">{f.name}</span>
-                        <span className="num shrink-0 text-xs text-muted-foreground">{formatSize(f.size)}</span>
-                      </a>
-                    </li>
-                  ))}
+              <section className="flex flex-col gap-2 border-t border-border pt-3">
+                <h3 className="text-xs font-medium text-muted-foreground">
+                  {t('plugin_website.message.attachments')}
+                </h3>
+                <ul className="flex flex-wrap gap-2">
+                  {view.attachments.map((f) => {
+                    // 图片服务端回 inline，开新标签页预览；其余回的是 Content-Disposition: attachment，
+                    // 再配 target=_blank 只会留下一个空白标签页（浏览器把响应当下载，页面永远空白），
+                    // 所以非图片一律原地下载，弹窗也不跳走。
+                    const preview = f.mime.startsWith('image/')
+                    return (
+                      <li key={f.token} className="min-w-0">
+                        <a
+                          className="inline-flex max-w-full items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5 transition-colors hover:bg-muted"
+                          href={`/website/inquiry/attachments/${f.token}`}
+                          {...(preview ? { target: '_blank', rel: 'noopener noreferrer' } : { download: f.name })}
+                        >
+                          <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <span className="min-w-0 truncate">{f.name}</span>
+                          <span className="num shrink-0 text-xs text-muted-foreground">{formatSize(f.size)}</span>
+                          {preview ? (
+                            <ExternalLink className="size-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                          ) : (
+                            <Download className="size-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                          )}
+                        </a>
+                      </li>
+                    )
+                  })}
                 </ul>
-              </div>
+              </section>
             ) : null}
             {view.overdue ? (
-              <p className="flex items-start gap-1.5 rounded-md border border-dashed p-2.5 text-xs text-muted-foreground">
-                <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                <span>{t('plugin_website.message.overdueHint')}</span>
-              </p>
+              <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-2.5 text-xs text-foreground">
+                <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden="true" />
+                <span className="leading-relaxed">{t('plugin_website.message.overdueHint')}</span>
+              </div>
             ) : null}
             {suggestData?.suggested?.length ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground">{t('plugin_website.message.suggestTitle')}</span>
-                <ul className="flex flex-col gap-1.5">
+              <section className="flex flex-col gap-1 border-t border-border pt-3">
+                <h3 className="text-xs font-medium text-muted-foreground">
+                  {t('plugin_website.message.suggestTitle')}
+                </h3>
+                <ul className="-mx-2 flex flex-col">
                   {suggestData.suggested.map((p) => (
-                    <li key={p.id} className="flex items-baseline justify-between gap-2">
+                    <li key={p.id}>
                       <a
-                        className="min-w-0 inline-flex items-center gap-1 underline"
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted"
                         href={p.path}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        <span className="truncate">{p.title}</span>
-                        <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate">{p.title}</span>
+                        <span className="num shrink-0 text-xs text-muted-foreground">
+                          {p.priceMin > 0 ? `${p.currency}${p.priceMin}` : t('plugin_website.message.suggestNoPrice')}
+                        </span>
+                        <ExternalLink className="size-3 shrink-0 text-muted-foreground/70" aria-hidden="true" />
                       </a>
-                      <span className="num shrink-0 text-xs text-muted-foreground">
-                        {p.priceMin > 0 ? `${p.currency}${p.priceMin}` : t('plugin_website.message.suggestNoPrice')}
-                      </span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             ) : null}
             {suggestLoading ? (
               <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
             ) : null}
-            <div className="text-xs text-muted-foreground">{[view.ip, view.ua].filter(Boolean).join(' · ')}</div>
-          </dl>
+            {/* 访客来源：IP + UA。以前裸着一行小字贴在列表尾部，读起来像第 5 条商品，
+                现在给它标签、加分隔线并降到脚注层级——排查灌水/群发时它是唯一线索，不能省。 */}
+            {view.ip || view.ua ? (
+              <div className="flex gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                <span className="w-20 shrink-0">{t('plugin_website.message.source')}</span>
+                <span className="min-w-0 break-words font-mono">{[view.ip, view.ua].filter(Boolean).join(' · ')}</span>
+              </div>
+            ) : null}
+          </div>
         </ResponsiveDialog>
       ) : null}
     </PageContainer>

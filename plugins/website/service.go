@@ -489,11 +489,23 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 		row = Nav{}
 	}
 	var all []Nav
-	if err := s.db.WithContext(ctx).Select("id", "parent_id").Find(&all).Error; err != nil {
+	if err := s.db.WithContext(ctx).Select("id", "parent_id", "position").Find(&all).Error; err != nil {
 		return nil, err
 	}
 	// 官网导航是平台级数据（无 tenant_id），父级存在性校验即等价于「同一租户」。
 	parents := navParentMap(all)
+	// 子项的槽位跟随父级：页脚列里的链接不允许挂着页头的 position，否则同一棵树
+	// 会被拆到两个槽位里（页脚只画一层子项，多出来的子项会整段消失）。
+	posByID := make(map[uint64]string, len(all))
+	for _, n := range all {
+		posByID[uint64(n.ID)] = navPositionOf(n.Position)
+	}
+	position := navPositionOf(f.Position)
+	if pid := uint64(f.ParentID); pid != 0 {
+		if p, ok := posByID[pid]; ok {
+			position = p
+		}
+	}
 	level, err := navDepth(parents, uint64(row.ID), uint64(f.ParentID))
 	if err != nil {
 		return nil, err
@@ -509,8 +521,28 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 	row.ParentID, row.Label, row.Href = f.ParentID, f.Label, f.Href
 	row.Description = f.Description
 	row.Sort, row.Enabled, row.I18nJSON = f.Sort, f.Enabled, i18n
+	row.Position = position
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
+	}
+	// 顶级项换槽位（页头↔页脚）时后代跟着走，一棵树只属于一个槽位。
+	// 只在更新时可能出现：新建的行还没有子项。
+	if id != 0 {
+		if ids := navSubtreeIDs(parents, uint64(row.ID)); len(ids) > 1 {
+			list := make([]int64, 0, len(ids)-1)
+			for _, v := range ids {
+				if v != uint64(row.ID) {
+					list = append(list, int64(v))
+				}
+			}
+			if len(list) > 0 {
+				if err := s.db.WithContext(ctx).Model(&Nav{}).
+					Where("id IN ? AND position <> ?", list, position).
+					Update("position", position).Error; err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	return &row, nil
 }
@@ -1506,6 +1538,7 @@ func (s *Service) RollbackPostVersion(ctx context.Context, postID idgen.ID, vers
 type SiteData struct {
 	Setting  *Setting
 	Navs     []Nav // 已组好的导航树：父级不可见的节点连同子树已丢弃
+	FooterNavs []Nav // 页脚导航树：顶级项 = 一列（标题），子项 = 该列链接
 	Features []Feature
 	Posts    []Post // 最新已发布新闻（首页取 3 条，列表页取 20 条）
 }
@@ -1532,7 +1565,18 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 		navs[i].localize(lang)
 	}
 	// Navs 是树：父级不可见的节点整棵丢弃，模板只按一级遍历。
-	navs = buildNavTree(navs)
+	// 页头与页脚各建一棵：position 认定统一走 navPositionOf，历史空值归到页头。
+	header := make([]Nav, 0, len(navs))
+	footer := make([]Nav, 0, 8)
+	for _, n := range navs {
+		if navPositionOf(n.Position) == NavPositionFooter {
+			footer = append(footer, n)
+			continue
+		}
+		header = append(header, n)
+	}
+	navs = buildNavTree(header)
+	footerNavs := buildNavTree(footer)
 	var features []Feature
 	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("sort, id").Find(&features).Error; err != nil {
 		return nil, err
@@ -1569,7 +1613,7 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 	for i := range posts {
 		posts[i].localize(lang)
 	}
-	return &SiteData{Setting: setting, Navs: navs, Features: features, Posts: posts}, nil
+	return &SiteData{Setting: setting, Navs: navs, FooterNavs: footerNavs, Features: features, Posts: posts}, nil
 }
 
 // PublishedPostBy 取一篇已发布的新闻；未发布或不存在返回 gorm.ErrRecordNotFound。

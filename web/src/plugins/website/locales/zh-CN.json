@@ -54,7 +54,9 @@
       "officesHint": "展示在联系页的地点卡与地图；地图厂商按访客语言判定（zh 系→天地图，其他→谷歌），Key 在「系统设置 → 地图服务」。",
       "officeAdd": "添加地点",
       "officeDrag": "拖动调整此地点的顺序",
-      "officesEmpty": "还没有办公地点，点「添加地点」创建第一个。"
+      "officesEmpty": "还没有办公地点，点「添加地点」创建第一个。",
+      "capUnsupported": "当前主题「{{theme}}」不渲染“{{what}}”，保存后官网上看不到效果。",
+      "capCurrency": "币种换算"
     },
     "social": {
       "github": "GitHub",
@@ -88,6 +90,7 @@
       "email": "邮箱",
       "phone": "电话",
       "ip": "IP 地址",
+      "source": "来源",
       "content": "留言内容",
       "createdAt": "时间",
       "detailTitle": "留言详情",
@@ -138,7 +141,12 @@
       "errUnknownHint1": "站内页面请用上面的「链接目标」下拉选择。",
       "errUnknownHint2": "需要新页面时，先在「页面管理」创建，再回来选「页面 · 标题」。",
       "errPageMissing": "页面 /p/{{slug}} 还不存在。",
-      "errPageMissingHint": "先在「页面管理」里创建这个 slug 的页面，再回来选它。"
+      "errPageMissingHint": "先在「页面管理」里创建这个 slug 的页面，再回来选它。",
+      "position": "导航位置",
+      "positionHeader": "页头",
+      "positionFooter": "页脚",
+      "footerHint": "页脚导航：每个顶级项渲染成一列（标题 + 子项链接）。页脚只用到两级，更深的分支不渲染。一条都没配时，官网显示主题内置的页脚；配了之后替换内置的产品/文档类栏目，品牌块、联系信息与友情链接不受影响。",
+      "footerEmpty": "还没有页脚导航，官网当前用的是主题内置页脚"
     },
     "feature": {
       "title": "特性管理",
@@ -265,6 +273,8 @@
       "categoryNoMatch": "没有匹配的类目",
       "categoriesEmpty": "还没有类目，先到「产品类目」里建一个",
       "categoryCountIncl": "含子类目共 {{count}} 件商品",
+      "categoryHasChildren": "含子类",
+      "categoryWithChildren": "{{name}}（含子类）",
       "coverUpload": "上传主图",
       "coverHint": "建议 800×800，上传后按此比例裁剪；也用于社交分享预览图",
       "images": "图集",
@@ -502,6 +512,7 @@
       "navLabel": "名称",
       "navDesc": "说明",
       "navHref": "链接",
+      "officeName": "办公地点名称",
       "featureTitle": "标题",
       "featureDesc": "描述",
       "featureIcon": "图标",

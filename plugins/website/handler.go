@@ -90,6 +90,8 @@ type themeView struct {
 	Version string `json:"version"`
 	HasDemo bool   `json:"hasDemo"`
 	Active  bool   `json:"active"`
+	// Caps 是这套主题会渲染的站点设置能力（ThemeCap*）；null = 未声明，管理端不限制。
+	Caps []string `json:"caps"`
 }
 
 // GET /plugins/website/themes —— 已注册主题清单（default 恒在最前）与当前选中的主题。
@@ -102,12 +104,14 @@ func (h *handler) listThemes(c *gin.Context) {
 	items := []themeView{{
 		ID: "default", Label: "默认主题",
 		Active: row.Theme == "",
+		Caps:   defaultThemeCaps,
 	}}
 	for _, t := range Themes() {
 		items = append(items, themeView{
 			ID: t.ID, Label: t.Label, Version: t.Version,
 			HasDemo: t.seed != nil,
 			Active:  row.Theme == t.ID,
+			Caps:    t.caps,
 		})
 	}
 	response.OK(c, gin.H{"theme": row.Theme, "items": items})

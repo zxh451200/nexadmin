@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { GripVertical, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ExternalLink, GripVertical, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -49,6 +49,7 @@ import {
   type SocialPlatform,
   type WebsiteOffice,
 } from './api'
+import { ThemeCapNote, useThemeCap } from './ThemeCapNotice'
 
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
@@ -364,6 +365,10 @@ function SettingsFormBody({
 
   // 当前选中主题（'' = default）：决定是否显示「导入演示内容」按钮。
   const selectedTheme = themesData?.items.find((x) => x.id === (shared.theme || 'default'))
+  // 主题能力：填了也不会渲染的设置项要给提示，别让人以为保存坏了。
+  // 传 shared.theme 而不是已保存值：表单里切主题后提示立刻跟着变。
+  const { capOk, themeLabel } = useThemeCap(shared.theme)
+  const capNote = (what: string) => t('plugin_website.settings.capUnsupported', { theme: themeLabel, what })
   const confirm = useConfirm()
   const importDemo = async () => {
     if (!selectedTheme) return
@@ -418,15 +423,17 @@ function SettingsFormBody({
   // 自定义 <head> 代码：拦截未闭合的 script/style 与文档级标签（校验规则见 headCodeInvalid）
   const headInvalid = headCodeInvalid(shared.headCode)
   // 未保存提示：shared 相对「载入/上次保存」的快照有变化即脏；刷新与关窗由浏览器原生拦截。
-  // 多语言字段在 Provider 内部，脏标记只覆盖共用字段——大头都在这边。
+  // 多语言字段的改动在 Provider 内部（lf.dirty），必须一并计入——否则只改了「首页标题」
+  // 这类可翻译字段时页面不脏，关标签页连提示都没有，改动直接丢。
   const savedRef = useRef<SharedSettings | null>(null)
-  const [dirty, setDirty] = useState(false)
+  const [sharedDirty, setSharedDirty] = useState(false)
   useEffect(() => {
     if (shared && !savedRef.current) savedRef.current = shared
   }, [shared])
   useEffect(() => {
-    if (shared && savedRef.current) setDirty(JSON.stringify(shared) !== JSON.stringify(savedRef.current))
+    if (shared && savedRef.current) setSharedDirty(JSON.stringify(shared) !== JSON.stringify(savedRef.current))
   }, [shared])
+  const dirty = sharedDirty || lf.dirty
   useEffect(() => {
     if (!dirty) return
     const warn = (e: BeforeUnloadEvent) => {
@@ -453,7 +460,9 @@ function SettingsFormBody({
       return
     }
     if (headInvalid) {
-      toast.error(t(`plugin_website.settings.headInvalid${headInvalid === 'script' ? 'Script' : headInvalid === 'style' ? 'Style' : 'DocTag'}`))
+      if (headInvalid === 'script') toast.error(t('plugin_website.settings.headInvalidScript'))
+      else if (headInvalid === 'style') toast.error(t('plugin_website.settings.headInvalidStyle'))
+      else toast.error(t('plugin_website.settings.headInvalidDocTag'))
       return
     }
     if (estYearInvalid) {
@@ -473,7 +482,9 @@ function SettingsFormBody({
         i18nJson: lf.serialize().i18nJson,
       })
       savedRef.current = shared
-      setDirty(false)
+      setSharedDirty(false)
+      // Provider 内部的脏标记也要清：不然保存完还会一直弹「未保存」提示
+      lf.markSaved()
       toast.success(t('common.operateSuccess'))
     } catch {
       // 失败原因由 http 拦截器统一弹出，这里只做本地状态收尾
@@ -667,7 +678,11 @@ function SettingsFormBody({
                 />
                 {headInvalid ? (
                   <span className="text-xs text-destructive">
-                    {t(`plugin_website.settings.headInvalid${headInvalid === 'script' ? 'Script' : headInvalid === 'style' ? 'Style' : 'DocTag'}`)}
+                    {headInvalid === 'script'
+                      ? t('plugin_website.settings.headInvalidScript')
+                      : headInvalid === 'style'
+                        ? t('plugin_website.settings.headInvalidStyle')
+                        : t('plugin_website.settings.headInvalidDocTag')}
                   </span>
                 ) : null}
               </SharedFieldShell>
@@ -702,6 +717,7 @@ function SettingsFormBody({
                   极易写错（大小写/引号/非数字），改为结构化行编辑器——USD 恒为基准 1；
                   表非空时公开站头部出「语言-币种」弹层，价格按访客所选币种换算展示。
                   默认币种下拉的选项直接取汇率表的键。 */}
+              {capOk('currency') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.capCurrency'))} />}
               <SharedFieldShell labelKey="plugin_website.fields.currencyRates" hint={t('plugin_website.hint.currencyRates')}>
                 <CurrencyRatesEditor
                   value={shared.currencyRates}
@@ -815,6 +831,7 @@ function SettingsFormBody({
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">{t('plugin_website.settings.offices')}</span>
                       <span className="text-xs text-muted-foreground">{t('plugin_website.settings.officesHint')}</span>
+                      {capOk('offices') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.offices'))} />}
                     </div>
                     <Button
                       type="button"
@@ -933,6 +950,7 @@ function SettingsFormBody({
                   {t('plugin_website.settings.friendLinks')}
                   <FieldHint text={t('plugin_website.hint.friendLinks', { max: limits.friendMax })} />
                 </span>
+                {capOk('friendLinks') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.friendLinks'))} />}
                 {shared.friendLinks.map((l, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <Input
@@ -1003,7 +1021,12 @@ function SettingsFormBody({
                 bare
                 className="px-3 py-2.5"
                 label={t('plugin_website.market.enabled')}
-                description={t('plugin_website.market.enabledHint')}
+                description={
+                  <>
+                    {t('plugin_website.market.enabledHint')}
+                    {capOk('market') ? null : <span className="mt-1 block text-warning">{capNote(t('plugin_website.market.enabled'))}</span>}
+                  </>
+                }
                 checked={shared.marketEnabled}
                 disabled={sharedDisabled}
                 onCheckedChange={(v) => onSharedChange({ ...shared, marketEnabled: v })}
@@ -1094,7 +1117,19 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_website.settings.title')} description={t('plugin_website.settings.desc')} />
+      <PageHeader
+        title={t('plugin_website.settings.title')}
+        description={t('plugin_website.settings.desc')}
+        actions={
+          // 改完就地跳去看：配了规范域名（siteOrigin）就用它，否则按同源根路径打开官网
+          <Button asChild variant="outline" size="sm">
+            <a href={shared.siteOrigin.trim() || '/'} target="_blank" rel="noreferrer">
+              <ExternalLink aria-hidden="true" />
+              {t('plugin_website.viewSite')}
+            </a>
+          </Button>
+        }
+      />
       <div className="flex w-full flex-col gap-4">
         <LocaleFormProvider
           schema={schema}

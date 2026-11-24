@@ -122,7 +122,7 @@
 {{template "content" .}}
 </main>
 <footer class="sl-footer">
-  <div class="sl-wrap sl-footer-grid">
+  <div class="sl-wrap sl-footer-grid{{if .FooterNavs}} sl-footer-grid-nav{{end}}">
     <div class="sl-footer-brand">
       <a class="sl-brand" href="{{.Home}}">
         {{if .LogoURL}}<img class="sl-brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="sl-brand-text">{{initial .SiteName}}</span>{{end}}
@@ -134,6 +134,16 @@
       </ul>
       {{end}}
     </div>
+    {{if .FooterNavs}}
+    {{/* 页脚导航（后台「导航管理 → 页脚」）：顶级项 = 一列标题，子项 = 该列链接；
+         没配就回退内置的产品/资源两列。 */}}
+    {{range .FooterNavs}}
+    <nav class="sl-footer-col" aria-label="{{.Label}}">
+      <h4>{{.Label}}</h4>
+      {{range .Children}}<a href="{{$.URL .Href}}"{{if or (hasPrefix .Href "http") (hasPrefix .Href "mailto:")}} target="_blank" rel="noopener noreferrer nofollow"{{end}}>{{.Label}}</a>{{end}}
+    </nav>
+    {{end}}
+    {{else}}
     <nav class="sl-footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.URL "/products"}}">{{.T "theme.solaris.allProducts"}}</a>
@@ -144,6 +154,7 @@
       <a href="{{.BaseURL}}/rss.xml" target="_blank" rel="noopener">{{.T "layout.rss"}}</a>{{end}}
       <a href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
     </nav>
+    {{end}}
     <nav class="sl-footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>
       {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}

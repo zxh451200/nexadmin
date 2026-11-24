@@ -124,6 +124,8 @@ export interface NavItem {
   /** 二级面板里跟在标题下的一句话说明；为空则该子项落在右侧链接列 */
   description: string
   href: string
+  /** 槽位：header=顶部导航，footer=页脚导航（子项跟随父级，由后端定型） */
+  position: 'header' | 'footer'
   sort: number
   enabled: boolean
   i18nJson: string
@@ -134,6 +136,7 @@ export interface NavForm {
   label: string
   description: string
   href: string
+  position: 'header' | 'footer'
   sort: number
   enabled: boolean
   i18nJson: string
@@ -493,10 +496,11 @@ export function useLanguages() {
   return { data, isLoading }
 }
 
-export function useSettings() {
+export function useSettings(enabled = true) {
   return useQuery({
     queryKey: [...KEY, 'settings'],
     queryFn: () => api.get<SiteSettings>(`${BASE}/settings`),
+    enabled,
   })
 }
 
@@ -528,12 +532,15 @@ export interface ThemeInfo {
   version: string
   hasDemo: boolean
   active: boolean
+  /** 这套主题会渲染的站点设置能力；null = 主题没声明，按「全部支持」处理 */
+  caps: string[] | null
 }
 
-export function useThemes() {
+export function useThemes(enabled = true) {
   return useQuery({
     queryKey: [...KEY, 'themes'],
     queryFn: () => api.get<{ theme: string; items: ThemeInfo[] }>(`${BASE}/themes`),
+    enabled,
   })
 }
 

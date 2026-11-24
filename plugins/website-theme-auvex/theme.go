@@ -45,8 +45,14 @@ func (*module) Name() string { return "website-theme-auvex" }
 // Register 无管理端路由：主题的一切交互都发生在 website 插件的设置页。
 func (*module) Register(*gin.RouterGroup, *core.Deps) {}
 
+// auvexThemeCaps 是这套主题会渲染的站点设置能力（按 tpl/*.tmpl 实测）：
+// 只有首页特性卡片；友情链接、币种选择器、办公地点、插件市场入口、FAQ 这套主题都不渲染。
+var auvexThemeCaps = []string{
+	website.ThemeCapFeatures,
+}
+
 func init() {
-	if err := website.RegisterTheme("auvex", "AUVEX 数控机床", "1.0.0", contentFS, seedDemo); err != nil {
+	if err := website.RegisterTheme("auvex", "AUVEX 数控机床", "1.0.0", contentFS, seedDemo, auvexThemeCaps...); err != nil {
 		// 模板坏了必须立刻暴露（编译期就能修），静默降级会让公开站悄悄退回默认主题。
 		panic(err)
 	}

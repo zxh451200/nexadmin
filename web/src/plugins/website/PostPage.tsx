@@ -90,13 +90,13 @@ function statusBadge(r: SitePost, t: (k: string) => string) {
  * 分组外壳：与 SharedFieldShell 同款标签行，但外层是 div。
  * 栏目面板里第一颗复选框会被 label 认成「本标签的控件」，点标题就误勾一个栏目。
  */
-function SharedGroup({ labelKey, children }: { labelKey: string; children: ReactNode }) {
+function SharedGroup({ label, children }: { label: ReactNode; children: ReactNode }) {
   const { t } = useTranslation()
   const { isSource } = useLocaleForm()
   return (
     <div className="flex flex-col gap-1 text-sm">
       <span className={cn('inline-flex min-h-7 items-center gap-1.5', !isSource && 'text-muted-foreground')}>
-        <span className="inline-flex items-baseline">{t(labelKey)}</span>
+        <span className="inline-flex items-baseline">{label}</span>
         {!isSource ? (
           <span className="rounded border px-1 text-[10px] font-semibold">{t('localeForm.sharedTag')}</span>
         ) : null}
@@ -281,7 +281,7 @@ function PostFormBody({
           <LocaleFormActions />
         </FormSection>
         <FormSection title={t('plugin_website.post.section.taxonomy')}>
-          <SharedGroup labelKey="plugin_website.post.categories">
+          <SharedGroup label={t('plugin_website.post.categories')}>
             <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.categories')}>
               {/* select 式触发器 + 可搜索多选弹层：分类多时搜索定位，行尾文章数保留 */}
               <PostCategoryPicker
@@ -354,7 +354,7 @@ function PostFormBody({
               ) : null}
             </div>
           </SharedGroup>
-          <SharedGroup labelKey="plugin_website.post.tags">
+          <SharedGroup label={t('plugin_website.post.tags')}>
             {/* 标签输入二合一（框架 TagsInput）：已建标签以芯片嵌在输入框内，回车/逗号收词，空值 Backspace 删最后一个。
                 分隔符只收半角逗号（与原 commitTags 口径一致），回拼用「, 」。 */}
             <TagsInput
@@ -1003,19 +1003,21 @@ export default function PostPage() {
     setFormOpen(true)
   }
 
-  const onDelete = async (rows: SitePost[]) => {
+  // 按 id 删：勾选可以跨页，用当前页的行反查只会删掉本页那几条。
+  const onDelete = async (ids: string[]) => {
+    const name = ids.length === 1 ? (data?.list.find((r) => r.id === ids[0])?.title ?? '') : ''
     if (
       await confirm({
         destructive: true,
-        description: rows.length === 1
-          ? t('plugin_website.post.deleteConfirm', { name: rows[0].title })
-          : t('plugin_website.post.deleteBatchConfirm', { count: rows.length }),
+        description: name
+          ? t('plugin_website.post.deleteConfirm', { name })
+          : t('plugin_website.post.deleteBatchConfirm', { count: ids.length }),
       })
     ) {
       try {
-        if (rows.length === 1) await remove.mutateAsync(rows[0].id)
-        else await removeBatch.mutateAsync(rows.map((r) => r.id))
-        setSelected([])
+        if (ids.length === 1) await remove.mutateAsync(ids[0])
+        else await removeBatch.mutateAsync(ids)
+        setSelected((s) => s.filter((id) => !ids.includes(id)))
         toast.success(t('common.operateSuccess'))
       } catch {
         // 同上：拦截器已经把服务端原因说过了
@@ -1066,8 +1068,6 @@ export default function PostPage() {
       setExporting(false)
     }
   }
-
-  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<SitePost>[] = [
     {
@@ -1245,7 +1245,7 @@ export default function PostPage() {
             <Button variant="outline" size="sm" onClick={() => void applyStatus(ids, 'draft')}>
               {t('plugin_website.post.offlineBatch')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+            <Button variant="destructive" size="sm" onClick={() => void onDelete(ids)}>
               <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -1272,7 +1272,7 @@ export default function PostPage() {
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.versions')} onClick={() => setVersionsOf(row)}>
               <History aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
+            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
               <Trash2 aria-hidden="true" />
             </Button>
           </Can>

@@ -45,8 +45,18 @@ func (*module) Name() string { return "website-theme-solaris" }
 // Register 无管理端路由：主题的一切交互都发生在 website 插件的设置页。
 func (*module) Register(*gin.RouterGroup, *core.Deps) {}
 
+// solarisThemeCaps 是这套主题会渲染的站点设置能力（按 tpl/*.tmpl 实测）。
+// 不在表里的项在站点设置里会被灰掉并说明：友情链接与插件市场入口这套主题不渲染。
+// 空集/未声明语义不同——见 website.normalizeThemeCaps。
+var solarisThemeCaps = []string{
+	website.ThemeCapCurrency,
+	website.ThemeCapOffices,
+	website.ThemeCapFeatures,
+	website.ThemeCapFAQ,
+}
+
 func init() {
-	if err := website.RegisterTheme("solaris", "SOLARIS 储能系统", "1.0.0", contentFS, seedDemo); err != nil {
+	if err := website.RegisterTheme("solaris", "SOLARIS 储能系统", "1.0.0", contentFS, seedDemo, solarisThemeCaps...); err != nil {
 		// 模板坏了必须立刻暴露（编译期就能修），静默降级会让公开站悄悄退回默认主题。
 		panic(err)
 	}

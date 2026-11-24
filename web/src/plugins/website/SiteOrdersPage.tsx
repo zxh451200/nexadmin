@@ -80,24 +80,24 @@ export default function SiteOrdersPage() {
     }
   }
 
-  const onDelete = async (rows: SiteOrder[]) => {
+  // 按 id 删：勾选可以跨页，用当前页的行反查只会删掉本页那几条。
+  const onDelete = async (ids: string[]) => {
+    const orderNo = ids.length === 1 ? (data?.list.find((r) => r.id === ids[0])?.orderNo ?? '') : ''
     const ok = await confirm({
       destructive: true,
-      description: rows.length === 1
-        ? t('plugin_website.orders.deleteConfirm', { orderNo: rows[0].orderNo })
-        : t('plugin_website.orders.deleteBatchConfirm', { count: rows.length }),
+      description: orderNo
+        ? t('plugin_website.orders.deleteConfirm', { orderNo })
+        : t('plugin_website.orders.deleteBatchConfirm', { count: ids.length }),
     })
     if (!ok) return
     try {
-      await remove.mutateAsync(rows.map((r) => r.id))
-      setSelected([])
+      await remove.mutateAsync(ids)
+      setSelected((s) => s.filter((id) => !ids.includes(id)))
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
     }
   }
-
-  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<SiteOrder>[] = [
     {
@@ -220,7 +220,7 @@ export default function SiteOrdersPage() {
         selection={{ selected, onChange: setSelected }}
         batchActions={() => (
           <Can perm="website:order">
-            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selected)}>
               <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -228,7 +228,7 @@ export default function SiteOrdersPage() {
         )}
         rowActions={(row) => (
           <Can perm="website:order">
-            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
+            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
               <Trash2 className="size-4" aria-hidden="true" />
             </Button>
           </Can>

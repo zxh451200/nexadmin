@@ -81,6 +81,9 @@ type ItemForm struct {
 	Sort        int    `json:"sort"`
 	Enabled     bool   `json:"enabled"`
 	I18nJSON    string `json:"i18nJson"`
+	// Position 只在顶级项上有意义（header/footer）：子项跟随父级，服务层会覆盖。
+	// 空值按 header 处理，兼容老前端与直接调 API 的脚本。
+	Position string `json:"position"`
 }
 
 // NavOrderItem 是一条拖拽排序指令：把 ID 挂到 ParentID 下并写入 Sort。

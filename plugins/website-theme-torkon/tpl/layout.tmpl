@@ -108,7 +108,7 @@
 {{template "content" .}}
 </main>
 <footer class="tk-footer">
-  <div class="tk-wrap tk-footer-grid">
+  <div class="tk-wrap tk-footer-grid{{if .FooterNavs}} tk-footer-grid-nav{{end}}">
     <div class="tk-footer-brand">
       <a class="tk-brand" href="{{.Home}}">
         {{if .LogoURL}}<img class="tk-brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="tk-brand-text">{{initial .SiteName}}</span>{{end}}
@@ -120,6 +120,16 @@
       </ul>
       {{end}}
     </div>
+    {{if .FooterNavs}}
+    {{/* 页脚导航（后台「导航管理 → 页脚」）：顶级项 = 一列标题，子项 = 该列链接；
+         没配就回退内置的产品/资源两列。 */}}
+    {{range .FooterNavs}}
+    <nav class="tk-footer-col" aria-label="{{.Label}}">
+      <h4>{{.Label}}</h4>
+      {{range .Children}}<a href="{{$.URL .Href}}"{{if or (hasPrefix .Href "http") (hasPrefix .Href "mailto:")}} target="_blank" rel="noopener noreferrer nofollow"{{end}}>{{.Label}}</a>{{end}}
+    </nav>
+    {{end}}
+    {{else}}
     <nav class="tk-footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.URL "/products"}}">{{.T "theme.torkon.allProducts"}}</a>
@@ -129,6 +139,7 @@
       <h4>{{.T "layout.resources"}}</h4>
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
     </nav>
+    {{end}}
     {{end}}
     <nav class="tk-footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>
