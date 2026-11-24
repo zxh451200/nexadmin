@@ -1,31 +1,37 @@
 import { checkPerm } from '@/framework/auth/usePermission'
+import type { ActivePluginIds } from '@/framework/contributions'
 import { menuGroups } from './groups'
-import { mergeRoutes } from './merge'
+import { mergeRoutes, mergeSettings } from './merge'
 import { promoteLoneGroups } from './menu-shape'
-import type { MenuNode, ModuleRoute } from './types'
+import type { MenuNode, ModuleRoute, SettingsContribution } from './types'
 
 const modules = import.meta.glob<{ routes?: ModuleRoute[] }>(
   ['/src/framework/modules/*/route.tsx', '/src/plugins/*/route.tsx', '/src/pages/**/route.tsx'],
   { eager: true },
 )
 
-/** 所有已发现的路由（去重）：框架模块 → 插件 → 用户页面，同 path 后者覆盖前者（规则见 merge.ts）。
- *  用户在 web/src/pages 里声明与内置页面相同的 path 即可整页替换。 */
+/** 构建期合并全部贡献，插件冲突在这里暴露；运行时再按授权状态重新发现。 */
 export const allRoutes: ModuleRoute[] = mergeRoutes(modules)
+
+/** null = 插件状态未知，保留贡献；undefined = 尚未问到，先过滤插件贡献。 */
+export function discoverRoutes(active: ActivePluginIds = null): ModuleRoute[] {
+  return mergeRoutes(modules, active)
+}
+
+/** 设置分区与路由共用原始贡献，避免从已合并路由里反推插件归属。 */
+export function discoverSettings(active: ActivePluginIds, builtins: readonly SettingsContribution[]): SettingsContribution[] {
+  return mergeSettings(modules, active, builtins)
+}
 
 /** 按权限过滤出可访问的路由 */
 export function filterRoutes(perms: string[], routes: ModuleRoute[] = allRoutes) {
   return routes.filter((r) => checkPerm(perms, r.perm))
 }
 
-/** 插件未启用时其菜单项也不显示；active 为 null/undefined 表示未知（mock、旧后端），不拦 */
-function pluginUsable(route: ModuleRoute | undefined, active?: Set<string> | null): boolean {
-  return !route?.plugin || !active || active.has(route.plugin)
-}
-
 /** 生成菜单树：分组（按 groups 顺序）→ 菜单项（按 order）；空分组不出现 */
-export function buildMenuTree(perms: string[], routes: ModuleRoute[] = allRoutes, active?: Set<string> | null): MenuNode[] {
-  const visible = filterRoutes(perms, routes).filter((r) => !r.hidden && r.menu && pluginUsable(r, active))
+export function buildMenuTree(perms: string[], routes?: ModuleRoute[], active: ActivePluginIds = null): MenuNode[] {
+  const available = routes ?? discoverRoutes(active)
+  const visible = filterRoutes(perms, available).filter((r) => !r.hidden && r.menu)
   const tree: MenuNode[] = []
   for (const group of [...menuGroups].sort((a, b) => a.order - b.order)) {
     const items = visible
@@ -66,10 +72,10 @@ export interface ServerMenu {
 export function buildMenuFromServer(
   records: ServerMenu[],
   perms: string[],
-  routes: ModuleRoute[] = allRoutes,
-  active?: Set<string> | null,
+  routes?: ModuleRoute[],
+  active: ActivePluginIds = null,
 ): MenuNode[] {
-  const byPath = new Map(routes.map((r) => [r.path, r]))
+  const byPath = new Map((routes ?? discoverRoutes(active)).map((r) => [r.path, r]))
   // 外链菜单（如官网插件的「打开官网」）不经过前端路由：放行渲染，由 Sidebar 负责新标签页打开
   const visible = (m: ServerMenu) => m.type !== 'button' && !m.hidden && m.status !== '0' && checkPerm(perms, m.perm)
   const leaf = (m: ServerMenu): MenuNode | null => {
@@ -79,7 +85,7 @@ export function buildMenuFromServer(
       return { key: m.id, title: m.title, icon: m.icon, path: m.path ?? '/', external: true }
     }
     const route = byPath.get(p)
-    if (!route || !pluginUsable(route, active)) return null
+    if (!route) return null
     return { key: m.id, title: m.title, icon: m.icon, path: `/${p}` }
   }
   const tree: MenuNode[] = []

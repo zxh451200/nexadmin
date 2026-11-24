@@ -1,5 +1,6 @@
 import { checkPerm } from '@/framework/auth/usePermission'
-import { dropInactivePluginCards, mergeCards } from './merge-cards'
+import type { ActivePluginIds } from '@/framework/contributions'
+import { mergeCards } from './merge-cards'
 import type { DashboardCard } from './types'
 
 const modules = import.meta.glob<{ cards?: DashboardCard[] }>(
@@ -14,9 +15,8 @@ export const allCards: DashboardCard[] = mergeCards(modules)
  * 按「已启用插件」取卡片：
  * activeIds = null 问不到（mock / 旧后端）保持原样；undefined 还没问到，先不挂任何插件卡片。
  */
-export function discoverCards(activeIds: string[] | null | undefined): DashboardCard[] {
-  if (activeIds === null) return allCards
-  return mergeCards(dropInactivePluginCards(modules, activeIds ?? []))
+export function discoverCards(activeIds: ActivePluginIds): DashboardCard[] {
+  return mergeCards(modules, activeIds)
 }
 
 /** 按权限过滤；没有 perm 的卡片所有登录用户可见（判定方式与路由一致） */

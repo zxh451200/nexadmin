@@ -1,11 +1,16 @@
 import { useCallback } from 'react'
 import { useAuth } from './useAuth'
 
+function matchesPerm(owned: string, need: string): boolean {
+  if (owned === '*' || owned === need) return true
+  return owned.endsWith(':*') && need.startsWith(owned.slice(0, -1))
+}
+
 export function checkPerm(perms: string[], perm: string | string[] | undefined, mode: 'any' | 'all' = 'any') {
   if (!perm || (Array.isArray(perm) && perm.length === 0)) return true
-  if (perms.includes('*')) return true
   const list = Array.isArray(perm) ? perm : [perm]
-  return mode === 'all' ? list.every((p) => perms.includes(p)) : list.some((p) => perms.includes(p))
+  const matches = (need: string) => perms.some((owned) => matchesPerm(owned, need))
+  return mode === 'all' ? list.every(matches) : list.some(matches)
 }
 
 export function usePermission() {

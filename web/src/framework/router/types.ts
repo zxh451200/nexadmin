@@ -14,6 +14,13 @@ export interface SettingsSectionSpec {
   component: LazyExoticComponent<ComponentType> | ComponentType
 }
 
+export interface SettingsContribution extends Omit<SettingsSectionSpec, 'component'> {
+  perm?: string | string[]
+  requiresPlugin?: string
+  /** 内置分区由 SettingsPage 渲染；路由声明的分区提供独立组件。 */
+  component?: SettingsSectionSpec['component']
+}
+
 export interface ModuleRoute {
   path: string // 无前导斜杠，如 'system/user'
   component: LazyExoticComponent<ComponentType> | ComponentType
@@ -22,7 +29,9 @@ export interface ModuleRoute {
   // tenant_id，读也会把别的租户的记录带走），所以非平台调用方进来直接给解释页，
   // 而不是让页面发一串必然 403 的请求再弹错误信封。与 perm 是两条独立的判据，都要过。
   platform?: boolean
-  // 该页面所属插件 ID（由 route.tsx 所在目录推断，见 discover/merge）：插件未启用时守卫直接拦截，
+  // 显式依赖的插件 ID；pages 覆盖页可用它保留插件依赖。未声明时由贡献来源目录推断。
+  requiresPlugin?: string
+  // 该页面所属插件 ID（由 route.tsx 所在目录推断，见 contributions/discover）：插件未启用时守卫直接拦截，
   // 不再渲染页面（否则页面会发出一串必然 404 的插件接口请求）。
   plugin?: string
   hidden?: boolean // true 则不进菜单

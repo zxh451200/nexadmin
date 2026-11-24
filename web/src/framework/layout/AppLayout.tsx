@@ -151,10 +151,9 @@ export function AppLayout() {
   })
   // 插件失效（过期 / 吊销 / 未授权）时，它的菜单项也一并隐藏，不留点了就报错的入口
   const { data: activePlugins } = useActivePlugins()
-  const activeSet = useMemo(() => (activePlugins ? new Set(activePlugins) : null), [activePlugins])
   const menu = useMemo(
-    () => (serverMenu ? buildMenuFromServer(serverMenu, perms, undefined, activeSet) : isError ? buildMenuTree(perms, undefined, activeSet) : []),
-    [serverMenu, isError, perms, activeSet],
+    () => (serverMenu ? buildMenuFromServer(serverMenu, perms, undefined, activePlugins) : isError ? buildMenuTree(perms, undefined, activePlugins) : []),
+    [serverMenu, isError, perms, activePlugins],
   )
   const activeKey = resolveTab(menu, location.pathname).path
   // Logo 与面包屑「首页」的落点：菜单里第一个能进的页面（无权限进工作台时也能落到自己的首页）

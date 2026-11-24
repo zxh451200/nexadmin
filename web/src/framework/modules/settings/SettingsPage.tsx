@@ -5,8 +5,8 @@ import { useSearchParams } from 'react-router-dom'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { usePermission } from '@/framework/auth/usePermission'
 import { usePersistedSet } from '@/framework/hooks/use-persisted-set'
-import { allRoutes } from '@/framework/router/discover'
-import type { SettingsGroupKey } from '@/framework/router/types'
+import { discoverSettings } from '@/framework/router/discover'
+import type { SettingsContribution, SettingsGroupKey } from '@/framework/router/types'
 import { useActivePlugins } from '@/framework/modules/plugin/active'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Skeleton } from '@/framework/ui/skeleton'
@@ -36,34 +36,41 @@ const GROUPS: ReadonlyArray<{ key: SettingsGroupKey; items: ReadonlyArray<{ key:
   },
 ]
 
+const BUILTIN_SECTIONS: readonly SettingsContribution[] = GROUPS.flatMap((group) =>
+  group.items.map((item) => ({
+    ...item,
+    group: group.key,
+    title: `settings.tabs.${item.key}`,
+    order: 0,
+  })),
+)
+
 export default function SettingsPage() {
   const { t } = useTranslation()
   const { has } = usePermission()
   const { data, isLoading } = useSettings()
   const [params, setParams] = useSearchParams()
-  const { data: activePlugins } = useActivePlugins()
-  const activeSet = useMemo(() => (activePlugins ? new Set(activePlugins) : null), [activePlugins])
+  const { data: activePlugins, isPending } = useActivePlugins()
+  const activeIds = isPending ? undefined : (activePlugins ?? null)
+  const sections = useMemo(() => discoverSettings(activeIds, BUILTIN_SECTIONS), [activeIds])
 
   // 没有该分区权限的项直接不出现；深链指向无权分区时回退到第一个可见分区。
-  const groups = useMemo(() => {
-    // 路由声明的分区：插件未启用（授权失效 / 被停用）时不出现，旧后端问不到时保持原样。
-    const extra = allRoutes.filter((r) => r.settings && (!r.plugin || !activeSet || activeSet.has(r.plugin)))
-    return GROUPS.map((g) => ({
-      key: g.key,
-      items: [
-        ...g.items.map((it) => ({ key: it.key, title: `settings.tabs.${it.key}`, perm: it.perm, order: 0 })),
-        ...extra
-          .filter((r) => r.settings!.group === g.key)
-          .map((r) => ({ key: r.settings!.key, title: r.settings!.title, perm: r.perm, order: r.settings!.order ?? 100 }))
-          .sort((a, b) => a.order - b.order),
-      ].filter((it) => has(it.perm)),
-    })).filter((g) => g.items.length > 0)
-  }, [activeSet, has])
+  const groups = useMemo(
+    () =>
+      GROUPS.map((g) => ({
+        key: g.key,
+        items: sections
+          .filter((section) => section.group === g.key)
+          .sort((a, b) => (a.order ?? 100) - (b.order ?? 100))
+          .filter((section) => has(section.perm)),
+      })).filter((g) => g.items.length > 0),
+    [sections, has],
+  )
   const visible = groups.flatMap((g) => g.items.map((it) => it.key))
   const wanted = params.get('tab')
   const active = visible.find((k) => k === wanted) ?? visible[0] ?? 'site'
   const go = (k: string) => setParams({ tab: k }, { replace: true })
-  const Extra = allRoutes.find((r) => r.settings?.key === active)?.settings?.component
+  const Extra = sections.find((section) => section.key === active)?.component
 
   // 分组折叠：存的是「收起的组」，默认全展开，刷新后保持；
   // 点到某个分区时自动展开它所在的分组（并写回记忆），收起的操作留给用户自己撤销。

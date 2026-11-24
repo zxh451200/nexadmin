@@ -11,7 +11,7 @@ import PlatformOnlyPage from '@/framework/pages/PlatformOnlyPage'
 import PluginInactivePage from '@/framework/pages/PluginInactivePage'
 import { PageLoading } from '@/framework/components/PageLoading'
 import { useActivePlugins } from '@/framework/modules/plugin/active'
-import { allRoutes, buildMenuTree } from './discover'
+import { buildMenuTree, discoverRoutes } from './discover'
 import type { ModuleRoute } from './types'
 
 // SSO 授权确认页：无布局的全屏页；未登录由 RequireAuth 跳登录页并带回跳地址
@@ -24,6 +24,7 @@ function Guarded({ route }: { route: ModuleRoute }) {
   const perms = useAuth((s) => s.perms)
   const platform = useAuth((s) => s.user?.platform)
   const active = useActivePlugins()
+  const plugin = route.requiresPlugin ?? route.plugin
   if (!checkPerm(perms, route.perm)) return <ForbiddenPage />
   // 平台级插件（表里没有 tenant_id，读也会把别的租户的记录带走）：后端整组挂了
   // RequirePlatformFeature，这里只负责不让人撞一串 403。判据只认服务端明确说了 false——
@@ -31,9 +32,9 @@ function Guarded({ route }: { route: ModuleRoute }) {
   if (route.platform && platform === false) return <PlatformOnlyPage />
   // 插件页：先确认插件已启用，再渲染页面本身（否则未启用插件的页面会发出一串必然 404 的请求）。
   // active.data 为 null 表示问不到（mock / 旧后端 / 网络错误），按未知处理，不拦。
-  if (route.plugin) {
+  if (plugin) {
     if (active.isPending) return <PageLoading />
-    if (active.data && !active.data.includes(route.plugin)) return <PluginInactivePage />
+    if (active.data && !active.data.includes(plugin)) return <PluginInactivePage />
   }
   const Component = route.component
   return (
@@ -45,11 +46,16 @@ function Guarded({ route }: { route: ModuleRoute }) {
 
 function HomeRedirect() {
   const perms = useAuth((s) => s.perms)
-  const first = useMemo(() => buildMenuTree(perms)[0]?.children?.[0]?.path, [perms])
+  const active = useActivePlugins()
+  const activeIds = active.isPending ? undefined : (active.data ?? null)
+  const first = useMemo(() => buildMenuTree(perms, undefined, activeIds)[0]?.children?.[0]?.path, [perms, activeIds])
   return first ? <Navigate to={first} replace /> : <ForbiddenPage />
 }
 
 export function AppRoutes() {
+  const active = useActivePlugins()
+  const activeIds = active.isPending ? undefined : (active.data ?? null)
+  const routes = useMemo(() => discoverRoutes(activeIds), [activeIds])
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -84,7 +90,7 @@ export function AppRoutes() {
         }
       />
       {/* fullscreen 路由：有鉴权但无布局壳（数据大屏 / 三维场景等沉浸页面），先于布局分支注册 */}
-      {allRoutes
+      {routes
         .filter((r) => r.fullscreen)
         .map((r) => (
           <Route
@@ -105,7 +111,7 @@ export function AppRoutes() {
         }
       >
         <Route index element={<HomeRedirect />} />
-        {allRoutes
+        {routes
           .filter((r) => !r.fullscreen)
           .map((r) => (
             <Route key={r.path} path={r.path} element={<Guarded route={r} />} />

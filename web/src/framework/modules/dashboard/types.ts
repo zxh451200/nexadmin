@@ -11,6 +11,8 @@ export interface DashboardCard {
   title: string
   /** 权限码；不填则所有登录用户可见 */
   perm?: string
+  /** 显式依赖插件；未声明时由 cards.tsx 所在插件目录推断。 */
+  requiresPlugin?: string
   size: DashboardCardSize
   /** 默认顺序，小的在前；不填排在有值的后面 */
   order?: number
