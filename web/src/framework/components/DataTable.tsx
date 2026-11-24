@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, Info, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useCompactLayout } from './table/use-compact-layout'
 import { useOverflowX } from './table/use-overflow-x'
+import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/framework/ui/table'
 import { cn } from '@/lib/utils'
 import { EmptyState } from './EmptyState'
+import { ListErrorBanner } from './ListErrorBanner'
 import { BatchBar } from './table/BatchBar'
 import { ColumnSettings } from './table/ColumnSettings'
 import { MobileCardContent } from './table/MobileCard'
@@ -29,12 +31,24 @@ export interface DataTableProps<T> {
   rowKey: keyof T | ((row: T) => string)
   loading?: boolean
   pagination?: PaginationProps | false
+  /** 不分页列表的命中总数；不传则不凭空推断 data.length */
+  total?: number
+  /** 当前是否应用了筛选条件，用于区分真空态与筛选零命中 */
+  hasFilters?: boolean
+  filteredEmptyText?: ReactNode
+  isError?: boolean
+  onRetry?: () => void
+  retrying?: boolean
   selection?: { selected: string[]; onChange: (selected: string[]) => void }
   /** 选中行后显示的批量操作；函数形式可拿到已选 id */
   batchActions?: ReactNode | ((selected: string[]) => ReactNode)
   rowActions?: (row: T) => ReactNode
-  /** 拖动排序；与 pagination 同时开启时忽略拖动并 console.warn */
-  sortable?: { onReorder: (orderedIds: string[]) => void | Promise<unknown> }
+  /** 拖动排序；disabled 时保留调用方意图并展示原因，与 pagination 同时开启时忽略拖动 */
+  sortable?: {
+    onReorder: (orderedIds: string[]) => void | Promise<unknown>
+    disabled?: boolean
+    disabledReason?: ReactNode
+  }
   /**
    * 服务端排序（受控）：给了它，声明了 sortKey 的列会把表头变成可点按钮，点了就在升/降之间切。
    * 排序值由调用方持有并回填（一般同时也喂给工具条的下拉），这里只负责交互与状态指示，
@@ -87,6 +101,12 @@ export function DataTable<T>({
   rowKey,
   loading,
   pagination,
+  total,
+  hasFilters,
+  filteredEmptyText,
+  isError,
+  onRetry,
+  retrying,
   selection,
   batchActions,
   rowActions,
@@ -112,9 +132,9 @@ export function DataTable<T>({
     [rowKey],
   )
 
-  const sortEnabled = !!sortable && !pagination
+  const sortEnabled = !!sortable?.onReorder && !sortable.disabled && !pagination
   useEffect(() => {
-    if (sortable && pagination) {
+    if (sortable?.onReorder && pagination) {
       console.warn('[DataTable] `sortable` and `pagination` cannot be used together; drag sorting is disabled.')
     }
   }, [sortable, pagination])
@@ -131,10 +151,10 @@ export function DataTable<T>({
   const { page: pagPage, pageSize: pagSize, total: pagTotal } = pag ?? { page: 1, pageSize: 0, total: 0 }
   const onPagChange = pag?.onChange
   useEffect(() => {
-    if (loading || rows.length > 0 || pagTotal === 0 || pagPage <= 1) return
+    if (loading || isError || rows.length > 0 || pagTotal === 0 || pagPage <= 1) return
     onPagChange?.(pagPage - 1, pagSize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, rows.length, pagPage, pagSize, pagTotal])
+  }, [loading, isError, rows.length, pagPage, pagSize, pagTotal])
 
   // 浮层内容：起拖时取该行第一列的单元格，宽度取被拖行的实际宽度
   const [dragChip, setDragChip] = useState<{ label: ReactNode; width: number } | null>(null)
@@ -168,7 +188,7 @@ export function DataTable<T>({
 
   const onDragEnd = async (e: DragEndEvent) => {
     setDragChip(null)
-    if (!sortable || !e.over || e.active.id === e.over.id) return
+    if (!sortEnabled || !sortable || !e.over || e.active.id === e.over.id) return
     const from = ids.indexOf(String(e.active.id))
     const to = ids.indexOf(String(e.over.id))
     if (from < 0 || to < 0) return
@@ -211,7 +231,27 @@ export function DataTable<T>({
   const { ref: scrollRef, overflowing } = useOverflowX<HTMLDivElement>()
   const pinActions = overflowing && !!rowActions
   const empty = !loading && rows.length === 0
-  const emptyNode = <EmptyState title={emptyText} />
+  const failedEmpty = !!isError && empty
+  const staleError = !!isError && !loading && rows.length > 0
+  const sortNotice = !!sortable?.disabled && !!sortable.disabledReason && !loading && rows.length > 0
+  const emptyNode = failedEmpty ? (
+    <EmptyState
+      title={t('common.loadFailed')}
+      action={
+        onRetry ? (
+          <Button type="button" variant="outline" disabled={retrying} onClick={onRetry}>
+            {retrying ? <Loader2 className="me-1 size-4 animate-spin" aria-hidden="true" /> : null}
+            {t('common.retry')}
+          </Button>
+        ) : null
+      }
+    />
+  ) : (
+    <EmptyState
+      title={hasFilters ? filteredEmptyText ?? t('common.emptyFiltered') : emptyText}
+      description={hasFilters ? t('common.emptyFilteredHint') : undefined}
+    />
+  )
 
   // 列显示设置：统一放在表格上方工具栏右端，和 TreeTable 一致
   const settingsNode = columnSettingsKey && !isMobile ? <ColumnSettings columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} /> : null
@@ -465,6 +505,15 @@ export function DataTable<T>({
         </div>
       ) : null}
 
+      {sortNotice ? (
+        <div role="status" className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{sortable?.disabledReason}</span>
+        </div>
+      ) : null}
+
+      {staleError && onRetry ? <ListErrorBanner onRetry={onRetry} retrying={retrying} /> : null}
+
       {sortEnabled ? (
         <DndContext
           sensors={sensors}
@@ -491,7 +540,17 @@ export function DataTable<T>({
         list
       )}
 
-      {pagination && pagination.total > 0 ? <TablePagination {...pagination} /> : null}
+      {!failedEmpty ? (
+        pagination ? (
+          pagination.total > 0 ? (
+            <TablePagination {...pagination} />
+          ) : (
+            <div className="num text-end text-sm text-muted-foreground">{t('dataTable.totalCount', { count: 0 })}</div>
+          )
+        ) : total !== undefined ? (
+          <div className="num text-end text-sm text-muted-foreground">{t('dataTable.totalCount', { count: total })}</div>
+        ) : null
+      ) : null}
 
       {selection && selected.length > 0 ? (
         <BatchBar count={selected.length} onClear={() => selection.onChange([])} mode={batchBarPlacement === 'root' ? 'sticky' : 'viewport'}>

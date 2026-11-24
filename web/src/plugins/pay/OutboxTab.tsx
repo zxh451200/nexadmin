@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -24,7 +25,7 @@ import {
   type PayOutboxEvent,
 } from './api'
 import { formatTime } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
+import { ListErrorBanner } from '@/framework/components/ListErrorBanner'
 
 const ALL = '__all'
 const STATUSES = ['pending', 'sent', 'dead', 'discarded'] as const
@@ -61,7 +62,7 @@ export function OutboxTab() {
   const [detail, setDetail] = useState<PayOutboxEvent | null>(null)
   const [discarding, setDiscarding] = useState<PayOutboxEvent | null>(null)
 
-  const { data, isLoading, isError, refetch } = useOutboxEvents({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isFetching, isError, refetch } = useOutboxEvents({ ...filters, page, pageSize, sort, desc })
   const { data: counts } = useOutboxCounts()
   const retry = useRetryOutbox()
 
@@ -136,7 +137,6 @@ export function OutboxTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <div className="flex flex-col gap-2">
         <p className="text-xs text-muted-foreground">{t('plugin_pay.outbox.description')}</p>
         <div className="flex flex-wrap items-center gap-2">
@@ -188,6 +188,10 @@ export function OutboxTab() {
         data={data?.list ?? []}
         rowKey="eventId"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         columnSettingsKey="plugin-pay-outbox"
         pagination={{
           page,
@@ -239,7 +243,7 @@ function DetailField({ label, value }: { label: string; value?: string }) {
 function OutboxDetailDialog({ row, onClose }: { row: PayOutboxEvent; onClose: () => void }) {
   const { t, i18n } = useTranslation()
   // 列表不带载荷：详情按 eventId 现取一次（契约第 4 条）。
-  const { data, isLoading } = useOutboxEvent(row.eventId)
+  const { data, isLoading, isFetching, isError, refetch } = useOutboxEvent(row.eventId)
   const detail = data ?? row
   const payload = prettyPayload(detail.payload)
   const time = (v?: string | null) => (v ? formatTime(v, i18n.language) : '-')
@@ -267,6 +271,7 @@ function OutboxDetailDialog({ row, onClose }: { row: PayOutboxEvent; onClose: ()
           </span>
         </div>
         {isLoading ? <p className="text-xs text-muted-foreground">{t('common.loading')}</p> : null}
+        {isError ? <ListErrorBanner onRetry={() => void refetch()} retrying={isFetching} /> : null}
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <DetailField label={t('plugin_pay.outbox.eventId')} value={detail.eventId} />
           <DetailField label={t('plugin_pay.fields.createdAt')} value={time(detail.createdAt)} />
@@ -277,14 +282,14 @@ function OutboxDetailDialog({ row, onClose }: { row: PayOutboxEvent; onClose: ()
         </dl>
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{t('plugin_pay.outbox.payload')}</p>
-          {payload ? (
+          {payload && !isError ? (
             <pre className="mt-1 max-h-80 max-w-full overflow-auto rounded-md bg-muted p-2 text-xs wrap-break-word whitespace-pre-wrap">{payload}</pre>
-          ) : (
+          ) : !isError ? (
             <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Inbox aria-hidden="true" className="h-3.5 w-3.5" />
               {t('plugin_pay.outbox.payloadEmpty')}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </ResponsiveDialog>

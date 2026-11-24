@@ -15,6 +15,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -95,7 +96,7 @@ export default function LoginLogPage() {
   const [desc, setDesc] = useState(true)
   const { start: startExportJob } = useAsyncJob()
 
-  const { data, isLoading } = useLoginLogList({ page, pageSize, sort, desc, ...toQuery(applied) })
+  const { data, isLoading, isError, isFetching, refetch } = useLoginLogList({ page, pageSize, sort, desc, ...toQuery(applied) })
   const del = useDeleteLoginLogs()
   const clean = useCleanLoginLogs()
   const [cleanOpen, setCleanOpen] = useState(false)
@@ -251,6 +252,10 @@ export default function LoginLogPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(toQuery(applied))}
         columnSettingsKey="loginLog"
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (

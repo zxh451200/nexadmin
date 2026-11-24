@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import {
   LocaleFormActions,
   LocaleFormProvider,
@@ -272,7 +273,7 @@ export default function FaqPage() {
   const [draft, setDraft] = useState<{ keyword?: string; enabled?: string }>({})
   const [filters, setFilters] = useState<{ keyword?: string; enabled?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
-  const { data, isLoading } = useFaqs({
+  const { data, isLoading, isError, refetch, isFetching } = useFaqs({
     page,
     pageSize: 200,
     keyword: filters.keyword || undefined,
@@ -424,6 +425,11 @@ export default function FaqPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword: filters.keyword, enabled: filters.enabled })}
+        total={data?.total}
         columnSettingsKey="website-faqs"
         sortable={canDrag ? { onReorder } : undefined}
         pagination={false}

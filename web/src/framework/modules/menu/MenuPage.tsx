@@ -28,7 +28,7 @@ export default function MenuPage() {
   // 删除还会级联清掉别的租户角色上的菜单绑定，所以连拖拽排序一起收。
   const { has, isPlatform } = usePermission()
   const confirm = useConfirm()
-  const { data = [], isLoading } = useMenuTree()
+  const { data = [], isLoading, isError, refetch, isFetching } = useMenuTree()
   const del = useDeleteMenu()
   const delBatch = useDeleteMenus()
   const sort = useSortMenus()
@@ -142,6 +142,11 @@ export default function MenuPage() {
         columns={columns}
         data={shown}
         loading={isLoading}
+        hasFilters={filter.active}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        reorderDisabledReason={has('menu:update') && isPlatform && filter.active ? t('common.reorderFilteredDisabled') : undefined}
         emptyText={t('common.empty')}
         columnSettingsKey="sysMenu"
         forceExpandAll={filter.active}

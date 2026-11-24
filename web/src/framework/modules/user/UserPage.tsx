@@ -10,6 +10,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Avatar, AvatarFallback, AvatarImage } from '@/framework/ui/avatar'
@@ -53,7 +54,8 @@ export default function UserPage() {
   const [importOpen, setImportOpen] = useState(false)
   const { start: startExportJob } = useAsyncJob()
 
-  const list = useUserList({ page, pageSize, sort, desc, ...toUserQuery(applied) })
+  const userQuery = toUserQuery(applied)
+  const list = useUserList({ page, pageSize, sort, desc, ...userQuery })
   const del = useDeleteUsers()
   const setStatus = useUpdateUserStatus()
   const batch = useBatchUserStatus()
@@ -153,7 +155,7 @@ export default function UserPage() {
       // 角色多时只露前两枚、其余收进「+N」：行高不随角色数乱涨，全量名单悬停可看
       render: (u) =>
         u.roleNames.length ? (
-          <div className="flex max-w-56 flex-wrap gap-1" title={u.roleNames.join('、')}>
+          <div className="flex max-w-56 flex-wrap gap-1" title={u.roleNames.join(t('common.listSeparator'))}>
             {u.roleNames.slice(0, 2).map((r) => (
               <Badge key={r} variant="outline">
                 {r}
@@ -261,6 +263,10 @@ export default function UserPage() {
         data={list.data?.list ?? []}
         rowKey="id"
         loading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        retrying={list.isFetching}
+        hasFilters={hasActiveFilterValues({ ...userQuery })}
         columnSettingsKey="user-list"
         sort={{
           key: sort,

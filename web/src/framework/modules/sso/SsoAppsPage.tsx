@@ -24,7 +24,7 @@ export function SsoSection() {
   const confirm = useConfirm()
   const { has } = usePermission()
   const canEdit = has('sso:edit')
-  const { data, isLoading } = useSsoApps()
+  const { data, isLoading, isError, isFetching, refetch } = useSsoApps()
   const setEnabled = useSetSsoAppEnabled()
   const remove = useDeleteSsoApp()
   const removeBatch = useDeleteSsoApps()
@@ -126,7 +126,7 @@ export function SsoSection() {
         // 角色多时收进「+N」；角色被删时兜底是原始 id——截断显示，悬停看全量
         const names = a.roleIds.map((id) => roleName.get(id) ?? `${id.slice(0, 8)}…`)
         return (
-          <div className="flex max-w-56 flex-wrap gap-1" title={names.join('、')}>
+          <div className="flex max-w-56 flex-wrap gap-1" title={names.join(t('common.listSeparator'))}>
             {names.slice(0, 2).map((n, i) => (
               <Badge key={a.roleIds[i]} variant="secondary">
                 {n}
@@ -185,6 +185,10 @@ export function SsoSection() {
         data={data ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        total={(data ?? []).length}
         pagination={false}
         emptyText={t('sso.empty')}
         selection={{ selected, onChange: setSelected }}

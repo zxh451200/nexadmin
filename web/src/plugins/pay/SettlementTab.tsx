@@ -35,7 +35,7 @@ import {
 import { CapabilityNote } from './CapabilityControls'
 import { capabilitiesOfChannel, supportsAction, useCapabilityIndex, useChannelDirectory } from './capabilities'
 import { formatBp, formatMoney, formatTime } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
+import { ListErrorBanner } from '@/framework/components/ListErrorBanner'
 
 const ALL = '__all'
 type View = 'settlements' | 'rules' | 'payouts'
@@ -67,7 +67,7 @@ function RulesPanel() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<PayCommissionRule | null>(null)
-  const { data = [], isLoading, isError, refetch } = useCommissionRules()
+  const { data = [], isLoading, isFetching, isError, refetch } = useCommissionRules()
 
   const columns: Column<PayCommissionRule>[] = [
     { key: 'subjectId', title: t('plugin_pay.fields.subject'), mobile: 'title', render: (r) => r.subjectId || t('plugin_pay.settle.defaultSubject') },
@@ -84,12 +84,14 @@ function RulesPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <DataTable
         columns={columns}
         data={data}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         columnSettingsKey="plugin-pay-commission-rules"
         emptyText={t('plugin_pay.empty')}
         toolbar={
@@ -233,7 +235,7 @@ function SettlementsPanel() {
   const confirm = useConfirm()
   const [status, setStatus] = useState<string | undefined>(undefined)
   const [generateOpen, setGenerateOpen] = useState(false)
-  const { data = [], isLoading, isError, refetch } = useSettlements({ status })
+  const { data = [], isLoading, isFetching, isError, refetch } = useSettlements({ status })
   const confirmSettlement = useConfirmSettlement()
 
   const onConfirm = async (s: PaySettlement) => {
@@ -276,7 +278,6 @@ function SettlementsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={status ?? ALL} onValueChange={(v) => setStatus(v === ALL ? undefined : v)}>
           <SelectTrigger className="w-40" aria-label={t('plugin_pay.fields.status')}>
@@ -297,6 +298,10 @@ function SettlementsPanel() {
         data={data}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={!!status}
         columnSettingsKey="plugin-pay-settlements"
         emptyText={t('plugin_pay.empty')}
         toolbar={
@@ -406,7 +411,7 @@ function PayoutsPanel() {
   const [channelPaying, setChannelPaying] = useState<PayPayoutBatch | null>(null)
   // 代付批次必须能下钻到「哪几笔失败、为什么失败」，partial 不是终点
   const [itemsOf, setItemsOf] = useState<PayPayoutBatch | null>(null)
-  const { data = [], isLoading, isError, refetch } = usePayouts({ status })
+  const { data = [], isLoading, isFetching, isError, refetch } = usePayouts({ status })
   const index = useCapabilityIndex()
   const { channels, providerOf } = useChannelDirectory()
   // 支持代付的渠道实例：一个都没有时按钮置灰并在面板里说明原因（后端也会拒）
@@ -454,7 +459,6 @@ function PayoutsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={status ?? ALL} onValueChange={(v) => setStatus(v === ALL ? undefined : v)}>
           <SelectTrigger className="w-40" aria-label={t('plugin_pay.fields.status')}>
@@ -481,6 +485,10 @@ function PayoutsPanel() {
         data={data}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={!!status}
         columnSettingsKey="plugin-pay-payouts"
         emptyText={t('plugin_pay.empty')}
         toolbar={
@@ -533,7 +541,7 @@ function PayoutsPanel() {
 /** 逐笔代付结论（契约第 10 条）：批次 partial/failed 时下钻到具体是哪几笔、为什么失败。 */
 function PayoutItemsDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose: () => void }) {
   const { t } = useTranslation()
-  const { data = [], isLoading, isError, refetch } = usePayoutItems(batch.id)
+  const { data = [], isLoading, isFetching, isError, refetch } = usePayoutItems(batch.id)
 
   const variant = (s: string): 'success' | 'destructive' | 'info' | 'warning' =>
     s === 'success' ? 'success' : s === 'failed' ? 'destructive' : s === 'initiated' ? 'warning' : 'info'
@@ -552,9 +560,9 @@ function PayoutItemsDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose:
     >
       <div className="flex flex-col gap-2">
         <p className="text-xs text-muted-foreground">{t('plugin_pay.settle.payoutItemsHint')}</p>
-        {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
+        {isError ? <ListErrorBanner onRetry={() => void refetch()} retrying={isFetching} /> : null}
         {isLoading ? <p className="text-xs text-muted-foreground">{t('common.loading')}</p> : null}
-        {!isLoading && data.length === 0 ? <p className="text-xs text-muted-foreground">{t('plugin_pay.empty')}</p> : null}
+        {!isLoading && !isError && data.length === 0 ? <p className="text-xs text-muted-foreground">{t('plugin_pay.empty')}</p> : null}
         <ul className="flex flex-col gap-2">
           {data.map((it) => (
             <li key={it.id} className="flex flex-col gap-1 rounded-lg border border-border p-2 text-xs">
@@ -669,7 +677,7 @@ function ChannelPayDialog({
 
 function CreatePayoutDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation()
-  const { data = [], isLoading } = useSettlements({ status: 'confirmed' })
+  const { data = [], isLoading, isFetching, isError, refetch } = useSettlements({ status: 'confirmed' })
   const create = useCreatePayout()
   const [selected, setSelected] = useState<string[]>([])
   const [method, setMethod] = useState('')
@@ -717,8 +725,9 @@ function CreatePayoutDialog({ onClose }: { onClose: () => void }) {
         <p className="text-xs text-muted-foreground">
           <RequiredMark /> {t('plugin_pay.settle.pickSettlementHint')}
         </p>
+        {isError ? <ListErrorBanner onRetry={() => void refetch()} retrying={isFetching} /> : null}
         {isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
-        {!isLoading && data.length === 0 ? <p className="text-muted-foreground">{t('plugin_pay.settle.noConfirmed')}</p> : null}
+        {!isLoading && !isError && data.length === 0 ? <p className="text-muted-foreground">{t('plugin_pay.settle.noConfirmed')}</p> : null}
         <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
           {data.map((s) => (
             <label key={s.id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">

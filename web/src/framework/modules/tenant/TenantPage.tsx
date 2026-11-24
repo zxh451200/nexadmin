@@ -22,6 +22,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { api } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
@@ -112,7 +113,7 @@ export default function TenantPage() {
   const [renewing, setRenewing] = useState<TenantRow | null>(null)
   const [renewDate, setRenewDate] = useState('')
 
-  const { data, isLoading } = useTenants({
+  const { data, isLoading, isError, isFetching, refetch } = useTenants({
     page,
     pageSize,
     keyword: filters.keyword || undefined,
@@ -332,6 +333,10 @@ export default function TenantPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         columnSettingsKey="tenant"
         pagination={{
           page,

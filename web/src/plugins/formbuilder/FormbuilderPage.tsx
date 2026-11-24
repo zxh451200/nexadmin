@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -56,7 +57,7 @@ export default function FormbuilderPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
 
-  const { data, isLoading } = useForms({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useForms({ ...filters, page, pageSize, sort, desc })
   const copy = useCopyForm()
   const remove = useDeleteForm()
   const removeBatch = useDeleteForms()
@@ -205,6 +206,10 @@ export default function FormbuilderPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={sortProp}
         columnSettingsKey="plugin-formbuilder-forms"
         pagination={{

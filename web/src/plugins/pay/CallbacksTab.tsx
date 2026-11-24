@@ -6,6 +6,7 @@ import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
@@ -17,7 +18,6 @@ import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { callbackReplayable, useCallbacks, useChannels, useReplayCallback, type CallbackQuery, type PayCallback } from './api'
 import { formatTime } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
 
@@ -57,7 +57,7 @@ export function CallbacksTab() {
   const [detail, setDetail] = useState<PayCallback | null>(null)
   const replay = useReplayCallback()
 
-  const { data, isLoading, isError, refetch } = useCallbacks({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isFetching, isError, refetch } = useCallbacks({ ...filters, page, pageSize, sort, desc })
   const { data: channels = [] } = useChannels()
   // 渠道列显示实例名（表头「渠道实例」），code 只在找不到实例时兜底——运营看得懂名称看不懂 code
   const channelName = useMemo(() => new Map(channels.map((c) => [c.code, c.name])), [channels])
@@ -147,7 +147,6 @@ export function CallbacksTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -208,6 +207,10 @@ export function CallbacksTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         sort={sortProp}
         columnSettingsKey="plugin-pay-callbacks"
         pagination={{

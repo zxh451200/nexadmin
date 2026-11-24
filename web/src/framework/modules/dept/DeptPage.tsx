@@ -28,7 +28,7 @@ export default function DeptPage() {
   const wanted = params.get('tab') === 'post' ? 'post' : 'dept'
   const tab = wanted === 'dept' && !canDept ? 'post' : wanted
   const setTab = (v: string) => setParams(v === 'post' ? { tab: 'post' } : {}, { replace: true })
-  const { data = [], isLoading } = useDeptTree(canDept)
+  const { data = [], isLoading, isError, refetch, isFetching } = useDeptTree(canDept)
   // 被数据范围裁剪的树只含部分同级，整体排序会得到 409，裁剪时不提供拖动（排序与移动都不给）
   const trimmed = useMemo(() => isTrimmed(data), [data])
   const del = useDeleteDept()
@@ -137,6 +137,11 @@ export default function DeptPage() {
         columns={columns}
         data={shown}
         loading={isLoading}
+        hasFilters={filter.active}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        reorderDisabledReason={has('dept:update') && filter.active ? t('common.reorderFilteredDisabled') : undefined}
         defaultExpandAll
         forceExpandAll={filter.active}
         emptyText={t('common.empty')}

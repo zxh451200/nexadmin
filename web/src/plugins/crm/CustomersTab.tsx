@@ -12,6 +12,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FieldHint } from '@/framework/components/FieldHint'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormSection } from '@/framework/components/FormLayout'
@@ -753,7 +754,7 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
                 {preview.newTags.length ? (
                   <p>
                     <span className="text-muted-foreground">{t('plugin_crm.customer.merge.tagsTitle')}：</span>
-                    {preview.newTags.join('、')}
+                    {preview.newTags.join(t('common.listSeparator'))}
                   </p>
                 ) : null}
                 {preview.newCustomFields.length ? (
@@ -1014,7 +1015,7 @@ export function CustomersTab() {
     }
   }
 
-  const { data: owned, isLoading: ownedLoading } = useCustomers({
+  const owned = useCustomers({
     ...filters,
     mine: ownerFilter === MINE,
     page,
@@ -1024,7 +1025,7 @@ export function CustomersTab() {
   })
   // 公海列表的筛选口径与客户列表一致（后端 ListPool 复用 applyCustomerFilter + orderOf）：
   // 这里少传一个条件，用户就会看到「更多筛选」角标亮着、结果却按未筛选返回。
-  const { data: pool, isLoading: poolLoading } = useCustomerPool({
+  const poolQuery = useCustomerPool({
     ...filters,
     page,
     pageSize,
@@ -1034,8 +1035,9 @@ export function CustomersTab() {
   const inPool = ownerFilter === POOL
   // 「更多筛选」上的数字：收起时也能看出低频条件里还有生效项，避免以为筛选被重置了。
   const moreActive = [draft.source, draft.level, draft.tag, draft.createdFrom, draft.createdTo].filter((v) => (Array.isArray(v) ? v.length : v)).length
-  const data = inPool ? pool : owned
-  const isLoading = inPool ? poolLoading : ownedLoading
+  const activeQuery = inPool ? poolQuery : owned
+  const data = activeQuery.data
+  const isLoading = activeQuery.isLoading
   const remove = useDeleteCustomer()
   const removeBatch = useDeleteCustomers()
   const claim = useClaimCustomer()
@@ -1127,7 +1129,7 @@ export function CustomersTab() {
         ...rows.map((cu) => [
           cu.name, t(`plugin_crm.type.${cu.type ?? 'person'}`), cu.code ?? '',
           cu.level ?? '', cu.type === 'company' ? (cu.taxNo ?? '') : (cu.idNo ?? ''), cu.phone ?? '',
-          cu.email ?? '', cu.country ?? '', cu.nationality ?? '', (cu.tags ?? []).join('、'),
+          cu.email ?? '', cu.country ?? '', cu.nationality ?? '', (cu.tags ?? []).join(t('common.listSeparator')),
           cu.owner ?? '', t(`plugin_crm.status.${cu.status}`),
           cu.externalSource ? `${cu.externalSource}/${cu.externalNo ?? ''}` : '',
           ...extraFields.map((f) => customValue(cu, f)),
@@ -1180,7 +1182,7 @@ export function CustomersTab() {
           </div>
           {(cu.tags?.length ?? 0) > 0 ? (
             // 标签挂在名字副行而不是独立一列：标签数不定，一列会被撑得忽宽忽窄
-            <div className="mt-0.5 flex flex-wrap gap-1" title={cu.tags!.join('、')}>
+            <div className="mt-0.5 flex flex-wrap gap-1" title={cu.tags!.join(t('common.listSeparator'))}>
               {cu.tags!.slice(0, 3).map((tag) => (
                 <Badge key={tag} variant="secondary" className="px-1.5 py-0 text-[10px]">
                   {tag}
@@ -1419,6 +1421,10 @@ export function CustomersTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={activeQuery.isError}
+        onRetry={() => void activeQuery.refetch()}
+        retrying={activeQuery.isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters, owner: ownerFilter === ALL ? undefined : ownerFilter })}
         sort={
           // 公海走独立接口（不支持排序参数），切到公海时表头退回纯展示
           inPool

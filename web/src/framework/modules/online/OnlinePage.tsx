@@ -9,6 +9,7 @@ import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { fmtDateTime } from '../oper-log/format'
@@ -22,7 +23,7 @@ export default function OnlinePage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
-  const { data, isLoading, isFetching, refetch } = useOnlineList({ page, pageSize, keyword: keyword || undefined })
+  const { data, isLoading, isFetching, isError, refetch } = useOnlineList({ page, pageSize, keyword: keyword || undefined })
   const force = useForceLogout()
 
   const onForce = async (row: OnlineUser) => {
@@ -85,6 +86,10 @@ export default function OnlinePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword })}
         columnSettingsKey="online"
         rowActions={(row) => (
           <Can perm="online:forceLogout">

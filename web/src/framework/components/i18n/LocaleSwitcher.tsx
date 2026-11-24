@@ -122,7 +122,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
                   <span className="truncate">{l.label}</span>
                   {blocked ? (
                     <span className="ms-auto max-w-36 truncate text-[10px] text-muted-foreground">
-                      {t('localeForm.publishMissing', { fields: missing.map(fieldLabel).join('、') })}
+                      {t('localeForm.publishMissing', { fields: missing.map(fieldLabel).join(t('common.listSeparator')) })}
                     </span>
                   ) : null}
                 </DropdownMenuCheckboxItem>

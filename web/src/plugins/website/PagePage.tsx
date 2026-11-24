@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -231,7 +232,7 @@ export default function PagePage() {
   // 表头排序：与筛选分开存；默认「排序权重优先、同权重最近更新在前」（与后端回退一致）
   const { sort, desc, sortProp } = useHeaderSort('sort', false, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
-  const { data, isLoading } = usePages({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = usePages({ ...filters, page, pageSize, sort, desc })
   const remove = useDeletePage()
   const removeBatch = useDeletePages()
   const setStatus = useSetPagesStatus()
@@ -370,6 +371,10 @@ export default function PagePage() {
         rowKey="id"
         sort={sortProp}
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         columnSettingsKey="plugin-website-pages"
         pagination={{
           page,

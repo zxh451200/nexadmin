@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -34,7 +35,7 @@ import {
   useChannelDirectory,
 } from './capabilities'
 import { formatAmount, formatTime } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
+import { ListErrorBanner } from '@/framework/components/ListErrorBanner'
 
 const ALL = '__all'
 const STATUSES = ['open', 'closed'] as const
@@ -52,7 +53,7 @@ export function ReconciliationTab() {
   const [runOpen, setRunOpen] = useState(false)
   const [detail, setDetail] = useState<PayReconcileTask | null>(null)
 
-  const { data = [], isLoading, isError, refetch } = useReconcileTasks(filters)
+  const { data = [], isLoading, isFetching, isError, refetch } = useReconcileTasks(filters)
   const { channels } = useChannelDirectory()
 
   const columns: Column<PayReconcileTask>[] = [
@@ -110,7 +111,6 @@ export function ReconciliationTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => setFilters(draft)}
         onReset={() => {
@@ -157,6 +157,10 @@ export function ReconciliationTab() {
         data={data}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         columnSettingsKey="plugin-pay-reconcile"
         emptyText={t('plugin_pay.empty')}
         toolbar={
@@ -351,7 +355,7 @@ function RunReconcileDialog({ onClose }: { onClose: () => void }) {
 
 function DiffsDialog({ task, onClose }: { task: PayReconcileTask; onClose: () => void }) {
   const { t } = useTranslation()
-  const { data = [], isLoading } = useReconcileDiffs(task.id)
+  const { data = [], isLoading, isFetching, isError, refetch } = useReconcileDiffs(task.id)
   const resolve = useResolveDiff()
   const [notes, setNotes] = useState<Record<string, string>>({})
 
@@ -385,8 +389,9 @@ function DiffsDialog({ task, onClose }: { task: PayReconcileTask; onClose: () =>
         </p>
         {task.failReason ? <CapabilityNote tone="warn">{t('plugin_pay.reconcile.failedWithReason', { reason: task.failReason })}</CapabilityNote> : null}
       </div>
+      {isError ? <ListErrorBanner onRetry={() => void refetch()} retrying={isFetching} /> : null}
       {isLoading ? <p className="text-sm text-muted-foreground">{t('common.loading')}</p> : null}
-      {!isLoading && data.length === 0 ? (
+      {!isLoading && !isError && data.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {task.failReason
             ? t('plugin_pay.reconcile.emptyBecauseFailed')

@@ -30,7 +30,7 @@ function describeCronText(d: CronDescription, t: (k: string, opts?: Record<strin
     case 'weekly': {
       if (!d.weekdays?.length) return ''
       const names = d.weekdays.map((w) => t(`plugin_cron.describe.weekday.${WEEKDAYS[w] ?? 'mon'}`))
-      return t('plugin_cron.describe.weekly', { time: `${String(d.hour ?? 0).padStart(2, '0')}:00`, days: names.join('、') })
+      return t('plugin_cron.describe.weekly', { time: `${String(d.hour ?? 0).padStart(2, '0')}:00`, days: names.join(t('common.listSeparator')) })
     }
     case 'monthly':
       return t('plugin_cron.describe.monthly', { time: hhmm(d.hour), day: d.day ?? 1 })

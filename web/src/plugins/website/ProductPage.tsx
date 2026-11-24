@@ -9,6 +9,7 @@ import { OptionPicker } from '@/framework/components/OptionPicker'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import {
@@ -294,7 +295,7 @@ function CategoryPicker({
           placeholder={t('plugin_website.product.categoriesPlaceholder')}
           hasValue={value.length > 0}
           allowClear={false}
-          display={selectedTitles.join('、')}
+          display={selectedTitles.join(t('common.listSeparator'))}
         />
       }
     >
@@ -986,7 +987,7 @@ export default function ProductPage() {
   const { sort, desc, sortProp } = useHeaderSort('updated_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
   const effectiveStatus = statusTab === ALL ? filters.status : statusTab
-  const { data, isLoading } = useProducts({ ...filters, status: effectiveStatus, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useProducts({ ...filters, status: effectiveStatus, page, pageSize, sort, desc })
   const extraLocales = languages.filter((l) => !l.default)
   const remove = useDeleteProduct()
   const removeBatch = useDeleteProducts()
@@ -1136,7 +1137,7 @@ export default function ProductPage() {
         return (
           <div
             className="flex max-w-56 flex-wrap gap-1"
-            title={list.map((c) => c.title).join('、')}
+            title={list.map((c) => c.title).join(t('common.listSeparator'))}
           >
             {shown.map((c) => (
               <Badge key={c.id} variant="outline">{c.title}</Badge>
@@ -1239,6 +1240,10 @@ export default function ProductPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters, status: effectiveStatus })}
         sort={sortProp}
         columnSettingsKey="plugin-website-products"
         pagination={{

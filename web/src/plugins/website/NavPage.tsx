@@ -413,7 +413,7 @@ export default function NavPage() {
   const confirm = useConfirm()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('nav')
-  const { data: navs = [], isLoading } = useNavs()
+  const { data: navs = [], isLoading, isError, refetch, isFetching } = useNavs()
   // 页面候选与 /p/slug 校验用的清单；后端单页上限 200，超过部分靠后端校验兜底。
   const { data: pagesData } = usePages({ page: 1, pageSize: 200 })
   const pagesList = pagesData?.list ?? []
@@ -528,6 +528,10 @@ export default function NavPage() {
         columns={columns}
         data={tree}
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={slot === 'footer'}
         defaultExpandAll
         maxDepth={maxDepth}
         columnSettingsKey="plugin-website-navs"

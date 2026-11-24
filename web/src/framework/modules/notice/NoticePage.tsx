@@ -12,6 +12,7 @@ import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -66,7 +67,7 @@ export default function NoticePage() {
   const [editing, setEditing] = useState<Notice | null>(null)
   const [statsFor, setStatsFor] = useState<Notice | null>(null)
 
-  const { data, isLoading } = useNoticeList({ ...toNoticeQuery(draft), ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isError, isFetching, refetch } = useNoticeList({ ...filters, page, pageSize, sort, desc })
   const publish = usePublishNotice()
   const revoke = useRevokeNotice()
   const remove = useDeleteNotices()
@@ -207,6 +208,10 @@ export default function NoticePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         sort={sortProp}
         columnSettingsKey="notice-list"
         pagination={{

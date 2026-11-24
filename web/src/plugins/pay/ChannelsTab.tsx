@@ -35,7 +35,7 @@ import {
   useCapabilityIndex,
 } from './capabilities'
 import { formatBp, formatTime } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
+import { ListErrorBanner } from '@/framework/components/ListErrorBanner'
 
 /** 渠道列表里的能力摘要：只列支持的动作，一眼看出哪些入口在该渠道可用。 */
 /** 一次自检的结论面板：逐项 pass/fail/skipped + 渠道原文诊断。 */
@@ -62,7 +62,7 @@ function ProbeDialog({ code, onClose }: { code: string; onClose: () => void }) {
       <div className="flex flex-col gap-3">
         {/* 自检只读：不下单、不退款、不打款，所以可以随便点 */}
         <p className="text-xs text-muted-foreground">{t('plugin_pay.probe.hint')}</p>
-        {probe.isError ? <ListErrorBanner onRetry={() => void probe.mutate(code)} /> : null}
+        {probe.isError ? <ListErrorBanner onRetry={() => void probe.mutate(code)} retrying={probe.isPending} /> : null}
         {probe.data ? <ProbeResultView r={probe.data} fmt={fmt} /> : null}
         {!probe.data && !probe.isError && probe.isPending ? (
           <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
@@ -380,7 +380,7 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
 export function ChannelsTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const { data: channels = [], isLoading, isError, refetch } = useChannels()
+  const { data: channels = [], isLoading, isFetching, isError, refetch } = useChannels()
   const { data: providers = [] } = useProviders()
   const index = useCapabilityIndex()
   const remove = useDeleteChannel()
@@ -436,12 +436,14 @@ export function ChannelsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <DataTable
         columns={columns}
         data={channels}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         columnSettingsKey="plugin-pay-channels"
         emptyText={t('plugin_pay.empty')}
         toolbar={

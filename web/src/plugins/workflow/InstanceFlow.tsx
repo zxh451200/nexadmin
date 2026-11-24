@@ -116,7 +116,7 @@ export function InstanceFlow({
   const pos = new Map(view.nodes.map((n) => [n.key, n]))
   const title =
     current.length > 0
-      ? t('plugin_workflow.flow.summary', { nodes: current.map((k) => pos.get(k)?.name || k).join('、') })
+      ? t('plugin_workflow.flow.summary', { nodes: current.map((k) => pos.get(k)?.name || k).join(t('common.listSeparator')) })
       : t('plugin_workflow.flow.summaryEnded')
 
   return (

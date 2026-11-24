@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -192,7 +193,7 @@ export default function RealnamePage() {
   const [filters, setFilters] = useState<{ keyword?: string; status?: string; all?: '1'; range?: DateRangeValue }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const { data, isLoading } = useVerifications({
+  const { data, isLoading, isError, refetch, isFetching } = useVerifications({
     keyword: filters.keyword, status: filters.status, all: filters.all,
     from: filters.range?.from, to: filters.range?.to,
     page, pageSize,
@@ -469,6 +470,16 @@ export default function RealnamePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({
+          keyword: filters.keyword,
+          status: filters.status,
+          all: filters.all,
+          from: filters.range?.from,
+          to: filters.range?.to,
+        })}
         columnSettingsKey="plugin-realname-verifications"
         toolbar={
           <Button variant="outline" size="sm" onClick={() => void onExport()} disabled={isLoading}>

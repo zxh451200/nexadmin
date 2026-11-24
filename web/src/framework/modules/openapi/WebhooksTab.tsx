@@ -39,7 +39,7 @@ export function WebhooksTab() {
   const canEdit = has('openapi:edit')
   // 表头排序：不分页的全量列表也走服务端排序，改排序不重置其它状态
   const { sort, desc, sortProp } = useHeaderSort('created_at', true)
-  const { data, isLoading } = useWebhooks({ sort, desc })
+  const { data, isLoading, isError, isFetching, refetch } = useWebhooks({ sort, desc })
   const setEnabled = useSetWebhookEnabled()
   const remove = useDeleteWebhook()
   const removeBatch = useDeleteWebhooks()
@@ -171,6 +171,10 @@ export function WebhooksTab() {
         data={data ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        total={rows.length}
         pagination={false}
         emptyText={t('openapi.webhooks.empty')}
         toolbar={

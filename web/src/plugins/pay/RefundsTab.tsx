@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -31,7 +32,6 @@ import {
   useChannelDirectory,
 } from './capabilities'
 import { formatMoney, formatTime, refundStatusVariant, toMinor } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
 
@@ -120,7 +120,7 @@ export function RefundsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedNo])
 
-  const { data, isLoading, isError, refetch } = useRefunds({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isFetching, isError, refetch } = useRefunds({ ...filters, page, pageSize, sort, desc })
   const create = useCreateRefund()
 
   const columns: Column<PayRefund>[] = [
@@ -157,7 +157,6 @@ export function RefundsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -195,6 +194,10 @@ export function RefundsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         sort={sortProp}
         columnSettingsKey="plugin-pay-refunds"
         pagination={{

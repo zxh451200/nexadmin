@@ -5,6 +5,7 @@ import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import type { Column } from '@/framework/components/table/types'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -20,7 +21,7 @@ export function ClientErrorsTab() {
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<ClientErrorRow | null>(null)
 
-  const { data, isLoading } = useClientErrors({ page, pageSize, keyword: keyword.trim() || undefined })
+  const { data, isLoading, isError, isFetching, refetch } = useClientErrors({ page, pageSize, keyword: keyword.trim() || undefined })
   const time = (iso: string) => <span className="num">{fmtDateTime(iso, i18n.language)}</span>
 
   const columns: Column<ClientErrorRow>[] = [
@@ -86,6 +87,10 @@ export function ClientErrorsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword })}
         columnSettingsKey="client-errors"
         onRowClick={setDetail}
         rowActions={(r) => <DetailAction onClick={() => setDetail(r)} />}

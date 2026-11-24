@@ -2,7 +2,7 @@
   "role": {
     "menu": "Roles",
     "title": "Roles",
-    "description": "Drag rows to reorder; assign menu and button permissions to a role",
+    "description": "Assign menu and button permissions to a role; drag rows to reorder when no filters are applied",
     "col": {
       "name": "Name",
       "code": "Code",

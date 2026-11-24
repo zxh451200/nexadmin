@@ -17,6 +17,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import type { Column } from '@/framework/components/table/types'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
@@ -80,7 +81,7 @@ export default function OperLogPage() {
   const [cleanDays, setCleanDays] = useState<string>('30')
   const { start: startExportJob } = useAsyncJob()
 
-  const { data, isLoading } = useOperLogList({ page, pageSize, sort, desc, ...toQuery(applied) })
+  const { data, isLoading, isError, isFetching, refetch } = useOperLogList({ page, pageSize, sort, desc, ...toQuery(applied) })
   const del = useDeleteOperLogs()
   const clean = useCleanOperLogs()
 
@@ -216,6 +217,10 @@ export default function OperLogPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(toQuery(applied))}
         columnSettingsKey="operLog"
         onRowClick={setDetail}
         rowActions={(l) => <DetailAction onClick={() => setDetail(l)} />}

@@ -26,7 +26,7 @@ function flatten(nodes: DeptNode[], map = new Map<string, string>()) {
 export function PostSection() {
   const { t } = useTranslation()
   const confirm = useConfirm()
-  const { data = [], isLoading } = usePostList()
+  const { data = [], isLoading, isError, refetch, isFetching } = usePostList()
   const { has } = usePermission()
   // 没有 dept:list 时不请求部门树（否则岗位页一进来就吃 403），所属部门列退化为「-」
   const canDept = has('dept:list')
@@ -131,6 +131,11 @@ export function PostSection() {
         rowKey="id"
         loading={isLoading}
         pagination={false}
+        total={shown.length}
+        hasFilters={filter.active}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="post:delete">
@@ -141,7 +146,15 @@ export function PostSection() {
           </Can>
         )}
         columnSettingsKey="post"
-        sortable={filter.active || !has('post:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={
+          has('post:update')
+            ? {
+                onReorder: (ids) => sort.mutateAsync(ids),
+                disabled: filter.active,
+                disabledReason: filter.active ? t('common.reorderFilteredDisabled') : undefined,
+              }
+            : undefined
+        }
         rowActions={(row) => (
           <>
             <Can perm="post:update">

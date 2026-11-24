@@ -300,7 +300,7 @@ export default function ProductCategoryPage() {
   const { has } = usePermission()
   // 预取翻译表单的字段元数据，点新增/编辑时不再闪空表单。
   useI18nSchema('product-category')
-  const { data: categories = [], isLoading } = useProductCategories()
+  const { data: categories = [], isLoading, isError, refetch, isFetching } = useProductCategories()
   const remove = useDeleteProductCategory()
   const reorder = useReorderProductCategories()
   const [formOpen, setFormOpen] = useState(false)
@@ -406,6 +406,9 @@ export default function ProductCategoryPage() {
         columns={columns}
         data={tree}
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         defaultExpandAll
         maxDepth={maxDepth}
         columnSettingsKey="plugin-website-product-categories"

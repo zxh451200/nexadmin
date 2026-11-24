@@ -248,7 +248,7 @@ export default function FeaturePage() {
   const confirm = useConfirm()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('feature')
-  const { data: features = [], isLoading } = useFeatures()
+  const { data: features = [], isLoading, isError, refetch, isFetching } = useFeatures()
   const { data: icons = [] } = useFeatureIcons()
   const { capOk, themeLabel } = useThemeCap()
   const remove = useDeleteFeature()
@@ -302,6 +302,10 @@ export default function FeaturePage() {
         data={features}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        total={features.length}
         columnSettingsKey="plugin-website-features"
         emptyText={t('plugin_website.empty')}
         selection={{ selected, onChange: setSelected }}

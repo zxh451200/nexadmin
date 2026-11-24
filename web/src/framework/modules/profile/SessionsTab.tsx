@@ -13,7 +13,7 @@ import { useKickSession, useSessions, type LoginSession } from './api'
 export function SessionsTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const { data = [], isLoading } = useSessions()
+  const { data = [], isLoading, isError, isFetching, refetch } = useSessions()
   const kick = useKickSession()
 
   const onKick = async (row: LoginSession) => {
@@ -59,6 +59,10 @@ export function SessionsTab() {
         data={data}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        total={data.length}
         columnSettingsKey="profile-sessions"
         pagination={false}
         rowActions={(row) =>

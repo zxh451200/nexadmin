@@ -82,7 +82,7 @@ export function DictDataPanel({ type, onBack }: Props) {
   const [editing, setEditing] = useState<DictDataRow | null>(null)
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
-  const { data = [], isLoading } = useDictData(type?.id ?? null)
+  const { data = [], isLoading, isError, refetch, isFetching } = useDictData(type?.id ?? null)
   const save = useSaveDictData()
   const del = useDeleteDictData()
   const delBatch = useDeleteDictDataBatch()
@@ -262,8 +262,21 @@ export function DictDataPanel({ type, onBack }: Props) {
         rowKey="id"
         loading={isLoading}
         pagination={false}
+        total={shown.length}
+        hasFilters={!!keyword.trim()}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         batchBarPlacement="root"
-        sortable={has('dict:update') && isPlatform ? { onReorder: (ids) => sort.mutateAsync(ids) } : undefined}
+        sortable={
+          has('dict:update') && isPlatform
+            ? {
+                onReorder: (ids) => sort.mutateAsync(ids),
+                disabled: !!keyword.trim(),
+                disabledReason: keyword.trim() ? t('common.reorderFilteredDisabled') : undefined,
+              }
+            : undefined
+        }
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="dict:delete">

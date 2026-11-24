@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -192,7 +193,7 @@ export function ModelsTab() {
   const [editing, setEditing] = useState<AiModel | null>(null)
   const [selected, setSelected] = useState<string[]>([])
 
-  const { data, isLoading } = useModels({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useModels({ ...filters, page, pageSize, sort, desc })
   const remove = useDeleteModel()
   const removeBatch = useDeleteModels()
   const ping = usePingModel()
@@ -335,6 +336,10 @@ export function ModelsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={sortProp}
         columnSettingsKey="plugin-aigateway-models"
         pagination={{

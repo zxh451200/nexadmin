@@ -16,6 +16,7 @@ import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormL
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { TreeSelect } from '@/framework/components/TreeSelect'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
@@ -59,7 +60,7 @@ export default function TenantPackagePage() {
   const [editing, setEditing] = useState<TenantPackageRow | null>(null)
   const [open, setOpen] = useState(false)
 
-  const { data, isLoading } = useTenantPackages({
+  const { data, isLoading, isError, isFetching, refetch } = useTenantPackages({
     page,
     pageSize,
     keyword: filters.keyword || undefined,
@@ -212,6 +213,10 @@ export default function TenantPackagePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         columnSettingsKey="tenantPkg"
         pagination={{
           page,

@@ -156,6 +156,11 @@ export default function RolePage() {
         rowKey="id"
         loading={list.isLoading}
         pagination={false}
+        total={shown.length}
+        hasFilters={filter.active}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        retrying={list.isFetching}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="role:delete">
@@ -165,7 +170,15 @@ export default function RolePage() {
             </Button>
           </Can>
         )}
-        sortable={filter.active || !has('role:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={
+          has('role:update')
+            ? {
+                onReorder: (ids) => sort.mutateAsync(ids),
+                disabled: filter.active,
+                disabledReason: filter.active ? t('common.reorderFilteredDisabled') : undefined,
+              }
+            : undefined
+        }
         rowActions={(r) => (
           <>
             <Can perm="role:assign">

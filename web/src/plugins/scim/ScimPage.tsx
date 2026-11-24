@@ -62,6 +62,10 @@ export default function ScimPage() {
       <DataTable
         data={rows}
         loading={q.isLoading}
+        isError={q.isError}
+        onRetry={() => void q.refetch()}
+        retrying={q.isFetching}
+        total={q.data?.total}
         columnSettingsKey="plugin-scim-tokens"
         emptyText={t('plugin_scim.empty')}
         rowKey="id"

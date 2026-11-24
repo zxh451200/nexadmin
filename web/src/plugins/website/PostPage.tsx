@@ -13,6 +13,7 @@ import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormGrid, FormSection } from '@/framework/components/FormLayout'
@@ -487,7 +488,7 @@ function PostCategoryPicker({
           placeholder={t('plugin_website.post.categoryFilter')}
           hasValue={value.length > 0}
           allowClear={false}
-          display={selectedTitles.join('、')}
+          display={selectedTitles.join(t('common.listSeparator'))}
         />
       }
     >
@@ -982,7 +983,7 @@ export default function PostPage() {
   // 表头排序：与筛选分开存；默认「最近更新在前」（与后端回退一致）
   const { sort, desc, sortProp } = useHeaderSort('updated_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
-  const { data, isLoading } = usePosts({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = usePosts({ ...filters, page, pageSize, sort, desc })
   const extraLocales = languages.filter((l) => !l.default)
   const remove = useDeletePost()
   const removeBatch = useDeletePosts()
@@ -1102,7 +1103,7 @@ export default function PostPage() {
         const list = r.categories ?? []
         if (!list.length) return <span className="text-muted-foreground">—</span>
         return (
-          <div className="flex max-w-56 flex-wrap gap-1" title={list.map((c) => c.title).join('、')}>
+          <div className="flex max-w-56 flex-wrap gap-1" title={list.map((c) => c.title).join(t('common.listSeparator'))}>
             {list.slice(0, 2).map((c) => (
               <Badge key={c.id} variant="outline">{c.title}</Badge>
             ))}
@@ -1120,7 +1121,7 @@ export default function PostPage() {
         const list = r.tags ?? []
         if (!list.length) return <span className="text-muted-foreground">—</span>
         return (
-          <div className="flex max-w-56 flex-wrap gap-1" title={list.map((x) => `#${x.name}`).join('、')}>
+          <div className="flex max-w-56 flex-wrap gap-1" title={list.map((x) => `#${x.name}`).join(t('common.listSeparator'))}>
             {list.slice(0, 2).map((x) => (
               <Badge key={x.id} variant="outline">{x.name}</Badge>
             ))}
@@ -1214,6 +1215,10 @@ export default function PostPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={sortProp}
         columnSettingsKey="plugin-website-posts"
         pagination={{

@@ -8,6 +8,7 @@ import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -280,18 +281,7 @@ export default function CodegenPage() {
         </TabsList>
 
         <TabsContent value="table" className="m-0 flex flex-col gap-4">
-          {tables.isError ? (
-            <EmptyState
-              icon={<Database aria-hidden="true" />}
-              title={t('plugin_codegen.tables.loadFailed')}
-              description={t('plugin_codegen.tables.loadFailedHint')}
-              action={
-                <Button variant="outline" onClick={() => void tables.refetch()}>
-                  {t('plugin_codegen.tables.retry')}
-                </Button>
-              }
-            />
-          ) : !tables.isLoading && allTables.length === 0 ? (
+          {!tables.isError && !tables.isLoading && allTables.length === 0 ? (
             <EmptyState
               icon={<Database aria-hidden="true" />}
               title={t('plugin_codegen.tables.emptyTitle')}
@@ -343,6 +333,10 @@ export default function CodegenPage() {
                 data={rows}
                 rowKey="name"
                 loading={tables.isLoading}
+                isError={tables.isError}
+                onRetry={() => void tables.refetch()}
+                retrying={tables.isFetching}
+                hasFilters={hasActiveFilterValues({ keyword })}
                 pagination={false}
                 emptyText={t('plugin_codegen.tables.empty')}
                 onRowClick={(r) => pickTable(r.name)}
@@ -352,7 +346,7 @@ export default function CodegenPage() {
                   </Button>
                 )}
               />
-              {savedConfigs.length > 0 ? (
+              {configs.isLoading || configs.isError || savedConfigs.length > 0 ? (
                 <section className="flex flex-col gap-2">
                   <p className="text-sm font-medium text-muted-foreground">{t('plugin_codegen.saved.title')}</p>
                   <PlatformNotice />
@@ -360,6 +354,10 @@ export default function CodegenPage() {
                     columns={configColumns}
                     data={savedConfigs}
                     rowKey="id"
+                    loading={configs.isLoading}
+                    isError={configs.isError}
+                    onRetry={() => void configs.refetch()}
+                    retrying={configs.isFetching}
                     pagination={false}
                     emptyText={t('plugin_codegen.saved.empty')}
                     selection={{ selected: selectedCfgs, onChange: setSelectedCfgs }}

@@ -15,7 +15,7 @@ import { RuleFormDialog } from './RuleFormDialog'
 export function IpRulesTab() {
   const { t } = useTranslation()
   const confirm = useConfirm()
-  const { data, isLoading } = useRules()
+  const { data, isLoading, isError, refetch, isFetching } = useRules()
   const setEnabled = useSetRuleEnabled()
   const remove = useDeleteRule()
   const removeBatch = useDeleteRules()
@@ -87,6 +87,9 @@ export function IpRulesTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         columnSettingsKey="plugin-security-ip"
         emptyText={t('plugin_security.ip.empty')}
         selection={{ selected, onChange: setSelected }}

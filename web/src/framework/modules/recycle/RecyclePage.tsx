@@ -13,6 +13,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import type { Column } from '@/framework/components/table/types'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -51,7 +52,7 @@ export default function RecyclePage() {
   const { sort, desc, sortProp } = useHeaderSort('deleted_at', true, () => setPage(1))
   const [selected, setSelected] = useState<string[]>([])
 
-  const { data, isLoading } = useRecycleList({
+  const { data, isLoading, isError, isFetching, refetch } = useRecycleList({
     page,
     pageSize,
     keyword: keyword || undefined,
@@ -208,6 +209,10 @@ export default function RecyclePage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword, type: typeApplied, from: appliedRange.from, to: appliedRange.to })}
         sort={sortProp}
         columnSettingsKey="recycle"
         selection={{ selected, onChange: setSelected }}

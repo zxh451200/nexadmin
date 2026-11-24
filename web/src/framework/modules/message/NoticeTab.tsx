@@ -10,6 +10,7 @@ import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { dictText, useDictItems } from '@/framework/components/pickers/useDictItems'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { RichTextView } from '@/framework/components/RichTextView'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -47,7 +48,7 @@ export function NoticeTab() {
     setPage(1)
   }
 
-  const { data, isLoading } = useMyNotices({
+  const { data, isLoading, isError, isFetching, refetch } = useMyNotices({
     page,
     pageSize,
     keyword: applied.keyword?.trim() || undefined,
@@ -172,6 +173,10 @@ export function NoticeTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(applied)}
         columnSettingsKey="notice-inbox"
         toolbar={
           <>
@@ -202,7 +207,8 @@ export function NoticeTab() {
           </>
         }
         onRowClick={open}
-        emptyText={applied.keyword || applied.type || applied.onlyUnread ? t('message.emptyFiltered') : t('message.emptyNotices')}
+        emptyText={t('message.emptyNotices')}
+        filteredEmptyText={t('message.emptyFiltered')}
         pagination={{
           page,
           pageSize,

@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -38,7 +39,7 @@ export default function SiteOrdersPage() {
   const [draft, setDraft] = useState<{ keyword?: string; status?: string[] }>({})
   const [filters, setFilters] = useState<{ keyword?: string; status?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
-  const { data, isLoading } = useSiteOrders({
+  const { data, isLoading, isError, refetch, isFetching } = useSiteOrders({
     page,
     pageSize,
     keyword: filters.keyword || undefined,
@@ -209,6 +210,10 @@ export default function SiteOrdersPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword: filters.keyword, status: filters.status })}
         columnSettingsKey="website-site-orders"
         pagination={{
           page,

@@ -13,6 +13,7 @@ import { dictText, useDictItems } from '@/framework/components/pickers/useDictIt
 import { FilterBar } from '@/framework/components/FilterBar'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
@@ -51,7 +52,7 @@ export function MessageTab({ unread }: { unread: number }) {
     setPage(1)
   }
 
-  const { data, isLoading } = useMessageList({
+  const { data, isLoading, isError, isFetching, refetch } = useMessageList({
     page,
     pageSize,
     keyword: applied.keyword.trim() || undefined,
@@ -190,6 +191,16 @@ export function MessageTab({ unread }: { unread: number }) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({
+          keyword: applied.keyword,
+          category: applied.category.length ? applied.category.join(',') : undefined,
+          unread: applied.onlyUnread ? '1' : undefined,
+          from: applied.range.from,
+          to: applied.range.to,
+        })}
         sort={sortProp}
         columnSettingsKey="message-inbox"
         onRowClick={open}
@@ -224,7 +235,8 @@ export function MessageTab({ unread }: { unread: number }) {
             </Button>
           </>
         }
-        emptyText={applied.keyword || applied.category.length || applied.onlyUnread || applied.range.from || applied.range.to ? t('message.emptyFiltered') : t('message.emptyMessages')}
+        emptyText={t('message.emptyMessages')}
+        filteredEmptyText={t('message.emptyFiltered')}
         pagination={{
           page,
           pageSize,

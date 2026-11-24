@@ -13,6 +13,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { fmtDateTime } from '../oper-log/format'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { DELIVERY_STATUSES, useDeliveries, useRetryDelivery, useWebhooks, type Delivery, type DeliveryStatus } from './api'
 
 const STATUS_VARIANT: Record<DeliveryStatus, BadgeProps['variant']> = {
@@ -55,7 +56,7 @@ export function DeliveriesTab() {
   const { data: webhooks } = useWebhooks()
   // 后端投递记录不带 Webhook 名称，用已加载的 Webhook 列表按 id 补上
   const webhookNameOf = (d: Delivery) => d.webhookName ?? webhooks?.find((w) => w.id === d.webhookId)?.name ?? d.webhookId
-  const { data, isLoading } = useDeliveries({
+  const { data, isLoading, isError, isFetching, refetch } = useDeliveries({
     page,
     pageSize,
     webhookId: applied.webhookId.length ? applied.webhookId.join(',') : undefined,
@@ -154,6 +155,14 @@ export function DeliveriesTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({
+          webhookId: applied.webhookId.length ? applied.webhookId.join(',') : undefined,
+          status: applied.status.length ? applied.status.join(',') : undefined,
+          event: applied.event === ANY ? undefined : applied.event,
+        })}
         sort={sortProp}
         emptyText={t('openapi.deliveries.empty')}
         pagination={{

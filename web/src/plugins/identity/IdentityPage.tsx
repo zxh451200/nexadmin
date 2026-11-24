@@ -31,7 +31,7 @@ function address(s: IdentitySource) {
 export default function IdentityPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
-  const { data = [], isLoading } = useSources()
+  const { data = [], isLoading, isError, refetch, isFetching } = useSources()
   const setEnabled = useSetEnabled()
   const remove = useDeleteSource()
   const removeBatch = useDeleteSources()
@@ -139,6 +139,9 @@ export default function IdentityPage() {
         data={data}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         columnSettingsKey="plugin-identity-sources"
         pagination={false}
         emptyText={t('plugin_identity.empty')}

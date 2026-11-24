@@ -23,7 +23,7 @@ export function AppsTab() {
   const confirm = useConfirm()
   const { has } = usePermission()
   const canEdit = has('openapi:edit')
-  const { data, isLoading } = useOpenApps()
+  const { data, isLoading, isError, isFetching, refetch } = useOpenApps()
   const setEnabled = useSetOpenAppEnabled()
   const remove = useDeleteOpenApp()
   const removeBatch = useDeleteOpenApps()
@@ -125,7 +125,7 @@ export function AppsTab() {
         // 角色多时收进「+N」；角色被删时兜底是原始 id——截断显示，悬停看全量
         const names = a.roleIds.map((id) => roleName.get(id) ?? `${id.slice(0, 8)}…`)
         return (
-          <div className="flex max-w-56 flex-wrap gap-1" title={names.join('、')}>
+          <div className="flex max-w-56 flex-wrap gap-1" title={names.join(t('common.listSeparator'))}>
             {names.slice(0, 2).map((n, i) => (
               <Badge key={a.roleIds[i]} variant="secondary">
                 {n}
@@ -166,6 +166,10 @@ export function AppsTab() {
         data={data ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        total={rows.length}
         pagination={false}
         emptyText={t('openapi.apps.empty')}
         toolbar={

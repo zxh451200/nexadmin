@@ -29,6 +29,13 @@ export function useClientFilter() {
 
 export type ClientFilter = ReturnType<typeof useClientFilter>
 
+/** 服务端筛选参数是否包含有效条件；false 与 0 也算有效值。 */
+export function hasActiveFilterValues(values: object) {
+  return Object.values(values).some((value) =>
+    Array.isArray(value) ? value.length > 0 : typeof value === 'string' ? value.trim().length > 0 : value !== undefined && value !== null,
+  )
+}
+
 /** 关键词为空视为匹配；否则任一字段包含关键词（不分大小写）即匹配 */
 export function matchText(keyword: string, ...fields: (string | null | undefined)[]) {
   const k = keyword.trim().toLowerCase()

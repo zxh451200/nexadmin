@@ -15,6 +15,7 @@ import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -340,6 +341,10 @@ export default function ImportsPage() {
         data={jobs.data?.list ?? []}
         rowKey="id"
         loading={jobs.isLoading}
+        isError={jobs.isError}
+        onRetry={() => void jobs.refetch()}
+        retrying={jobs.isFetching}
+        hasFilters={hasActiveFilterValues({ source, status })}
         sort={sortProp}
         columnSettingsKey="plugin-imports-jobs"
         pagination={{

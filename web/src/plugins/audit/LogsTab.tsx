@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { ExportCsvButton, type CsvColumn } from '@/framework/components/export/ExportCsvButton'
@@ -147,7 +148,7 @@ export function LogsTab() {
     to: applied.range.to,
   }
   const query: LogQuery = { ...exportQuery, page, pageSize, sort, desc }
-  const { data, isLoading } = useLogs(query)
+  const { data, isLoading, isError, refetch, isFetching } = useLogs(query)
   const { data: tables } = useLogTables()
 
   // 导出当前筛选下的全部记录（服务端封顶 20000 行）；列与列表一致。
@@ -221,6 +222,10 @@ export function LogsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(exportQuery)}
         sort={sortProp}
         columnSettingsKey="plugin-audit-logs"
         pagination={{

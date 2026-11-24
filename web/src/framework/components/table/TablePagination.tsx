@@ -29,7 +29,8 @@ export function TablePagination({ page, pageSize, total, onChange, pageSizeOptio
 
   if (isMobile) {
     return (
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="num w-full text-center text-sm text-muted-foreground">{t('dataTable.totalCount', { count: total })}</span>
         <Button type="button" variant="outline" disabled={page <= 1} onClick={() => go(page - 1)}>
           <ChevronLeft className="me-1 h-4 w-4 rtl:rotate-180" aria-hidden="true" />
           {t('common.prev')}

@@ -222,6 +222,10 @@ export default function MissPoolPanel() {
         data={rows}
         rowKey="id"
         loading={misses.isLoading}
+        isError={misses.isError}
+        onRetry={() => void misses.refetch()}
+        retrying={misses.isFetching}
+        hasFilters={statusFilter !== 'all'}
         sort={sortProp}
         pagination={{
           page,

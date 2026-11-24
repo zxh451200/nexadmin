@@ -13,6 +13,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -61,7 +62,7 @@ export default function SendLogPage() {
   const [detail, setDetail] = useState<SendLog | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
 
-  const { data, isLoading } = useSendLogList({ page, pageSize, ...toQuery(applied), sort, desc })
+  const { data, isLoading, isError, isFetching, refetch } = useSendLogList({ page, pageSize, ...toQuery(applied), sort, desc })
   const del = useDeleteSendLogs()
 
   const search = () => {
@@ -181,6 +182,10 @@ export default function SendLogPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(toQuery(applied))}
         columnSettingsKey="sendlog"
         onRowClick={setDetail}
         rowActions={(l) => <DetailAction onClick={() => setDetail(l)} />}

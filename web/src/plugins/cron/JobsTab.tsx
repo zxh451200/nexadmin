@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -58,7 +59,7 @@ export function JobsTab({ onViewLogs }: Props) {
   const [runTarget, setRunTarget] = useState<CronJob | null>(null)
   const [healthTarget, setHealthTarget] = useState<CronJob | null>(null)
 
-  const { data, isLoading } = useJobs({ ...filters, page, pageSize, sort, desc }, autoRefresh)
+  const { data, isLoading, isError, refetch, isFetching } = useJobs({ ...filters, page, pageSize, sort, desc }, autoRefresh)
   const { data: handlers = [] } = useHandlers()
   const setEnabled = useSetEnabled()
   const setEnabledBatch = useSetJobsEnabled()
@@ -201,6 +202,10 @@ export function JobsTab({ onViewLogs }: Props) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={sortProp}
         columnSettingsKey="plugin-cron-jobs"
         pagination={{

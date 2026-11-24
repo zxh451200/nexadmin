@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -152,7 +153,7 @@ export function LogsTab({ jobIds, onJobsChange }: Props) {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   const query: LogQuery = { jobId: jobIds?.length ? jobIds.join(',') : undefined, status: applied?.length ? applied.join(',') : undefined, page, pageSize, sort, desc }
-  const { data, isLoading } = useLogs(query, autoRefresh)
+  const { data, isLoading, isError, refetch, isFetching } = useLogs(query, autoRefresh)
   const { data: jobs } = useJobs({ page: 1, pageSize: 200 })
   const runJob = useRunJob()
 
@@ -225,6 +226,10 @@ export function LogsTab({ jobIds, onJobsChange }: Props) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ jobId: query.jobId, status: query.status })}
         sort={sortProp}
         columnSettingsKey="plugin-cron-logs"
         pagination={{

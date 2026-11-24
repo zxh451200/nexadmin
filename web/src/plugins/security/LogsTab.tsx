@@ -8,7 +8,7 @@ export function LogsTab() {
   const { t, i18n } = useTranslation()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const { data, isLoading } = useLogs({ page, pageSize })
+  const { data, isLoading, isError, refetch, isFetching } = useLogs({ page, pageSize })
 
   const columns: Column<SecurityLog>[] = [
     { key: 'createdAt', title: t('plugin_security.logs.time'), mobile: 'sub', render: (l) => <span className="num">{formatTime(l.createdAt, i18n.language)}</span> },
@@ -26,6 +26,9 @@ export function LogsTab() {
       data={data?.list ?? []}
       rowKey="id"
       loading={isLoading}
+      isError={isError}
+      onRetry={() => void refetch()}
+      retrying={isFetching}
       columnSettingsKey="plugin-security-logs"
       pagination={{
         page,

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -18,7 +19,7 @@ export function UsageTab() {
   // 表头排序：与筛选分开存；默认最新在前（与后端回退一致）
   const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
 
-  const { data, isLoading } = useUsage({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useUsage({ ...filters, page, pageSize, sort, desc })
   const { data: summary = [] } = useUsageSummary()
 
   const columns: Column<AiUsage>[] = [
@@ -96,6 +97,10 @@ export function UsageTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={sortProp}
         columnSettingsKey="plugin-aigateway-usage"
         pagination={{

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -26,7 +27,7 @@ export function UsersTab() {
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const { data, isLoading } = useUsers({ keyword, page, pageSize })
+  const { data, isLoading, isError, refetch, isFetching } = useUsers({ keyword, page, pageSize })
   const reset = useResetUser()
 
   const onReset = async (u: TwoFactorUser) => {
@@ -66,6 +67,10 @@ export function UsersTab() {
         data={data?.list ?? []}
         rowKey="userId"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword })}
         columnSettingsKey="plugin-security-users"
         pagination={{
           page,

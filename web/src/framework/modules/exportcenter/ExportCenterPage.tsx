@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import { Button } from '@/framework/ui/button'
 import { Progress } from '@/framework/ui/progress'
 import { OptionPicker } from '@/framework/components/OptionPicker'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { cn } from '@/lib/utils'
 import { errMsg } from '@/lib/errMsg'
 import { fmtDateTime } from '../oper-log/format'
@@ -60,7 +61,7 @@ export default function ExportCenterPage() {
   const [selected, setSelected] = useState<string[]>([])
 
   // 有进行中的任务且页面可见时才轮询；切到别的标签或浏览器标签页隐藏时暂停，恢复时立即刷新一次
-  const { data, isLoading, refetch } = useJobList(
+  const { data, isLoading, isError, isFetching, refetch } = useJobList(
     {
       page,
       pageSize,
@@ -269,6 +270,10 @@ export default function ExportCenterPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...applied, all: all || undefined })}
         columnSettingsKey="jobs"
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (

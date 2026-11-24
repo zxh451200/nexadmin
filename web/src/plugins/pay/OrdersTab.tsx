@@ -8,6 +8,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
@@ -30,7 +31,6 @@ import {
 } from './api'
 import { formatMoney, formatTime, payStatusVariant } from './format'
 import { cn } from '@/lib/utils'
-import { ListErrorBanner } from './ListErrorBanner'
 import { PayStatsPanel } from './PayStatsPanel'
 
 const STATUSES = [
@@ -90,7 +90,7 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
   }
   const [detail, setDetail] = useState<PayOrder | null>(null)
 
-  const { data, isLoading, isError, refetch } = useOrders({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isFetching, isError, refetch } = useOrders({ ...filters, page, pageSize, sort, desc })
   const { data: channels = [] } = useChannels()
   const close = useCloseOrder()
   const sync = useSyncOrder()
@@ -240,7 +240,6 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
       />
       {view === 'stats' ? <PayStatsPanel onDrillDown={onDrillDown} /> : (
         <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => {
           setFilters(toOrderQuery(draft))
@@ -314,6 +313,10 @@ export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         sort={sortProp}
         columnSettingsKey="plugin-pay-orders"
         pagination={{

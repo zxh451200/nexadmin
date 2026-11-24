@@ -171,7 +171,7 @@ function CreateDialog({
 export function TokensTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const { data, isLoading } = useAccessTokens()
+  const { data, isLoading, isError, isFetching, refetch } = useAccessTokens()
   const revoke = useRevokeAccessToken()
   const revokeBatch = useRevokeAccessTokens()
   const [createOpen, setCreateOpen] = useState(false)
@@ -256,6 +256,10 @@ export function TokensTab() {
         data={rows}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        total={rows.length}
         columnSettingsKey="profile-tokens"
         pagination={false}
         emptyText={t('profile.tokens.empty')}

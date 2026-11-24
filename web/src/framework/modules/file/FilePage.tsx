@@ -14,6 +14,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Segmented } from '@/framework/components/Segmented'
 import { BatchBar } from '@/framework/components/table/BatchBar'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -62,7 +63,7 @@ export default function FilePage() {
   const [renaming, setRenaming] = useState<FileItem | null>(null)
 
   const pageSize = view === 'grid' ? PAGE_SIZE_GRID : listSize
-  const { data, isLoading } = useFileList({
+  const { data, isLoading, isError, isFetching, refetch } = useFileList({
     page,
     pageSize,
     keyword: applied.keyword || undefined,
@@ -441,6 +442,16 @@ export default function FilePage() {
               data={rows}
               rowKey="id"
               loading={isLoading}
+              isError={isError}
+              onRetry={() => refetch()}
+              retrying={isFetching}
+              hasFilters={hasActiveFilterValues({
+                keyword: applied.keyword,
+                category: applied.category.length ? applied.category.join(',') : undefined,
+                groupId: group === GROUP_ALL ? undefined : group,
+                from: applied.range.from,
+                to: applied.range.to,
+              })}
               selection={{ selected, onChange: setSelected }}
               sort={{ key: applied.sort, desc: applied.desc, onChange: (key, desc) => applySort(key as FileSort, desc) }}
               batchActions={batchActions}

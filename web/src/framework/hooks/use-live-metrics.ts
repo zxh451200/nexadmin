@@ -20,5 +20,5 @@ export function useLiveMetrics<T>(url: string, intervalMs: number, max = 30) {
   useEffect(() => {
     if (q.data) setHistory((h) => [...h, q.data as T].slice(-max))
   }, [q.dataUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
-  return { latest: q.data, history, isLoading: q.isLoading, isFetching: q.isFetching, refetch: q.refetch }
+  return { latest: q.data, history, isLoading: q.isLoading, isError: q.isError, isFetching: q.isFetching, refetch: q.refetch }
 }

@@ -28,7 +28,7 @@ function formatUptime(sec: number, d: string, h: string, m: string) {
 export default function ServerMonitorPage() {
   const { t, i18n } = useTranslation()
   const [interval, setIntervalMs] = useState<string>('3000')
-  const { latest, history, isLoading } = useLiveMetrics<ServerSnapshot>('/monitor/server', Number(interval), 30)
+  const { latest, history, isLoading, isError, isFetching, refetch } = useLiveMetrics<ServerSnapshot>('/monitor/server', Number(interval), 30)
 
   const points = useMemo(
     () =>
@@ -118,9 +118,9 @@ export default function ServerMonitorPage() {
         <TabsContent value="metrics" className="mt-0 flex flex-col gap-3 md:gap-5">
           <HealthCard />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-4">
-            {isLoading || !latest ? (
+            {isLoading ? (
               Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
-            ) : (
+            ) : latest ? (
               <>
                 <StatCard tone="chart-1"
                   title={t('serverMonitor.card.cpu')}
@@ -150,7 +150,7 @@ export default function ServerMonitorPage() {
                   icon={<Timer aria-hidden="true" />}
                 />
               </>
-            )}
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2">
@@ -221,9 +221,9 @@ export default function ServerMonitorPage() {
                 <CardTitle className="text-base font-medium">{t('serverMonitor.info.title')}</CardTitle>
               </CardHeader>
               <CardContent>
-                {info.length === 0 ? (
+                {isLoading ? (
                   <Skeleton className="h-40 w-full" />
-                ) : (
+                ) : info.length > 0 ? (
                   <dl className="divide-y divide-border text-sm">
                     {info.map(([k, v]) => (
                       <div key={k} className="flex items-center justify-between gap-4 py-2.5">
@@ -232,7 +232,7 @@ export default function ServerMonitorPage() {
                       </div>
                     ))}
                   </dl>
-                )}
+                ) : null}
               </CardContent>
             </Card>
             <Card className="lg:col-span-2">
@@ -240,7 +240,18 @@ export default function ServerMonitorPage() {
                 <CardTitle className="text-base font-medium">{t('serverMonitor.disk.title')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <DataTable<DiskInfo> bare columns={diskColumns} data={disks} rowKey="mount" loading={!latest} pagination={false} />
+                <DataTable<DiskInfo>
+                  bare
+                  columns={diskColumns}
+                  data={disks}
+                  rowKey="mount"
+                  loading={isLoading}
+                  isError={isError}
+                  onRetry={() => void refetch()}
+                  retrying={isFetching}
+                  total={disks.length}
+                  pagination={false}
+                />
               </CardContent>
             </Card>
           </div>

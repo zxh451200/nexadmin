@@ -250,7 +250,7 @@ function InstanceList({ filter, onSelect }: { filter: Filter; onSelect: (id: str
                 {w.pending.length > 0
                   ? `${t('plugin_workflow.currentApprovers')}: ${[
                       ...new Set(w.pending.map((p) => (p.assignee ? names(p.assignee) || p.nodeName : t('plugin_workflow.anyone')))),
-                    ].join('、')}`
+                    ].join(t('common.listSeparator'))}`
                   : w.current.join(', ')}
               </span>
               <span>{t('plugin_workflow.submitter')}: {names(w.submitter) || t('plugin_workflow.unknownUser')}</span>
@@ -398,6 +398,9 @@ function DefList() {
         data={defs.data?.list ?? []}
         rowKey="id"
         loading={defs.isLoading}
+        isError={defs.isError}
+        onRetry={() => void defs.refetch()}
+        retrying={defs.isFetching}
         sort={sortProp}
         columnSettingsKey="plugin-workflow-defs"
         pagination={{ page, pageSize, total: defs.data?.total ?? 0, onChange: setPage }}

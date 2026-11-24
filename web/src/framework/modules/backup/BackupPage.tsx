@@ -238,6 +238,9 @@ export default function BackupPage() {
         data={rows}
         rowKey="id"
         loading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        retrying={list.isFetching}
         sort={sortProp}
         columnSettingsKey="backup-records"
         emptyText={restoreHelp}

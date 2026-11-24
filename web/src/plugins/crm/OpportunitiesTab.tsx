@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -210,7 +211,7 @@ export function OpportunitiesTab() {
   // 多选状态叫 picked，与客户页保持一致。
   const [picked, setPicked] = useState<string[]>([])
 
-  const { data, isLoading } = useOpportunities({ ...filters, page, pageSize, sort: sort || undefined, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useOpportunities({ ...filters, page, pageSize, sort: sort || undefined, desc })
   const remove = useDeleteOpportunity()
   const removeBatch = useDeleteOpportunities()
 
@@ -326,6 +327,10 @@ export function OpportunitiesTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={{
           key: sort,
           desc,

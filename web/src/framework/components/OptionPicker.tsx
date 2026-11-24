@@ -33,8 +33,8 @@ export function OptionPicker({ value, onChange, options, title, placeholder, dis
     () =>
       value
         .map((v) => labelOf.get(v) ?? v)
-        .join('、'),
-    [value, labelOf],
+        .join(t('common.listSeparator')),
+    [value, labelOf, t],
   )
   return (
     <PickerShell

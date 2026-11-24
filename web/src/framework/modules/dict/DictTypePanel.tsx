@@ -62,7 +62,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
   const [editing, setEditing] = useState<DictTypeRow | null>(null)
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
-  const { data = [], isLoading } = useDictTypes(keyword)
+  const { data = [], isLoading, isError, refetch, isFetching } = useDictTypes(keyword)
   const save = useSaveDictType()
   const del = useDeleteDictType()
   const delBatch = useDeleteDictTypes()
@@ -199,9 +199,22 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         rowKey="id"
         loading={isLoading}
         pagination={false}
+        total={data.length}
+        hasFilters={!!keyword.trim()}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
         onRowClick={onSelect}
         batchBarPlacement="root"
-        sortable={keyword || !has('dict:update') || !isPlatform ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={
+          has('dict:update') && isPlatform
+            ? {
+                onReorder: (ids) => sort.mutateAsync(ids),
+                disabled: !!keyword.trim(),
+                disabledReason: keyword.trim() ? t('common.reorderFilteredDisabled') : undefined,
+              }
+            : undefined
+        }
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="dict:delete">

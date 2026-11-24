@@ -241,6 +241,7 @@ export const routes: ModuleRoute[] = [
 
 - **i18n**：命名空间固定为 `plugin_<id>`，在 `locales/zh-CN.json` 和 `en-US.json` 里同步写，顶层 key 就是 `plugin_cron`。动态拼接的 key（如 `` t(`plugin_cron.type.${v}`) ``）要保证每个取值都有文案。
 - **组件**：只用 `@/framework/components` 和 `@/framework/ui` 里的组件，例如 `DataTable`、`FilterBar`、`ResponsiveDialog`、`FormLayout`、`PageHeader`。不要直接用 `ui/table`、`ui/dialog`、`ui/sheet`、`ui/drawer`（这条 ESLint 规则目前只覆盖 `src/pages/**` 与内置模块页面，不覆盖 `src/plugins/**`，插件里不会有警告，审核时人工检查）。
+- **列表状态**：把查询的 `isLoading`、`isError`、`isFetching`、`refetch` 分别传给 `DataTable` / `TreeTable` 的 `loading`、`isError`、`retrying`、`onRetry`，由组件区分首次加载失败与保留旧数据的刷新失败并提供就地重试。筛选已应用时传 `hasFilters`，区分真空态与零命中；服务端筛选参数可用 `hasActiveFilterValues` 判断。关闭分页时传 `total={data.total ?? data.length}` 显示命中总数。筛选会截断完整列表时，不能提交筛选子集排序；保留排序意图，通过 `sortable.disabled` + `disabledReason`（树表用 `reorderDisabledReason` 并移除排序回调）明确禁用并说明原因。列表文案拼接用 `t('common.listSeparator')`，不要硬编码中文顿号。
 - **颜色**：只用语义色 token（`bg-card`、`text-muted-foreground`、`border-border`……），不要写 `#fff`、`bg-blue-500` 这类硬编码颜色，否则暗色主题会坏（ESLint 对 `src/**` 会给警告）。
 - **布局**：移动优先，用逻辑类（`ms-`、`me-`、`ps-`、`pe-`、`start-`、`end-`）而不是 `ml-`、`pl-`，保证 RTL 语言也正常。手机上触控目标不小于 40px。
 - **表单控件**：能用 Select 的地方不要用 Input（枚举、字典、外键、布尔、时间都有现成控件）。

@@ -21,7 +21,7 @@ export default function ApiMonitorPage() {
   const [interval, setIntervalMs] = useState<string>('3000')
   const [top, setTop] = useState<string>('5')
   const [sortBy, setSortBy] = useState<SortKey>('qps')
-  const { latest, history, isLoading } = useLiveMetrics<ApiSnapshot>('/monitor/api', Number(interval), 30)
+  const { latest, history, isLoading, isError, isFetching, refetch } = useLiveMetrics<ApiSnapshot>('/monitor/api', Number(interval), 30)
 
   const points = useMemo(
     () => history.map((h) => ({ time: new Date(h.ts).toLocaleTimeString(i18n.language, { hour12: false }), qps: h.qps })),
@@ -80,9 +80,9 @@ export default function ApiMonitorPage() {
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4">
-        {isLoading || !latest ? (
+        {isLoading ? (
           Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
-        ) : (
+        ) : latest ? (
           <>
             <StatCard tone="chart-1"
               title={t('apiMonitor.card.qps')}
@@ -99,7 +99,7 @@ export default function ApiMonitorPage() {
               icon={<AlertTriangle aria-hidden="true" />}
             />
           </>
-        )}
+        ) : null}
       </div>
 
       <ChartCard title={t('apiMonitor.chart.qps')}>
@@ -164,7 +164,17 @@ export default function ApiMonitorPage() {
             </div>
           </div>
         </div>
-        <DataTable<ApiStat> columns={columns} data={rows} rowKey={(r) => `${r.method} ${r.path}`} loading={!latest} pagination={false} />
+        <DataTable<ApiStat>
+          columns={columns}
+          data={rows}
+          rowKey={(r) => `${r.method} ${r.path}`}
+          loading={isLoading}
+          isError={isError}
+          onRetry={() => void refetch()}
+          retrying={isFetching}
+          total={rows.length}
+          pagination={false}
+        />
       </div>
     </PageContainer>
   )

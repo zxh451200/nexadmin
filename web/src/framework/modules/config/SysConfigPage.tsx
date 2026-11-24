@@ -19,6 +19,7 @@ import { JsonInput } from '@/framework/components/JsonInput'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
 import { OptionPicker } from '@/framework/components/OptionPicker'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
@@ -65,7 +66,7 @@ export function ParamsSection() {
   const [editing, setEditing] = useState<ConfigRow | null>(null)
   const [open, setOpen] = useState(false)
 
-  const { data, isLoading } = useConfigs({
+  const { data, isLoading, isError, isFetching, refetch } = useConfigs({
     page,
     pageSize,
     keyword: filters.keyword || undefined,
@@ -238,6 +239,10 @@ export function ParamsSection() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues(filters)}
         sort={sortProp}
         columnSettingsKey="sysConfig"
         pagination={{

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -35,7 +36,6 @@ import {
   useChannelDirectory,
 } from './capabilities'
 import { formatMoney, formatTime } from './format'
-import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
 // authorizing = 已占位、渠道冻结结论未回；failed = 渠道明确拒绝（钱没冻住，可换单重试）。
@@ -66,7 +66,7 @@ export function AuthorizationsTab() {
   const [createOpen, setCreateOpen] = useState(false)
   const [capture, setCapture] = useState<PayAuthorization | null>(null)
 
-  const { data, isLoading, isError, refetch } = useAuthorizations({ ...filters, page, pageSize, sort, desc })
+  const { data, isLoading, isFetching, isError, refetch } = useAuthorizations({ ...filters, page, pageSize, sort, desc })
   const voidAuth = useVoidAuth()
 
   const onVoid = async (a: PayAuthorization) => {
@@ -126,7 +126,6 @@ export function AuthorizationsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -164,6 +163,10 @@ export function AuthorizationsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ ...filters })}
         sort={sortProp}
         columnSettingsKey="plugin-pay-authorizations"
         pagination={{

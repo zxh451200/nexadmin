@@ -712,6 +712,10 @@ export default function KbPage() {
         data={rows}
         rowKey="id"
         loading={docs.isLoading}
+        isError={docs.isError}
+        onRetry={() => void docs.refetch()}
+        retrying={docs.isFetching}
+        hasFilters={statusFilter !== 'all'}
         sort={sortProp}
         pagination={{
           page,

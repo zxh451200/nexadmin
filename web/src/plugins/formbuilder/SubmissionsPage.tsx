@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
@@ -68,7 +69,7 @@ export default function SubmissionsPage() {
   const [selected, setSelected] = useState<string[]>([])
 
   const { data: meta, isError } = useSubmissionMeta(id)
-  const { data, isLoading } = useSubmissions(id, { ...toQuery(filters), page, pageSize, sort, desc })
+  const { data, isLoading, isError: submissionsError, refetch: refetchSubmissions, isFetching: submissionsFetching } = useSubmissions(id, { ...toQuery(filters), page, pageSize, sort, desc })
   const remove = useDeleteSubmission()
   const removeBatch = useDeleteSubmissions()
   const exportJob = useExportJob()
@@ -221,6 +222,10 @@ export default function SubmissionsPage() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={submissionsError}
+        onRetry={() => void refetchSubmissions()}
+        retrying={submissionsFetching}
+        hasFilters={hasActiveFilterValues(toQuery(filters))}
         sort={sortProp}
         columnSettingsKey="plugin-formbuilder-submissions"
         pagination={{

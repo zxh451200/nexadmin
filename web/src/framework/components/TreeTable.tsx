@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp, Info, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent, type Modifier } from '@dnd-kit/core'
@@ -13,6 +13,7 @@ import { Skeleton } from '@/framework/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/framework/ui/table'
 import { cn } from '@/lib/utils'
 import { EmptyState } from './EmptyState'
+import { ListErrorBanner } from './ListErrorBanner'
 import { BatchBar } from './table/BatchBar'
 import { ExpandAllToggle } from './ExpandAllToggle'
 import { ColumnSettings } from './table/ColumnSettings'
@@ -53,9 +54,16 @@ export interface TreeTableProps<T extends { id: string; children?: T[] }> {
   /** 选中行后显示的批量操作；函数形式可拿到已选 id */
   batchActions?: ReactNode | ((selected: string[]) => ReactNode)
   loading?: boolean
+  total?: number
+  hasFilters?: boolean
+  filteredEmptyText?: ReactNode
+  isError?: boolean
+  onRetry?: () => void
+  retrying?: boolean
   toolbar?: ReactNode
   columnSettingsKey?: string
   onRowClick?: (row: T) => void
+  reorderDisabledReason?: ReactNode
   emptyText?: ReactNode
   className?: string
 }
@@ -135,9 +143,16 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   selection,
   batchActions,
   loading,
+  total,
+  hasFilters,
+  filteredEmptyText,
+  isError,
+  onRetry,
+  retrying,
   toolbar,
   columnSettingsKey,
   onRowClick,
+  reorderDisabledReason,
   emptyText,
   className,
 }: TreeTableProps<T>) {
@@ -778,6 +793,26 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   const { ref: scrollRef, overflowing } = useOverflowX<HTMLDivElement>()
   const pinActions = overflowing && !!rowActions
   const empty = !loading && tree.length === 0
+  const failedEmpty = !!isError && empty
+  const staleError = !!isError && !loading && tree.length > 0
+  const emptyNode = failedEmpty ? (
+    <EmptyState
+      title={t('common.loadFailed')}
+      action={
+        onRetry ? (
+          <Button type="button" variant="outline" disabled={retrying} onClick={onRetry}>
+            {retrying ? <Loader2 className="me-1 size-4 animate-spin" aria-hidden="true" /> : null}
+            {t('common.retry')}
+          </Button>
+        ) : null
+      }
+    />
+  ) : (
+    <EmptyState
+      title={hasFilters ? filteredEmptyText ?? t('common.emptyFiltered') : emptyText}
+      description={hasFilters ? t('common.emptyFilteredHint') : undefined}
+    />
+  )
 
   const wrapGroup = (parentId: string | null, nodes: T[], content: ReactNode) =>
     onReorder ? (
@@ -964,7 +999,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
           {empty ? (
             <TableRow>
               <TableCell colSpan={colSpan}>
-                <EmptyState title={emptyText} />
+                {emptyNode}
               </TableCell>
             </TableRow>
           ) : null}
@@ -1090,7 +1125,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         : null}
       {empty ? (
         <div className="rounded-lg border border-border bg-card">
-          <EmptyState title={emptyText} />
+          {emptyNode}
         </div>
       ) : null}
       {!loading ? renderCards(tree, null, 0) : null}
@@ -1117,6 +1152,15 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
           ) : null}
         </div>
       </div>
+
+      {reorderDisabledReason && !onReorder && !onMove && !loading && tree.length > 0 ? (
+        <div role="status" className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{reorderDisabledReason}</span>
+        </div>
+      ) : null}
+
+      {staleError && onRetry ? <ListErrorBanner onRetry={onRetry} retrying={retrying} /> : null}
 
       {(onReorder || onMove) ? (
         <DndContext
@@ -1194,6 +1238,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       ) : (
         list
       )}
+
+      {total !== undefined && !failedEmpty ? (
+        <div className="num text-end text-sm text-muted-foreground">{t('dataTable.totalCount', { count: total })}</div>
+      ) : null}
 
       {selection && selected.length > 0 ? (
         <BatchBar count={selected.length} onClear={() => selection.onChange([])}>

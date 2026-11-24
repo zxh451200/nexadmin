@@ -277,6 +277,9 @@ export function VideoTab() {
         data={list.data?.list ?? []}
         rowKey="id"
         loading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        retrying={list.isFetching}
         columnSettingsKey="media-videos"
         pagination={{ page, pageSize: PAGE_SIZE, total: list.data?.total ?? 0, onChange: setPage }}
         emptyText={t('plugin_media.video.empty')}

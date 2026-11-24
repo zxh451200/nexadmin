@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Button } from '@/framework/ui/button'
@@ -31,7 +32,7 @@ export function ReportsTab() {
   const [pageSize, setPageSize] = useState(10)
   // 表头排序：默认按分组升序（与后端回退序一致），改排序回第一页
   const { sort, desc, sortProp } = useHeaderSort('group', false, () => setPage(1))
-  const { data, isLoading } = useReportList({ keyword, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useReportList({ keyword, page, pageSize, sort, desc })
   const reports = data?.list ?? []
   const remove = useDeleteReport()
   const removeBatch = useDeleteReports()
@@ -100,6 +101,10 @@ export function ReportsTab() {
         data={reports}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword })}
         sort={sortProp}
         pagination={{
           page,

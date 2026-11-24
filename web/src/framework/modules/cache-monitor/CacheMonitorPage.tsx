@@ -19,7 +19,7 @@ const INTERVALS = ['3000', '10000', '30000', '0'] as const
 export default function CacheMonitorPage() {
   const { t, i18n } = useTranslation()
   const [interval, setIntervalMs] = useState<string>('3000')
-  const { latest, history, isLoading } = useLiveMetrics<CacheSnapshot>('/monitor/cache', Number(interval), 30)
+  const { latest, history, isLoading, isError, isFetching, refetch } = useLiveMetrics<CacheSnapshot>('/monitor/cache', Number(interval), 30)
   const nf = useMemo(() => new Intl.NumberFormat(i18n.language), [i18n.language])
 
   const points = useMemo(
@@ -75,9 +75,9 @@ export default function CacheMonitorPage() {
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-4">
-        {isLoading || !latest ? (
+        {isLoading ? (
           Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
-        ) : (
+        ) : latest ? (
           <>
             <StatCard tone="chart-1"
               title={t('cacheMonitor.card.memory')}
@@ -101,7 +101,7 @@ export default function CacheMonitorPage() {
               icon={<Zap aria-hidden="true" />}
             />
           </>
-        )}
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2">
@@ -151,9 +151,9 @@ export default function CacheMonitorPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {info.length === 0 ? (
+            {isLoading ? (
               <Skeleton className="h-40 w-full" />
-            ) : (
+            ) : info.length > 0 ? (
               <dl className="divide-y divide-border text-sm">
                 {info.map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-4 py-2.5">
@@ -162,7 +162,7 @@ export default function CacheMonitorPage() {
                   </div>
                 ))}
               </dl>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -172,7 +172,18 @@ export default function CacheMonitorPage() {
           <CardTitle className="text-base font-medium">{t('cacheMonitor.prefix.title')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable<CachePrefix> bare columns={prefixColumns} data={latest?.prefixes ?? []} rowKey="prefix" loading={!latest} pagination={false} />
+          <DataTable<CachePrefix>
+            bare
+            columns={prefixColumns}
+            data={latest?.prefixes ?? []}
+            rowKey="prefix"
+            loading={isLoading}
+            isError={isError}
+            onRetry={() => void refetch()}
+            retrying={isFetching}
+            total={latest?.prefixes.length ?? 0}
+            pagination={false}
+          />
         </CardContent>
       </Card>
     </PageContainer>

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Badge } from '@/framework/ui/badge'
@@ -26,7 +27,7 @@ export function ChartsTab() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Chart | null>(null)
   const [picked, setPicked] = useState<string[]>([])
-  const { data, isLoading } = useCharts({ keyword, page, pageSize, sort, desc })
+  const { data, isLoading, isError, refetch, isFetching } = useCharts({ keyword, page, pageSize, sort, desc })
   const { data: datasets = [] } = useDatasetOptions('chart')
   const remove = useDeleteChart()
   const removeBatch = useDeleteCharts()
@@ -94,6 +95,10 @@ export function ChartsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+        hasFilters={hasActiveFilterValues({ keyword })}
         sort={sortProp}
         columnSettingsKey="plugin-report-charts"
         pagination={{

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Badge } from '@/framework/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
@@ -109,7 +110,19 @@ export default function AboutPage() {
               </SelectContent>
             </Select>
           </div>
-          <DataTable<LicenseRow> bare columns={columns} data={filtered} rowKey="name" loading={lic.isLoading} pagination={false} />
+          <DataTable<LicenseRow>
+            bare
+            columns={columns}
+            data={filtered}
+            rowKey="name"
+            loading={lic.isLoading}
+            isError={lic.isError}
+            onRetry={() => lic.refetch()}
+            retrying={lic.isFetching}
+            hasFilters={hasActiveFilterValues({ keyword, type: type === ALL ? undefined : type })}
+            total={filtered.length}
+            pagination={false}
+          />
         </CardContent>
       </Card>
     </PageContainer>

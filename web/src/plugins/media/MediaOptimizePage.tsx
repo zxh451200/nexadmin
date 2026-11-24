@@ -182,6 +182,9 @@ export default function MediaOptimizePage() {
             data={rows}
             rowKey="id"
             loading={list.isLoading}
+            isError={list.isError}
+            onRetry={() => void list.refetch()}
+            retrying={list.isFetching}
             columnSettingsKey="media-pending"
             pagination={{
               page,
