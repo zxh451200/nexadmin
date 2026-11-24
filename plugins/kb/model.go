@@ -4,6 +4,7 @@ package kb
 // 应答的统一口径，跟 plg_im_* 同一套归属。
 
 import (
+	"database/sql"
 	"time"
 
 	"nexadmin/core/database"
@@ -32,8 +33,11 @@ type Document struct {
 	Model      string `gorm:"size:128;not null;default:''" json:"model"`
 	Dimension  int    `gorm:"not null;default:0" json:"dimension"`
 	Error      string `gorm:"size:500;not null;default:''" json:"error,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	// SourceText 是抽取出的原文（不参与检索、不外发）：改分块参数重新切分时以它为输入。
+	// 003 之前入库的老文档为 NULL，代码回退到「把切块拼回去」。
+	SourceText sql.NullString `gorm:"column:source_text;type:text" json:"-"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
 func (Document) TableName() string { return "plg_kb_document" }
@@ -49,3 +53,27 @@ type Chunk struct {
 }
 
 func (Chunk) TableName() string { return "plg_kb_chunk" }
+
+// 未命中问题池状态：pending=待补，resolved=已转成 QA 文档，ignored=已忽略。
+const (
+	MissPending  = "pending"
+	MissResolved = "resolved"
+	MissIgnored  = "ignored"
+)
+
+// Miss 是一条「知识库答不上来」的访客问题。平台级表，与文档同归属。
+// NormHash 唯一：同一问题（忽略空白 / 大小写 / 首尾标点）只攒一条，热度看 AskCount。
+// DocumentID 指向「转 QA」后生成的文档；再次未命中会重开为 pending 并清掉它。
+type Miss struct {
+	database.PlatformModel
+	Question   string    `gorm:"size:1000;not null" json:"question"`
+	NormHash   string    `gorm:"size:64;not null;uniqueIndex:uk_plg_kb_miss_norm" json:"-"`
+	AskCount   int       `gorm:"not null;default:0" json:"askCount"`
+	Status     string    `gorm:"size:16;not null;index:idx_plg_kb_miss_status" json:"status"`
+	DocumentID idgen.ID  `gorm:"not null;default:0" json:"documentId"`
+	LastConvNo string    `gorm:"size:64;not null;default:''" json:"-"`
+	FirstAt    time.Time `json:"firstAt"`
+	LastAt     time.Time `json:"lastAt"`
+}
+
+func (Miss) TableName() string { return "plg_kb_miss" }

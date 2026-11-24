@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { AlertTriangle, BotMessageSquare, CircleCheck, CircleX, Clock, FileText, Loader2, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -18,6 +18,7 @@ import { DataTable, type Column } from '@/framework/components/DataTable'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { Textarea } from '@/framework/ui/textarea'
 import { errMsg } from '@/lib/errMsg'
+import MissPoolPanel from './MissPoolPanel'
 import {
   uploadDocument,
   uploadDocumentFromLibrary,
@@ -26,11 +27,15 @@ import {
   useDocumentChunks,
   useDocuments,
   useKbSettings,
+  useKbStats,
   useKbStatus,
+  useRechunkDocument,
+  useRechunkPreview,
   useRenameDocument,
   useReembedDocument,
   useSaveKbSettings,
   type KbDocument,
+  type KbSettings,
 } from './api'
 
 /** 单个文件在批量上传过程中的行状态：等待 → 上传中 → 成功/失败。 */
@@ -211,24 +216,80 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
 }
 
 /** 知识块预览弹窗：看这篇文档切出来的全部块——库里实际参与检索的文本。
- * 排查「AI 为什么这么答 / 为什么没命中」时从这里入手，不用对着块数黑盒猜。 */
+ * 排查「AI 为什么这么答 / 为什么没命中」时从这里入手，不用对着块数黑盒猜。
+ * 还能按当前分块参数预览重切结果：切得不合适时先看再应用，不用删了重传。 */
 function ChunksDialog({ doc, onOpenChange }: { doc: KbDocument; onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const chunks = useDocumentChunks(doc.id)
-  const list = chunks.data?.chunks ?? []
+  const preview = useRechunkPreview()
+  const apply = useRechunkDocument()
+  const [previewBlocks, setPreviewBlocks] = useState<string[] | null>(null)
+  const stored = chunks.data?.chunks ?? []
+  const list = previewBlocks
+    ? previewBlocks.map((content, i) => ({ key: `p${i}`, seq: i + 1, content }))
+    : stored.map((c) => ({ key: c.id, seq: c.seq, content: c.content }))
+
+  const onPreview = async () => {
+    try {
+      const res = await preview.mutateAsync(doc.id)
+      setPreviewBlocks(res.chunks)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
+    }
+  }
+
+  const onApply = async () => {
+    try {
+      await apply.mutateAsync(doc.id)
+      toast.success(t('plugin_kb.rechunkDone', { count: previewBlocks?.length ?? 0 }))
+      onOpenChange(false)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
+    }
+  }
+
   return (
     <ResponsiveDialog
       open
       onOpenChange={onOpenChange}
       title={t('plugin_kb.chunksTitle', { name: doc.title })}
-      description={t('plugin_kb.chunksDesc', { count: doc.chunkCount, model: doc.model })}
+      description={
+        previewBlocks
+          ? t('plugin_kb.rechunkPreviewDesc', { count: previewBlocks.length, current: doc.chunkCount })
+          : t('plugin_kb.chunksDesc', { count: doc.chunkCount, model: doc.model })
+      }
       size="lg"
       footer={
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
-          {t('common.close')}
-        </Button>
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.close')}
+          </Button>
+          {previewBlocks ? (
+            <>
+              <Button variant="ghost" onClick={() => setPreviewBlocks(null)} disabled={apply.isPending}>
+                {t('plugin_kb.rechunkBack')}
+              </Button>
+              <Button onClick={() => void onApply()} disabled={apply.isPending}>
+                {apply.isPending ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+                {t('plugin_kb.rechunkApply', { count: previewBlocks.length })}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={() => void onPreview()} disabled={preview.isPending || stored.length === 0}>
+              {preview.isPending ? (
+                <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : (
+                <RefreshCw aria-hidden="true" />
+              )}
+              {t('plugin_kb.rechunkPreview')}
+            </Button>
+          )}
+        </>
       }
     >
+      {previewBlocks ? (
+        <div className="mb-3 rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">{t('plugin_kb.rechunkWarn')}</div>
+      ) : null}
       {chunks.isLoading ? (
         <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
           <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -239,7 +300,7 @@ function ChunksDialog({ doc, onOpenChange }: { doc: KbDocument; onOpenChange: (v
       ) : (
         <ol className="flex max-h-[26rem] flex-col gap-2 overflow-y-auto pe-1">
           {list.map((c) => (
-            <li key={c.id} className="flex gap-2.5 rounded-md border border-border p-2.5">
+            <li key={c.key} className="flex gap-2.5 rounded-md border border-border p-2.5">
               <span className="num shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">#{c.seq}</span>
               <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{c.content}</p>
             </li>
@@ -300,7 +361,7 @@ function RenameDialog({ doc, onOpenChange }: { doc: KbDocument; onOpenChange: (v
   )
 }
 
-/** 检索设置弹窗：阈值 / TopK / 追加风格要求。 */
+/** 检索设置弹窗：阈值 / TopK / 检索方式 / 分块参数 / 追加风格要求。 */
 function SettingsDialog({
   open,
   onOpenChange,
@@ -308,18 +369,28 @@ function SettingsDialog({
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  initial?: { threshold: number; topK: number; systemPrompt: string }
+  initial?: KbSettings
 }) {
   const { t } = useTranslation()
   const save = useSaveKbSettings()
   const [threshold, setThreshold] = useState(String(initial?.threshold ?? ''))
   const [topK, setTopK] = useState(String(initial?.topK ?? ''))
+  const [mode, setMode] = useState<'hybrid' | 'vector'>(initial?.mode ?? 'hybrid')
+  const [chunkSize, setChunkSize] = useState(String(initial?.chunkSize ?? ''))
+  const [chunkOverlap, setChunkOverlap] = useState(String(initial?.chunkOverlap ?? ''))
   const [systemPrompt, setSystemPrompt] = useState(initial?.systemPrompt ?? '')
-  const ready = threshold !== '' && topK !== ''
+  const ready = threshold !== '' && topK !== '' && chunkSize !== '' && chunkOverlap !== ''
 
   const submit = async () => {
     try {
-      await save.mutateAsync({ threshold: Number(threshold), topK: Number(topK), systemPrompt })
+      await save.mutateAsync({
+        threshold: Number(threshold),
+        topK: Number(topK),
+        systemPrompt,
+        mode,
+        chunkSize: Number(chunkSize),
+        chunkOverlap: Number(chunkOverlap),
+      })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
@@ -346,6 +417,20 @@ function SettingsDialog({
       }
     >
       <div className="flex flex-col gap-4 text-sm">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="kb-mode">{t('plugin_kb.fields.mode')}</Label>
+          <SimpleSelect
+            className="w-full"
+            aria-label={t('plugin_kb.fields.mode')}
+            value={mode}
+            onChange={(v) => setMode(v as 'hybrid' | 'vector')}
+            options={[
+              { value: 'hybrid', label: t('plugin_kb.fields.modeHybrid') },
+              { value: 'vector', label: t('plugin_kb.fields.modeVector') },
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">{t('plugin_kb.fields.modeHint')}</p>
+        </div>
         <div className="grid grid-cols-1 gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="kb-threshold">{t('plugin_kb.fields.threshold')}</Label>
@@ -357,7 +442,18 @@ function SettingsDialog({
             <Input id="kb-topk" type="number" min="1" max="10" step="1" value={topK} onChange={(e) => setTopK(e.target.value)} />
             <p className="text-xs text-muted-foreground">{t('plugin_kb.fields.topKHint')}</p>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="kb-chunksize">{t('plugin_kb.fields.chunkSize')}</Label>
+            <Input id="kb-chunksize" type="number" min="100" max="2000" step="50" value={chunkSize} onChange={(e) => setChunkSize(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{t('plugin_kb.fields.chunkSizeHint')}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="kb-chunkoverlap">{t('plugin_kb.fields.chunkOverlap')}</Label>
+            <Input id="kb-chunkoverlap" type="number" min="0" max="1000" step="10" value={chunkOverlap} onChange={(e) => setChunkOverlap(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{t('plugin_kb.fields.chunkOverlapHint')}</p>
+          </div>
         </div>
+        <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">{t('plugin_kb.fields.chunkNote')}</p>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="kb-prompt">{t('plugin_kb.fields.systemPrompt')}</Label>
           <Textarea id="kb-prompt" rows={4} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder={t('plugin_kb.fields.systemPromptHint')} />
@@ -372,6 +468,19 @@ function formatTime(v: string, lang: string) {
   return new Intl.DateTimeFormat(lang, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(v))
 }
 
+/** 体积展示：统计条用，超过 1KB 才进位，避免「0.8 MB」这种读不出量级的写法。 */
+function formatSize(bytes: number) {
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let v = bytes
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${i === 0 || v >= 10 ? Math.round(v) : v.toFixed(1)} ${units[i]}`
+}
+
 /**
  * 知识库页：文档列表 + 上传 + 检索设置 + 测试提问。
  * AI 是否已具备条件（对话模型 / Embedding 模型）由 status 接口给结论，顶部横幅给设置指引。
@@ -384,14 +493,17 @@ export default function KbPage() {
   const [chunksDoc, setChunksDoc] = useState<KbDocument | null>(null)
   const [renameDoc, setRenameDoc] = useState<KbDocument | null>(null)
   const [question, setQuestion] = useState('')
-  // 状态筛选：ready/failed 走后端 ?status=；「需重新向量化」是「模型已变更」的推导态，
-  // 后端没有这个状态值，拉全量后在前端过滤。
-  const [statusFilter, setStatusFilter] = useState<'all' | 'ready' | 'failed' | 'reembed'>('all')
+  // 状态筛选：ready/failed/stale 全部交后端（?status=），分页后前端过滤只在当前页生效，
+  // 会出现「明明有需重嵌的文档却筛不出来」。
+  const [statusFilter, setStatusFilter] = useState<'all' | 'ready' | 'failed' | 'stale'>('all')
   const [selected, setSelected] = useState<string[]>([])
-  // 表头排序：默认新文档在前（与后端回退一致）
-  const { sort, desc, sortProp } = useHeaderSort('created_at', true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  // 表头排序：默认新文档在前（与后端回退一致）；排序变化回第一页（旧页码常越界）
+  const { sort, desc, sortProp } = useHeaderSort('created_at', true, () => setPage(1))
 
-  const docs = useDocuments(statusFilter === 'ready' || statusFilter === 'failed' ? statusFilter : undefined, sort, desc)
+  const docs = useDocuments(statusFilter === 'all' ? undefined : statusFilter, sort, desc, page, pageSize)
+  const stats = useKbStats()
   const status = useKbStatus()
   const settings = useKbSettings()
   const remove = useDeleteDocument()
@@ -400,13 +512,8 @@ export default function KbPage() {
 
   const embedModel = status.data?.embedModel ?? ''
   const needReembed = (d: KbDocument) => d.status === 'failed' || (!!embedModel && !!d.model && d.model !== embedModel)
-  const rows = useMemo(() => {
-    const all = docs.data ?? []
-    if (statusFilter === 'reembed') {
-      return all.filter((d) => d.status === 'failed' || (!!embedModel && !!d.model && d.model !== embedModel))
-    }
-    return all
-  }, [docs.data, statusFilter, embedModel])
+  const rows = docs.data?.list ?? []
+  const total = docs.data?.total ?? 0
 
   const onDelete = async (d: KbDocument) => {
     const ok = await confirm({
@@ -418,6 +525,8 @@ export default function KbPage() {
     try {
       await remove.mutateAsync(d.id)
       toast.success(t('common.operateSuccess'))
+      // 删掉本页最后一条时回退一页，避免停在空白页
+      if (rows.length === 1 && page > 1) setPage(page - 1)
     } catch {
       // 失败原因由 http 拦截器统一弹出
     }
@@ -425,7 +534,7 @@ export default function KbPage() {
 
   // 批量删除：后端只有单条 DELETE，前端逐条循环；条数大时串行耗时可接受（文档量级小）
   const onBatchDelete = async (ids: string[]) => {
-    const targets = (docs.data ?? []).filter((d) => ids.includes(d.id))
+    const targets = rows.filter((d) => ids.includes(d.id))
     if (targets.length === 0) return
     const ok = await confirm({
       title: t('common.delete'),
@@ -446,11 +555,12 @@ export default function KbPage() {
     if (fail > 0) toast.warning(t('plugin_kb.batchDeleteDone', { done, fail }))
     else toast.success(t('plugin_kb.batchDeleteDone', { done, fail }))
     setSelected([])
+    if (fail === 0 && done === rows.length && page > 1) setPage(page - 1)
   }
 
   // 批量重新向量化：同样逐条调单文档接口，只挑真正「需重新向量化」的行
   const onBatchReembed = async (ids: string[]) => {
-    const targets = (docs.data ?? []).filter((d) => ids.includes(d.id) && needReembed(d))
+    const targets = rows.filter((d) => ids.includes(d.id) && needReembed(d))
     if (targets.length === 0) return
     let done = 0
     let fail = 0
@@ -490,14 +600,6 @@ export default function KbPage() {
       // 失败原因由 http 拦截器统一弹出
     }
   }
-
-  // 统计条：文档 / 知识块 / 未就绪，数据都在现有接口里，前端汇总（量级小不做后端聚合）
-  const stats = useMemo(() => {
-    const all = docs.data ?? []
-    const chunks = all.reduce((n, d) => n + d.chunkCount, 0)
-    const failed = all.filter((d) => d.status !== 'ready').length
-    return { docs: all.length, chunks, failed }
-  }, [docs.data])
 
   const columns: Column<KbDocument>[] = [
     {
@@ -587,16 +689,20 @@ export default function KbPage() {
         </div>
       ) : null}
 
-      {docs.data ? (
+      {stats.data ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <FileText className="size-3.5" aria-hidden="true" />
-            {t('plugin_kb.statsDocs', { count: stats.docs })}
+            {t('plugin_kb.statsDocs', { count: stats.data.docs })}
           </span>
-          <span>{t('plugin_kb.statsChunks', { count: stats.chunks })}</span>
+          <span>{t('plugin_kb.statsChunks', { count: stats.data.chunks })}</span>
+          <span>{t('plugin_kb.statsSize', { size: formatSize(stats.data.size) })}</span>
           {status.data?.embedModel ? <span>{t('plugin_kb.statsModel', { model: status.data.embedModel })}</span> : null}
-          {stats.failed > 0 ? (
-            <span className="text-warning">{t('plugin_kb.statsFailed', { count: stats.failed })}</span>
+          {stats.data.failed > 0 ? (
+            <span className="text-warning">{t('plugin_kb.statsFailed', { count: stats.data.failed })}</span>
+          ) : null}
+          {stats.data.pendingMiss > 0 ? (
+            <span className="text-warning">{t('plugin_kb.statsPendingMiss', { count: stats.data.pendingMiss })}</span>
           ) : null}
         </div>
       ) : null}
@@ -607,6 +713,16 @@ export default function KbPage() {
         rowKey="id"
         loading={docs.isLoading}
         sort={sortProp}
+        pagination={{
+          page,
+          pageSize,
+          total,
+          onChange: (p, s) => {
+            setPage(p)
+            setPageSize(s)
+            setSelected([])
+          },
+        }}
         columnSettingsKey="plugin-kb-documents"
         emptyText={t('plugin_kb.empty')}
         selection={{ selected, onChange: setSelected }}
@@ -648,19 +764,25 @@ export default function KbPage() {
               aria-label={t('plugin_kb.filterStatus')}
               value={statusFilter}
               onChange={(v) => {
-                setStatusFilter(v as 'all' | 'ready' | 'failed' | 'reembed')
+                setStatusFilter(v as 'all' | 'ready' | 'failed' | 'stale')
+                setPage(1)
                 setSelected([])
               }}
               options={[
                 { value: 'all', label: t('plugin_kb.filterAll') },
                 { value: 'ready', label: t('plugin_kb.status.ready') },
                 { value: 'failed', label: t('plugin_kb.status.failed') },
-                { value: 'reembed', label: t('plugin_kb.filterReembed') },
+                { value: 'stale', label: t('plugin_kb.filterReembed') },
               ]}
             />
           </>
         }
       />
+
+      {/* 未命中问题池：线上答不上来的问题攒在这里，补一条答案即转成 QA 文档。 */}
+      <Can perm="kb:list">
+        <MissPoolPanel />
+      </Can>
 
       {/* 测试提问：不走 IM，直接验证检索命中与模型回答（调阈值用）。 */}
       <Can perm="kb:list">
@@ -710,6 +832,11 @@ export default function KbPage() {
                       <Badge variant="outline" className="shrink-0">
                         {t('plugin_kb.hitScore', { score: h.score })}
                       </Badge>
+                      {h.match === 'keyword' ? (
+                        <Badge variant="warning" className="shrink-0">
+                          {t('plugin_kb.matchKeyword')}
+                        </Badge>
+                      ) : null}
                       <span className="font-medium text-foreground">{h.title}</span>
                       <span className="min-w-0 truncate">{h.excerpt}</span>
                     </div>
@@ -725,15 +852,7 @@ export default function KbPage() {
       {chunksDoc ? <ChunksDialog doc={chunksDoc} onOpenChange={(v) => !v && setChunksDoc(null)} /> : null}
       {renameDoc ? <RenameDialog doc={renameDoc} onOpenChange={(v) => !v && setRenameDoc(null)} /> : null}
       {settings.data ? (
-        <SettingsDialog
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initial={{
-            threshold: settings.data.threshold,
-            topK: settings.data.topK,
-            systemPrompt: settings.data.systemPrompt,
-          }}
-        />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} initial={settings.data} />
       ) : null}
     </PageContainer>
   )

@@ -1,5 +1,5 @@
 import { defineMock, genId } from '@/framework/request/mock'
-import type { KbAnswer, KbChunk, KbDocument, KbHit } from './api'
+import type { KbAnswer, KbChunk, KbDocument, KbHit, KbMiss } from './api'
 
 // 知识库 mock：文档 / 设置 / 状态 / 测试提问 / 知识块预览 / 重命名 / 删除 / 重嵌。
 // 开发态没有 AI 网关，mock 让整条管理链路（含召回调试候选）都能走通。
@@ -30,6 +30,13 @@ const docs: KbDocument[] = [
   },
 ]
 
+const misses: KbMiss[] = [
+  { id: genId(), question: 'XR-500 型号的保修期是多久？', askCount: 7, status: 'pending', documentId: '', firstAt: new Date(Date.now() - 6 * 86400_000).toISOString(), lastAt: new Date(Date.now() - 3600_000).toISOString() },
+  { id: genId(), question: '可以货到付款吗', askCount: 4, status: 'pending', documentId: '', firstAt: new Date(Date.now() - 4 * 86400_000).toISOString(), lastAt: new Date(Date.now() - 7200_000).toISOString() },
+  { id: genId(), question: '企业批量采购有折扣吗', askCount: 3, status: 'resolved', documentId: docs[0]?.id ?? '', firstAt: new Date(Date.now() - 9 * 86400_000).toISOString(), lastAt: new Date(Date.now() - 2 * 86400_000).toISOString() },
+  { id: genId(), question: '能开增值税专用发票吗', askCount: 2, status: 'ignored', documentId: '', firstAt: new Date(Date.now() - 12 * 86400_000).toISOString(), lastAt: new Date(Date.now() - 8 * 86400_000).toISOString() },
+]
+
 /** 伪分块：按标题生成几条像样的段落文本，块数与 doc.chunkCount 对齐。 */
 function makeChunks(doc: KbDocument): KbChunk[] {
   const n = Math.max(1, Math.min(doc.chunkCount, 8))
@@ -42,12 +49,44 @@ function makeChunks(doc: KbDocument): KbChunk[] {
 
 defineMock([
   { method: 'GET', url: '/plugins/kb/status', handler: () => ({ embedReady: true, chatReady: true, model: 'qwen-plus', embedModel: EMBED_MODEL }) },
-  { method: 'GET', url: '/plugins/kb/settings', handler: () => ({ threshold: 0.35, topK: 4, systemPrompt: '' }) },
+  {
+    method: 'GET',
+    url: '/plugins/kb/settings',
+    handler: () => ({ threshold: 0.35, topK: 4, systemPrompt: '', mode: 'hybrid', chunkSize: 500, chunkOverlap: 50 }),
+  },
   { method: 'PUT', url: '/plugins/kb/settings', handler: ({ body }) => body },
   {
     method: 'GET',
+    url: '/plugins/kb/stats',
+    handler: () => ({
+      docs: docs.length,
+      chunks: docs.reduce((n, d) => n + d.chunkCount, 0),
+      ready: docs.filter((d) => d.status === 'ready').length,
+      failed: docs.filter((d) => d.status !== 'ready').length,
+      size: docs.reduce((n, d) => n + d.size, 0),
+      pendingMiss: misses.filter((m) => m.status === 'pending').length,
+    }),
+  },
+  {
+    method: 'GET',
     url: '/plugins/kb/documents',
-    handler: ({ query }) => docs.filter((d) => !query.status || d.status === query.status),
+    // 分页 + 状态筛选都在「服务端」（这里）做：stale = 失败或向量模型与当前配置不一致。
+    handler: ({ query }) => {
+      const status = String(query.status ?? '')
+      const matched = docs.filter((d) => {
+        if (!status) return true
+        if (status === 'stale') return d.status !== 'ready' || (d.model !== '' && d.model !== EMBED_MODEL)
+        return d.status === status
+      })
+      const page = Math.max(1, Number(query.page) || 1)
+      const pageSize = Math.max(1, Math.min(200, Number(query.pageSize) || 20))
+      return {
+        list: matched.slice((page - 1) * pageSize, page * pageSize),
+        total: matched.length,
+        page,
+        pageSize,
+      }
+    },
   },
   {
     method: 'GET',
@@ -56,6 +95,31 @@ defineMock([
       const doc = docs.find((x) => x.id === params.id)
       if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
       return { document: doc, chunks: makeChunks(doc) }
+    },
+  },
+  {
+    // 预览重切：用「块数 + 1」模拟参数变化后的切分结果，不落库。
+    method: 'GET',
+    url: '/plugins/kb/documents/:id/rechunk',
+    handler: ({ params }) => {
+      const doc = docs.find((x) => x.id === params.id)
+      if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
+      const chunks = makeChunks({ ...doc, chunkCount: doc.chunkCount + 1 }).map((c) => c.content)
+      return { document: doc, chunks, count: chunks.length }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/kb/documents/:id/rechunk',
+    handler: ({ params }) => {
+      const doc = docs.find((x) => x.id === params.id)
+      if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
+      doc.chunkCount += 1
+      doc.status = 'ready'
+      doc.model = EMBED_MODEL
+      doc.dimension = 1024
+      doc.error = ''
+      return doc
     },
   },
   {
@@ -122,13 +186,93 @@ defineMock([
       }
       const hits: KbHit[] = [
         { documentId: docs[0]?.id ?? '', title: '产品常见问题 FAQ', excerpt: '现货商品付款后 48 小时内出库，偏远地区 72 小时……', score: 0.62 },
-        { documentId: docs[1]?.id ?? '', title: '售后与退换政策', excerpt: '自签收之日起 7 天内可申请无理由退货，运费自理……', score: 0.41 },
+        // 关键词兜底命中：向量分低于阈值，但字面几乎全中（型号 / 订单号类问法）
+        { documentId: docs[1]?.id ?? '', title: '售后与退换政策', excerpt: '自签收之日起 7 天内可申请无理由退货，运费自理……', score: 0.29, match: 'keyword' },
       ]
       const out: KbAnswer = {
         answer: '根据知识库：现货商品付款后 48 小时内出库，偏远地区 72 小时内出库。如需了解具体订单的物流状态，请提供订单号由人工为您查询。',
         hits, handoff: false,
       }
       return out
+    },
+  },
+  {
+    // 未命中问题池：分页 / 状态筛选 / 排序都在「服务端」（这里）做，与真实接口一致。
+    method: 'GET',
+    url: '/plugins/kb/misses',
+    handler: ({ query }) => {
+      const status = String(query.status ?? '')
+      const matched = misses.filter((m) => !status || m.status === status)
+      const sort = String(query.sort ?? 'askCount')
+      const desc = query.desc !== 'false' && query.desc !== false
+      const val = (m: KbMiss): string | number =>
+        sort === 'lastAt' ? Date.parse(m.lastAt) : sort === 'question' ? m.question : m.askCount
+      matched.sort((a, b) => {
+        const av = val(a)
+        const bv = val(b)
+        const cmp = typeof av === 'string' ? av.localeCompare(String(bv)) : Number(av) - Number(bv)
+        return desc ? -cmp : cmp
+      })
+      const page = Math.max(1, Number(query.page) || 1)
+      const pageSize = Math.max(1, Math.min(100, Number(query.pageSize) || 20))
+      return {
+        list: matched.slice((page - 1) * pageSize, page * pageSize),
+        total: matched.length,
+        page,
+        pageSize,
+      }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/kb/misses/ignore',
+    handler: ({ body }) => {
+      const ids: string[] = Array.isArray(body?.ids) ? body.ids : []
+      let count = 0
+      for (const m of misses) {
+        if (ids.includes(m.id) && m.status === 'pending') {
+          m.status = 'ignored'
+          count++
+        }
+      }
+      return { count }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/kb/misses/:id/resolve',
+    handler: ({ params, body }) => {
+      const m = misses.find((x) => x.id === params.id)
+      if (!m) throw Object.assign(new Error('问题不存在'), { code: 404 })
+      const doc: KbDocument = {
+        id: genId(), title: m.question.slice(0, 200), sourceName: '未命中问题转QA.txt',
+        mime: 'text/plain', size: String(body?.answer ?? '').length, status: 'ready',
+        chunkCount: 1, model: EMBED_MODEL, dimension: 1024, createdAt: NOW,
+      }
+      docs.unshift(doc)
+      m.status = 'resolved'
+      m.documentId = doc.id
+      return doc
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/kb/misses/:id/reopen',
+    handler: ({ params }) => {
+      const m = misses.find((x) => x.id === params.id)
+      if (!m) throw Object.assign(new Error('问题不存在'), { code: 404 })
+      m.status = 'pending'
+      m.documentId = ''
+      return m
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/kb/misses/:id',
+    handler: ({ params }) => {
+      const i = misses.findIndex((x) => x.id === params.id)
+      if (i >= 0) misses.splice(i, 1)
+      return { ok: true }
     },
   },
 ])

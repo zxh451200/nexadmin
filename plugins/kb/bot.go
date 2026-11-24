@@ -17,6 +17,7 @@ import (
 	"nexadmin/core/ai"
 	"nexadmin/core/cache"
 	"nexadmin/core/event"
+	"nexadmin/core/lifecycle"
 	"nexadmin/core/tenant"
 	im "nexadmin/plugins/im"
 )
@@ -59,7 +60,7 @@ func newBot(ctx context.Context, d *core.Deps, svc *Service) *bot {
 	return b
 }
 
-func (b *bot) subscribe() { event.Subscribe(b) }
+func (b *bot) subscribe(rt *lifecycle.Runtime) { rt.Subscribe(b) }
 
 // Handle 在事件总线分发协程里被调用：只做过滤、防重与入队。
 func (b *bot) Handle(e event.Event) {
@@ -220,6 +221,11 @@ func (b *bot) answer(data im.EventData) {
 		return
 	}
 	if res.Handoff { // 知识库答不了：不编造，礼貌说明 + 转人工排队
+		// 只有真正的检索未命中才进问题池——频控超限与模型调用失败在上面已 return，
+		// 那是系统问题不是知识缺口，记进来只会淹没运营队列。写失败不影响访客兜底。
+		if err := b.svc.RecordMiss(ctx, question, data.ConvNo); err != nil && b.log != nil {
+			b.log.Warn("kb: record miss failed", "convNo", data.ConvNo, "err", err.Error())
+		}
 		b.fallback(data.ConvNo, st.AIFallbackText)
 		return
 	}

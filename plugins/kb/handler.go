@@ -51,21 +51,66 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/documents/:id", core.Perm("kb:edit"), h.rename)
 	g.DELETE("/documents/:id", core.Perm("kb:delete"), d.OperLogMiddleware("kb", "delete"), h.remove)
 	g.POST("/documents/:id/reembed", core.Perm("kb:edit"), h.reembed)
+	// 重新切分：GET 只预览（改没改对先看切出来的块），POST 才落库。
+	g.GET("/documents/:id/rechunk", core.Perm("kb:edit"), h.rechunkPreview)
+	g.POST("/documents/:id/rechunk", core.Perm("kb:edit"), h.rechunk)
+	g.GET("/stats", core.Perm("kb:list"), h.stats)
+	// 未命中问题池：访客问了但知识库答不上来的问题，按热度攒着等管理员补答案。
+	g.GET("/misses", core.Perm("kb:list"), h.listMisses)
+	g.POST("/misses/ignore", core.Perm("kb:edit"), d.OperLogMiddleware("kb", "ignore"), h.ignoreMisses)
+	g.POST("/misses/:id/resolve", core.Perm("kb:edit"), d.OperLogMiddleware("kb", "resolve"), h.resolveMiss)
+	g.POST("/misses/:id/reopen", core.Perm("kb:edit"), h.reopenMiss)
+	g.DELETE("/misses/:id", core.Perm("kb:delete"), d.OperLogMiddleware("kb", "delete"), h.deleteMiss)
 	g.GET("/settings", core.Perm("kb:list"), h.getSettings)
 	g.PUT("/settings", core.Perm("kb:edit"), h.putSettings)
 	g.GET("/status", core.Perm("kb:list"), h.status)
 	g.POST("/ask", core.Perm("kb:list"), h.ask)
 }
 
-// GET /plugins/kb/documents —— 文档列表。
+// GET /plugins/kb/documents —— 文档列表（分页）。
+// status=stale 是「需重新向量化」的派生态：失败的，或向量模型与当前配置不一致的。
 func (h *handler) list(c *gin.Context) {
 	sortField, desc := response.ParseSort(c)
 	// 未指定排序字段时保持历史默认（新文档在前）
 	if sortField == "" {
 		desc = true
 	}
-	rows, err := h.svc.ListDocuments(c.Request.Context(), DocumentQuery{Status: c.Query("status"), Sort: sortField, Desc: desc})
-	respond(c, rows, err)
+	page, pageSize := response.ParsePage(c)
+	q := DocumentQuery{Sort: sortField, Desc: desc, Page: page, PageSize: pageSize}
+	status := c.Query("status")
+	if status == "stale" {
+		// 当前模型取不到（AI 未配置）时只有 failed 算 stale：用哨兵值让 SQL 走到模型比较分支。
+		q.StaleModel = h.embedModel(c)
+		if q.StaleModel == "" {
+			q.StaleModel = "-"
+		}
+	} else {
+		q.Status = status
+	}
+	rows, total, err := h.svc.ListDocuments(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, rows, total, page, pageSize)
+}
+
+// embedModel 返回当前配置的 embedding 模型名；AI 未装配或未配置时为空。
+func (h *handler) embedModel(c *gin.Context) string {
+	if h.svc.gw == nil {
+		return ""
+	}
+	cfg, err := h.svc.gw.Load(c.Request.Context())
+	if err != nil {
+		return ""
+	}
+	return cfg.Normalize().EmbedModel
+}
+
+// GET /plugins/kb/stats —— 全库统计（文档 / 知识块 / 未就绪 / 占用体积）。
+func (h *handler) stats(c *gin.Context) {
+	st, err := h.svc.Stats(c.Request.Context())
+	respond(c, st, err)
 }
 
 // POST /plugins/kb/documents —— multipart 上传（file + 可选 title），同步切分并向量化。
@@ -235,6 +280,22 @@ func (h *handler) reembed(c *gin.Context) {
 	respond(c, doc, err)
 }
 
+// GET /plugins/kb/documents/:id/rechunk —— 按当前分块参数预览重切结果（不落库）。
+func (h *handler) rechunkPreview(c *gin.Context) {
+	doc, blocks, err := h.svc.RechunkPreview(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"document": doc, "chunks": blocks, "count": len(blocks)})
+}
+
+// POST /plugins/kb/documents/:id/rechunk —— 按当前分块参数重切并重新向量化。
+func (h *handler) rechunk(c *gin.Context) {
+	doc, err := h.svc.Rechunk(c.Request.Context(), c.Param("id"))
+	respond(c, doc, err)
+}
+
 // GET /plugins/kb/settings
 func (h *handler) getSettings(c *gin.Context) {
 	respond(c, h.svc.Settings(c.Request.Context()), nil)
@@ -286,4 +347,59 @@ func (h *handler) ask(c *gin.Context) {
 	// 管理端测试提问打开召回调试：handoff 时带回最接近的候选与分数，调阈值不用盲调
 	res, err := h.svc.Answer(c.Request.Context(), who, in.Query, true)
 	respond(c, res, err)
+}
+
+// GET /plugins/kb/misses —— 未命中问题池。默认按提问次数降序，被问得最多的先补。
+func (h *handler) listMisses(c *gin.Context) {
+	sortField, desc := response.ParseSort(c)
+	if sortField == "" {
+		sortField, desc = "ask_count", true
+	}
+	page, pageSize := response.ParsePage(c)
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	rows, total, err := h.svc.ListMisses(c.Request.Context(), MissQuery{
+		Status: c.Query("status"), Sort: sortField, Desc: desc, Page: page, PageSize: pageSize,
+	})
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, rows, total, page, pageSize)
+}
+
+// POST /plugins/kb/misses/:id/resolve {"answer":"..."} —— 补答案并转成 QA 文档。
+func (h *handler) resolveMiss(c *gin.Context) {
+	var in struct {
+		Answer string `json:"answer"`
+	}
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	doc, err := h.svc.ResolveMiss(c.Request.Context(), c.Param("id"), in.Answer)
+	respond(c, doc, err)
+}
+
+// POST /plugins/kb/misses/ignore {"ids":[...]} —— 批量忽略（只处理待补的）。
+func (h *handler) ignoreMisses(c *gin.Context) {
+	var in struct {
+		IDs []string `json:"ids"`
+	}
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	n, err := h.svc.IgnoreMisses(c.Request.Context(), in.IDs)
+	respond(c, gin.H{"count": n}, err)
+}
+
+// POST /plugins/kb/misses/:id/reopen —— 把已忽略 / 已解决的项放回待补队列。
+func (h *handler) reopenMiss(c *gin.Context) {
+	miss, err := h.svc.ReopenMiss(c.Request.Context(), c.Param("id"))
+	respond(c, miss, err)
+}
+
+// DELETE /plugins/kb/misses/:id —— 删除问题项（已转出的 QA 文档不跟着删）。
+func (h *handler) deleteMiss(c *gin.Context) {
+	respond(c, gin.H{"ok": true}, h.svc.DeleteMiss(c.Request.Context(), c.Param("id")))
 }
