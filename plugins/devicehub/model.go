@@ -72,6 +72,10 @@ type Device struct {
 	Lng      *float64 `json:"lng,omitempty"`
 	Lat      *float64 `json:"lat,omitempty"`
 	Location string   `gorm:"size:255;not null;default:''" json:"location"`
+	// 最后一次采集错误的文案与时间：离线设备重启后也能在列表/详情看到原因，不必翻服务器日志。
+	// 采集恢复时清空——这一列只表达「当前仍未恢复的错误」，不留历史噪音（历史看采集日志）。
+	LastError   string     `gorm:"size:255;not null;default:''" json:"lastError,omitempty"`
+	LastErrorAt *time.Time `json:"lastErrorAt,omitempty"`
 }
 
 func (Device) TableName() string { return "plg_devhub_device" }

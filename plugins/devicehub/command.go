@@ -199,6 +199,11 @@ func (s *Service) execCommand(ctx context.Context, cmd *Command) {
 		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, err.Error())
 		return
 	}
+	// 下发与回执各记一条：日志里能看清「这条写操作发生在什么时候、落到哪个地址、结果如何」。
+	s.appendLog(d.ID, LogEntry{
+		Level: "info", Kind: "write", Target: p.Address,
+		Message: s.text("下发 "+p.Name+" = "+cmd.RawValue, "Write "+p.Name+" = "+cmd.RawValue),
+	})
 	execCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	// 驱动内部有自己的网络超时（Modbus 默认 2s、S7 2s、OPC UA 5s），且多数阻塞在
@@ -248,6 +253,15 @@ func (s *Service) finishCommand(ctx context.Context, cmd *Command, deviceNo, sta
 		return
 	}
 	cmd.Status, cmd.Result = status, result
+	// 指令也进设备日志：「刚才那条下发到底回执了什么」与「采集为什么没数」是同一张时间线的事。
+	switch status {
+	case CmdDone:
+		s.appendLog(cmd.DeviceID, LogEntry{Level: "info", Kind: "write", Message: s.text("指令已执行（回执正常）", "Command executed")})
+	case CmdTimeout:
+		s.appendLog(cmd.DeviceID, LogEntry{Level: "error", Kind: "write", Message: s.text("指令超时：", "Command timed out: ") + result})
+	case CmdFailed:
+		s.appendLog(cmd.DeviceID, LogEntry{Level: "error", Kind: "write", Message: s.text("指令失败：", "Command failed: ") + result})
+	}
 	if deviceNo != "" {
 		ws.Publish("device:"+deviceNo, wsFrame{Type: "command", DeviceNo: deviceNo, DeviceID: cmd.DeviceID})
 		s.publish(ctx, EventCommand, EventData{

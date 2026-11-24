@@ -193,6 +193,29 @@ defineMock([
     }),
   },
   {
+    // 采集/指令日志：真后端是每设备 200 条的内存环形缓冲，新的在前
+    method: 'GET', url: '/plugins/devicehub/devices/:no/logs',
+    handler: ({ params }) => {
+      const d = deviceOf(String(params.no))
+      if (!d) throw new Error('device not found')
+      const now = Date.now()
+      const t = (secAgo: number) => new Date(now - secAgo * 1000).toISOString()
+      return {
+        capacity: 200,
+        list: [
+          { ts: t(18), level: 'warn', kind: 'read', target: 'hr:40003', message: '读取失败：read tcp 192.168.1.20:502: i/o timeout', costMs: 0, repeat: 3 },
+          { ts: t(24), level: 'error', kind: 'write', target: 'hr:40001', message: '指令超时：执行超时（5 秒）', repeat: 1 },
+          { ts: t(31), level: 'info', kind: 'write', target: 'hr:40001', message: '下发 输出频率 = 350', repeat: 1 },
+          { ts: t(64), level: 'info', kind: 'poll', message: '轮询 3/3 成功', costMs: 42, repeat: 1 },
+          { ts: t(128), level: 'info', kind: 'poll', message: '轮询 3/3 成功', costMs: 38, repeat: 1 },
+          { ts: t(240), level: 'warn', kind: 'status', message: '设备转为离线', repeat: 1 },
+          { ts: t(255), level: 'info', kind: 'status', message: '设备恢复在线', repeat: 1 },
+          { ts: t(300), level: 'info', kind: 'connect', target: '192.168.1.20:502', message: '连接成功，开始采集', repeat: 1 },
+        ],
+      }
+    },
+  },
+  {
     // 告警事件：deviceNo + level 筛选 + 分页，与真后端同形状（Page）
     method: 'GET', url: '/plugins/devicehub/alarms',
     handler: ({ query }) => {

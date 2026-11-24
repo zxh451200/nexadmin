@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, ArrowLeft, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, User, Wifi, WifiOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ArrowLeft, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, TriangleAlert, User, Wifi, WifiOff } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -38,6 +38,7 @@ import {
   useDevice,
   useDeviceFeed,
   useDeviceRules,
+  useDeviceLogs,
   useDeviceStats,
   useDeviceStream,
   useDevices,
@@ -97,6 +98,11 @@ export default function DevicePage() {
   const list = useMemo(() => devices.data?.list ?? [], [devices.data])
   const total = devices.data?.total ?? 0
   const pages = Math.max(1, Math.ceil(total / DEVICES_PAGE_SIZE))
+  // 删掉末页最后一条后页码要自己回退：否则 total 还有值、当前页却已空，
+  // 列表区整块空白，底部还显示「第 3/2 页」（DataTable 自带这套自愈，这里是手写分页）。
+  useEffect(() => {
+    if (page > pages) setPage(pages)
+  }, [page, pages])
 
   // URL ?device=DEV... 直达某台设备（站内信/书签）；默认选第一台
   const [selectedNo, setSelectedNo] = useState<string | undefined>(params.get('device') ?? undefined)
@@ -379,6 +385,13 @@ function DeviceDetail({
               {d.lastSeenAt ? t('plugin_devicehub.device.lastSeenAgo', { ago: formatAgo(d.lastSeenAt) }) : t('plugin_devicehub.device.neverSeen')}
             </p>
           ) : null}
+          {/* 最后一次采集错误：不点进「日志」也能看到原因（采集恢复后服务端会清空这一行） */}
+          {d?.lastError ? (
+            <p className="mt-0.5 flex items-start gap-1 text-xs text-destructive" title={d.lastError}>
+              <TriangleAlert className="mt-px size-3 shrink-0" aria-hidden="true" />
+              <span className="line-clamp-2 wrap-break-word">{d.lastError}</span>
+            </p>
+          ) : null}
         </div>
         {d ? (
           <span className="flex shrink-0 items-center gap-1">
@@ -456,6 +469,7 @@ function DeviceDetail({
           <TabsTrigger value="history">{t('plugin_devicehub.tab.history')}</TabsTrigger>
           <TabsTrigger value="commands">{t('plugin_devicehub.tab.commands')}</TabsTrigger>
           <TabsTrigger value="alarms">{t('plugin_devicehub.tab.alarms')}</TabsTrigger>
+          <TabsTrigger value="logs">{t('plugin_devicehub.tab.logs')}</TabsTrigger>
         </TabsList>
         <TabsContent value="points">
           <PointsPanel key={deviceNo} deviceNo={deviceNo} points={points.data ?? []} />
@@ -470,6 +484,9 @@ function DeviceDetail({
         </TabsContent>
         <TabsContent value="alarms">
           <AlarmsPanel key={deviceNo} deviceNo={deviceNo} points={points.data ?? []} />
+        </TabsContent>
+        <TabsContent value="logs">
+          <LogsPanel key={deviceNo} deviceNo={deviceNo} />
         </TabsContent>
       </Tabs>
     </div>
@@ -981,6 +998,53 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+// ---- 日志 ----
+
+/**
+ * 采集/指令日志：服务端每设备保留 200 条环形缓冲（进程重启即清），这里只负责按时间倒序铺开。
+ * 页面打开时 4s 轮询一次——日志是「正在发生」的东西，静态快照看不出故障还在不在继续。
+ */
+function LogsPanel({ deviceNo }: { deviceNo: string }) {
+  const { t } = useTranslation()
+  const logs = useDeviceLogs(deviceNo)
+  const rows = logs.data?.list ?? []
+  const capacity = logs.data?.capacity ?? 200
+
+  if (logs.isLoading) {
+    return (
+      <div className="space-y-1.5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-7 w-full" />
+        ))}
+      </div>
+    )
+  }
+  if (rows.length === 0) {
+    return <EmptyState title={t('plugin_devicehub.log.empty')} description={t('plugin_devicehub.log.emptyHint')} className="py-6" />
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{t('plugin_devicehub.log.hint', { count: capacity })}</p>
+      <div className="divide-y divide-border rounded-lg border border-border text-xs">
+        {rows.map((l, i) => (
+          <div key={`${l.ts}-${i}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-3 py-1.5">
+            <span className="shrink-0 font-mono tabular-nums text-muted-foreground">{formatTimeSec(l.ts)}</span>
+            <Badge variant={levelVariant(l.level)} className="shrink-0">
+              {t(`plugin_devicehub.log.level.${l.level}`)}
+            </Badge>
+            <span className="shrink-0 text-muted-foreground">{t(`plugin_devicehub.log.kind.${l.kind}`)}</span>
+            {l.target ? <span className="shrink-0 font-mono text-foreground/70">{l.target}</span> : null}
+            <span className="min-w-0 flex-1 wrap-break-word text-foreground">{l.message}</span>
+            {/* 合并后的重复次数：掉线期间同一条错误会一直刷，压成 ×37 比铺 37 行有用 */}
+            {l.repeat > 1 ? <span className="shrink-0 tabular-nums text-muted-foreground">×{l.repeat}</span> : null}
+            {l.costMs ? <span className="shrink-0 font-mono tabular-nums text-muted-foreground">{l.costMs} ms</span> : null}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

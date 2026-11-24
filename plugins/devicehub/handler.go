@@ -81,6 +81,9 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/devices/:no/history", core.Perm("devicehub:list"), h.history)
 	g.GET("/devices/:no/history-export", core.Perm("devicehub:list"), h.historyExport)
 
+	// 采集/指令日志（内存环形缓冲，最多 200 条）：排障时「刚才到底报了什么」比曲线更有用
+	g.GET("/devices/:no/logs", core.Perm("devicehub:list"), h.deviceLogs)
+
 	// 指令（高危独立权限 + 操作日志）
 	g.GET("/devices/:no/commands", core.Perm("devicehub:list"), h.listCommands)
 	g.POST("/devices/:no/commands", core.Perm("devicehub:control"), d.OperLogMiddleware("devicehub", "control"), h.createCommand)
@@ -211,6 +214,17 @@ func (h *handler) history(c *gin.Context) {
 	}
 	rows, bucket, err := h.svc.History(c.Request.Context(), q)
 	respond(c, gin.H{"rows": rows, "bucket": bucket}, err)
+}
+
+// deviceLogs 返回设备最近的采集/指令日志（内存环形缓冲，新的在前）。
+// 不带分页：缓冲本身只有 200 条，前端按打开的 tab 轮询整段即可。
+func (h *handler) deviceLogs(c *gin.Context) {
+	id, ok := h.deviceIDByNo(c)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "200"))
+	respond(c, gin.H{"list": h.svc.Logs(id, limit), "capacity": logRingSize}, nil)
 }
 
 func (h *handler) historyExport(c *gin.Context) {

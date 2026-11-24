@@ -37,6 +37,11 @@ type Service struct {
 	// 按设备分组并发后，下一轮扫描不能再把同一台设备上还在跑的指令领一遍。
 	cmdMu       sync.Mutex
 	cmdInFlight map[idgen.ID]bool
+
+	// 采集/指令日志的内存环形缓冲（见 logs.go）：deviceId → 最近 200 条。
+	// 只放内存是刻意的——它是排障用的临时证据，审计另有 oper_log 与 alarm_event。
+	logMu sync.Mutex
+	logs  map[idgen.ID]*logRing
 }
 
 // logger 是最小日志面（便于测试注入空实现），与 ticket 同款。
@@ -312,6 +317,8 @@ func (s *Service) DeleteDevice(ctx context.Context, id idgen.ID) error {
 	if s.collector != nil {
 		s.collector.stopDevice(id)
 	}
+	// 设备没了，内存里的日志缓冲也没有读者了：不释放的话，删掉的设备会一直占着 200 条。
+	defer s.dropLogs(id)
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		pointIDs := func() *gorm.DB {
 			return tx.Session(&gorm.Session{NewDB: true}).Table("plg_devhub_point").Select("id").Where("device_id = ?", id)
@@ -559,9 +566,11 @@ func (s *Service) setDeviceStatus(ctx context.Context, d *Device, status string)
 	}
 	switch {
 	case status == StatusOffline:
+		s.appendLog(d.ID, LogEntry{Level: "warn", Kind: "status", Message: s.text("设备转为离线", "Device went offline")})
 		recordStatusAlarm(LevelCritical, s.text("设备离线："+d.Name, "Device offline: "+d.Name))
 	case status == StatusOnline && prev == StatusOffline && hadSeen:
 		// 只有「在线过 → 离线 → 再上线」算恢复；从没上线过的设备首次连上不报喜
+		s.appendLog(d.ID, LogEntry{Level: "info", Kind: "status", Message: s.text("设备恢复在线", "Device back online")})
 		recordStatusAlarm(LevelInfo, s.text("设备恢复在线："+d.Name, "Device back online: "+d.Name))
 	}
 }

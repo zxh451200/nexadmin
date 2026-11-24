@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -95,11 +96,15 @@ func (c *collector) deviceLoop(ctx context.Context, d *Device) {
 	drv, err := driver.New(d.Protocol, d.Endpoint, []byte(d.Config))
 	if err != nil {
 		c.svc.logWarn("devicehub: build driver failed", "deviceNo", d.DeviceNo, "err", err.Error())
+		c.svc.appendLog(d.ID, LogEntry{Level: "error", Kind: "connect", Message: c.svc.text("构造驱动失败：", "Driver init failed: ") + err.Error()})
+		c.svc.markDeviceError(ctx, d, c.svc.text("构造驱动失败：", "Driver init failed: ")+err.Error())
 		c.svc.setDeviceStatus(ctx, d, StatusOffline)
 		return
 	}
 	if err := drv.Connect(ctx); err != nil {
 		c.svc.logWarn("devicehub: connect failed", "deviceNo", d.DeviceNo, "err", err.Error())
+		c.svc.appendLog(d.ID, LogEntry{Level: "error", Kind: "connect", Target: d.Endpoint, Message: c.svc.text("连接失败：", "Connect failed: ") + err.Error()})
+		c.svc.markDeviceError(ctx, d, c.svc.text("连接失败：", "Connect failed: ")+err.Error())
 		c.svc.setDeviceStatus(ctx, d, StatusOffline)
 	}
 	interval := devicePollInterval(d)
@@ -112,8 +117,12 @@ func (c *collector) deviceLoop(ctx context.Context, d *Device) {
 			c.svc.onReading(context.Background(), d, address, v, interval)
 		}); err != nil {
 			c.svc.logWarn("devicehub: subscribe failed", "deviceNo", d.DeviceNo, "err", err.Error())
+			c.svc.appendLog(d.ID, LogEntry{Level: "error", Kind: "connect", Target: d.Endpoint, Message: c.svc.text("订阅失败：", "Subscribe failed: ") + err.Error()})
+			c.svc.markDeviceError(ctx, d, c.svc.text("订阅失败：", "Subscribe failed: ")+err.Error())
 			c.svc.setDeviceStatus(ctx, d, StatusOffline)
 		} else {
+			c.svc.appendLog(d.ID, LogEntry{Level: "info", Kind: "connect", Target: d.Endpoint, Message: c.svc.text("已订阅，等待上行数据", "Subscribed, waiting for upstream data")})
+			c.svc.clearDeviceError(ctx, d)
 			c.svc.setDeviceStatus(ctx, d, StatusOnline)
 		}
 		// 即使刚才订阅失败也起巡检：paho 会自动重连，重连成功后由 Ping/静默判定翻回在线。
@@ -181,6 +190,8 @@ func (c *collector) pollOnce(ctx context.Context, d *Device, drv driver.Driver, 
 	}
 	def := devicePollInterval(d)
 	fail, attempted := 0, 0
+	started := time.Now()
+	lastErr := ""
 	for i := range points {
 		select {
 		case <-ctx.Done():
@@ -201,13 +212,35 @@ func (c *collector) pollOnce(ctx context.Context, d *Device, drv driver.Driver, 
 		v, err := drv.Read(ctx, p.Address, p.DataType)
 		if err != nil {
 			fail++
+			lastErr = err.Error()
 			c.svc.logWarn("devicehub: read failed", "deviceNo", d.DeviceNo, "point", p.Address, "err", err.Error())
+			// 读失败逐点记一条：这是排障时最想知道的那一行（哪个地址、报什么）。
+			// 连续重复由 appendLog 合并成「×N」，掉线期间不会把整个缓冲刷满。
+			c.svc.appendLog(d.ID, LogEntry{
+				Level: "warn", Kind: "read", Target: p.Address,
+				Message: c.svc.text("读取失败：", "Read failed: ") + err.Error(),
+			})
 			continue
 		}
 		c.svc.onReading(ctx, d, p.Address, v, def)
 	}
 	if attempted == 0 {
 		return // 这轮没有到期的测点：无从判断链路，不动状态（也省掉每 tick 刷 last_seen）
+	}
+	cost := time.Since(started).Milliseconds()
+	if fail > 0 {
+		// 落一条「最后一次错误」：详情页头部与设备列表不必点进日志就能看到原因。
+		c.svc.markDeviceError(ctx, d, c.svc.text("采集失败：", "Poll failed: ")+lastErr)
+	} else {
+		c.svc.clearDeviceError(ctx, d)
+		// 正常设备的摘要按分钟限流：不记的话「一切正常」时日志是空的，看不出设备还在采；
+		// 每轮都记又会把真正的异常冲掉。
+		if c.svc.shouldLogSummary(d.ID, time.Now()) {
+			c.svc.appendLog(d.ID, LogEntry{
+				Level: "info", Kind: "poll", CostMs: cost,
+				Message: c.svc.text(fmt.Sprintf("轮询 %d/%d 成功", attempted, attempted), fmt.Sprintf("Polled %d/%d ok", attempted, attempted)),
+			})
+		}
 	}
 	// 一轮里全部失败大概率是断线：标记 offline；有成功就是 online。
 	if fail == attempted {

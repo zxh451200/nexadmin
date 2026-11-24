@@ -31,6 +31,9 @@ export interface Device {
   lng?: number | null
   lat?: number | null
   location?: string
+  /** 最后一次采集错误：采集恢复时由服务端清空，这里只表示「当前仍未恢复」 */
+  lastError?: string
+  lastErrorAt?: string | null
 }
 
 export interface Point {
@@ -298,6 +301,29 @@ export function useCommands(deviceNo?: string) {
     queryFn: () => api.get<CommandRow[]>(`${BASE}/devices/${deviceNo}/commands`, { limit: 50 }),
     enabled: !!deviceNo,
     refetchInterval: useHiddenPause(5000),
+  })
+}
+
+/** 采集/指令日志：服务端是每设备 200 条的内存环形缓冲，新的在前。 */
+export interface DeviceLog {
+  ts: string
+  level: 'info' | 'warn' | 'error'
+  /** connect 建链 / poll 轮询摘要 / read 读点 / write 指令 / status 在线状态 */
+  kind: 'connect' | 'poll' | 'read' | 'write' | 'status'
+  target?: string
+  message: string
+  costMs?: number
+  /** 同一条日志在合并窗口内重复的次数（1 表示没重复） */
+  repeat: number
+}
+
+export function useDeviceLogs(deviceNo?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'logs', deviceNo],
+    queryFn: () => api.get<{ list: DeviceLog[]; capacity: number }>(`${BASE}/devices/${deviceNo}/logs`, { limit: 200 }),
+    enabled: !!deviceNo,
+    // 日志按秒级变化，但没必要跟 WS 抢实时性：4 秒一轮已经能看着故障发生
+    refetchInterval: useHiddenPause(4000),
   })
 }
 

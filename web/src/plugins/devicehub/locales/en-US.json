@@ -178,10 +178,28 @@
       "deleteRuleConfirm": "Delete the rule “{{name}}”? This point will stop raising that alarm."
     },
     "tab": {
-      "points": "Point config",
+      "points": "Points",
       "history": "History",
       "commands": "Commands",
-      "alarms": "Alarms"
+      "alarms": "Alarms",
+      "logs": "Logs"
+    },
+    "log": {
+      "hint": "Last {{count}} collection and command log entries. Cleared when the process restarts; repeats of the same error are collapsed into a count.",
+      "empty": "No logs yet",
+      "emptyHint": "Once the device is enabled and polling starts, connection, poll and command entries show up here.",
+      "level": {
+        "info": "Info",
+        "warn": "Warn",
+        "error": "Error"
+      },
+      "kind": {
+        "connect": "Connect",
+        "poll": "Poll",
+        "read": "Read",
+        "write": "Command",
+        "status": "Status"
+      }
     }
   }
 }
