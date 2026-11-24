@@ -197,7 +197,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
                 iconSize={8}
                 wrapperStyle={{ fontSize: 12 }}
                 formatter={sliceFormatter}
-                inactiveColor="hsl(var(--muted-foreground))"
+                inactiveColor="hsl(var(--muted-foreground) / 0.55)"
               />
             </PieChart>
           )
@@ -216,7 +216,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
                 iconSize={8}
                 wrapperStyle={{ fontSize: 12 }}
                 formatter={formatter}
-                inactiveColor="hsl(var(--muted-foreground))"
+                inactiveColor="hsl(var(--muted-foreground) / 0.55)"
               />
             ) : null}
           </>

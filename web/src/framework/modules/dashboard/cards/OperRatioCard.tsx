@@ -80,7 +80,7 @@ export default function OperRatioCard() {
                   iconSize={8}
                   wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
                   formatter={formatter}
-                  inactiveColor="hsl(var(--muted-foreground))"
+                  inactiveColor="hsl(var(--muted-foreground) / 0.55)"
                 />
               </PieChart>
             )}

@@ -83,7 +83,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
           wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
           formatter={formatter}
           // 默认 #ccc 在白卡上等于隐形，关掉的系列得留得下可点回来的痕迹
-          inactiveColor="hsl(var(--muted-foreground))"
+          inactiveColor="hsl(var(--muted-foreground) / 0.55)"
         />
       )}
     </>

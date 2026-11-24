@@ -24,11 +24,11 @@ export default function CronOverviewCard() {
     refetchInterval: live ? 60_000 : false,
   })
   if (isError) return null
-  const items: Array<{ key: string; value: number; warn?: boolean }> = data
+  const items: Array<{ key: string; label: string; value: number; warn?: boolean }> = data
     ? [
-        { key: 'total', value: data.total },
-        { key: 'enabled', value: data.enabled },
-        { key: 'failed24h', value: data.failed24h, warn: data.failed24h > 0 },
+        { key: 'total', label: t('plugin_cron.card.total'), value: data.total },
+        { key: 'enabled', label: t('plugin_cron.card.enabled'), value: data.enabled },
+        { key: 'failed24h', label: t('plugin_cron.card.failed24h'), value: data.failed24h, warn: data.failed24h > 0 },
       ]
     : []
   return (
@@ -48,7 +48,7 @@ export default function CronOverviewCard() {
           <dl className="grid grid-cols-3 gap-2 text-center md:grid-cols-1 md:text-start xl:grid-cols-3 xl:text-center">
             {items.map((it) => (
               <div key={it.key} className="flex min-w-0 flex-col-reverse">
-                <dt className="truncate text-xs text-muted-foreground">{t(`plugin_cron.card.${it.key}`)}</dt>
+                <dt className="truncate text-xs text-muted-foreground">{it.label}</dt>
                 <dd className={cn('num text-2xl font-semibold', it.warn && 'text-destructive')}>{it.value}</dd>
               </div>
             ))}

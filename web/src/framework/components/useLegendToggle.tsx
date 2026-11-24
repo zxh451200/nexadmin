@@ -54,10 +54,12 @@ export function useLegendToggle(
             toggle(key)
           }
         }}
-        // 关掉态不能只压透明度：recharts 已把 inactive 项刷成 muted 色，再叠 opacity 才和图例里"隐身"区分开
+        // 关闭态要三重信号：更淡（0.3）+ 删除线 + recharts 的 inactiveColor 压暗圆点。
+        // 只压透明度不够——图例本来就是一排 12px 小字，30% 和 40% 在深色底上肉眼分不出来，
+        // 而删除线是「这一项不再计入」的通用信号，一眼就能看出哪条被关掉了。
         className={cn(
           'cursor-pointer select-none rounded-sm px-0.5 transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40',
-          off ? 'opacity-40 hover:opacity-70' : 'hover:opacity-80',
+          off ? 'line-through decoration-1 opacity-30 hover:opacity-70' : 'hover:opacity-80',
         )}
       >
         {value}

@@ -1,13 +1,21 @@
 import { useTranslation } from 'react-i18next'
-import { Area, ComposedChart, CartesianGrid, Line, Tooltip, XAxis } from 'recharts'
+import { Area, ComposedChart, CartesianGrid, Line, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChartBox } from '@/framework/components/ChartBox'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
 /** 趋势图照抄模板 performance-overview 的画法：ComposedChart——主系列渐变面积（0.36→0.04）
-    + 次系列细折线，natural 平滑、无 dot、无 cursor、仅横向网格（0.5 透明度）、
-    X 轴 minTickGap 48 防挤、tooltip 为日期标题 + 线形指示 + 右对齐粗体数值。 */
+    + 次系列细折线，monotone 平滑、无 dot、无 cursor、仅横向网格（0.5 透明度）、
+    X 轴 minTickGap 48 防挤、tooltip 为日期标题 + 线形指示 + 右对齐粗体数值。
+
+    曲线类型用 monotone 而不是 natural：natural 是自然三次样条，相邻数据点落差大时（比如节假日
+    归零前后）会在两点之间冲出数据范围、掉到 0 线以下；而 Area 渲染带 clipPath（裁剪到绘图区），
+    冲出基线的那一段直接被裁掉，看起来就是「线在低谷处被盖住了」。monotone 是保单调插值，
+    曲线不会超出相邻点的值域，既能保住平滑感又不会掉出坐标区。
+
+    Y 轴显式给 domain 留白（峰值 8% 顶部、底部 4%）：峰值不贴顶，0 值也抬离裁剪边缘，
+    否则落在 0 上的折线（如询盘）会被裁掉一半、显得几乎看不见。 */
 
 export interface TrendBarSeries {
   key: string
@@ -71,6 +79,19 @@ export function TrendArea({ data, xKey, series, height: heightProp = 280, classN
   const [primary, ...rest] = series
   const uid = `${primary?.key ?? 's'}-fill`
 
+  // Y 轴上下留白：所有系列的最大值决定顶部空间，底部留 4% 让 0 值离开裁剪边缘
+  const peak = data.reduce((max, row) => {
+    let m = max
+    for (const s of series) {
+      const v = Number(row[s.key])
+      if (Number.isFinite(v) && v > m) m = v
+    }
+    return m
+  }, 0)
+  // peak 为 0（窗口内全归零）时给一个 [−0.04, 1] 的兜底区间，否则平坦的 0 线会压在下边缘上
+  const yTop = peak > 0 ? peak * 1.08 : 1
+  const yBottom = peak > 0 ? -peak * 0.04 : -0.04
+
   return (
     <div className={cn('w-full', className)}>
       {/* 图例置顶、右对齐（与模板 ChartLegend verticalAlign=top 同位） */}
@@ -97,6 +118,7 @@ export function TrendArea({ data, xKey, series, height: heightProp = 280, classN
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} />
+              <YAxis hide domain={[yBottom, yTop]} />
               <XAxis
                 dataKey={xKey}
                 tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
@@ -109,7 +131,7 @@ export function TrendArea({ data, xKey, series, height: heightProp = 280, classN
               {primary ? (
                 <Area
                   dataKey={primary.key}
-                  type="natural"
+                  type="monotone"
                   stroke={primary.color}
                   strokeWidth={1.5}
                   fill={`url(#${uid})`}
@@ -122,7 +144,7 @@ export function TrendArea({ data, xKey, series, height: heightProp = 280, classN
                 <Line
                   key={s.key}
                   dataKey={s.key}
-                  type="natural"
+                  type="monotone"
                   stroke={s.color}
                   strokeWidth={1.3}
                   dot={false}
