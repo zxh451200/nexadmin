@@ -332,20 +332,24 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const r = el.getBoundingClientRect()
       if (!r.width && !r.height) continue // 隐藏行零尺寸：既无法命中也不该当锚点
 
-      // 名称列（第一个数据列，把手与勾选列排在它前面）的起始沿 nameStart 是落位线的尺子：
-      // 第 N 级的落位线从名称列起始沿往里缩 N 档，正好对齐第 N 级行名称的真实缩进——
-      // 「落在第几级」与上方可见的行缩进是同一把尺，肉眼可对。
-      // 把手不是独立单元格：它和箭头、名称文字一起嵌在第一个可见列的 TableCell 内（见下面 cells 的 ci===0 分支）。
+      // 落位线的尺子是「名称文字的左沿」，第 N 级往里缩 N 档，正好压在第 N 级行名称的起笔处——
+      // 「落在第几级」与上方可见的行缩进共用同一把尺，肉眼可对。
+      // 取名称文字（箭头之后的 min-w-0 容器，见下面 cells 的 ci===0 分支）而不是 td 左沿：
+      // td 左沿还含着 12px 内边距 + 20px 拖动把手 + 箭头，从那儿起画，竖拐角会悬在勾选框与
+      // 行内容之间的空白里，跟这一行对不上。没有该锚点（纯卡片布局）才退回 td 左沿。
       // 只有勾选列才是名称列之前的独立 td；把 onReorder 也算进来会取到下一列（负责人/电话），
       // 落位线就画到名称列外面去了。
       const leadingCells = selection ? 1 : 0
       const nameCell = el.querySelectorAll('td')[leadingCells]?.getBoundingClientRect()
+      const textEl = el.querySelector<HTMLElement>('[data-name-anchor]')
+      const textRect = textEl?.getBoundingClientRect()
+      const fallbackStart = rtl ? (nameCell?.right ?? r.right) : (nameCell?.left ?? r.left)
       next.set(id, {
         top: r.top,
         bottom: r.bottom,
         left: r.left,
         right: r.right,
-        nameStart: rtl ? (nameCell?.right ?? r.right) : (nameCell?.left ?? r.left),
+        nameStart: textRect ? (rtl ? textRect.right : textRect.left) : fallbackStart,
         nameEdge: nameCell ? (rtl ? nameCell.left : nameCell.right) : null,
       })
     }
@@ -442,7 +446,6 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
 
     const plan = (o: {
       y: number
-      indentBase: number | null
       depth: number
       mode: DropPlan['mode']
       parentId: string | null
@@ -450,16 +453,17 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       edge?: 'before' | 'after'
       reason?: string
     }): DropPlan => {
-      // 落位线从「第 N 级名称的真实缩进位置」起画：indentBase 是落点行名称列的起始沿，
-      // 每级往里缩一个 INDENT_STEP——第 2 级的线正好对齐二级行名称的缩进，
-      // 「蓝条对应哪一级」与上方可见的行缩进是同一把尺，不用再靠 24px 的微差猜。
-      // （旧口径从把手单元格边沿 +48 起算，每级只差 24px，宽表格里 1 级和 2 级看起来一样。）
+      // 落位线从「第 N 级名称的真实起笔处」画起：所有行结构一致（同一套把手 + 箭头 + 文字），
+      // 所以只认一个基准——第一行（必是顶级）名称文字的左沿，再往里缩 depth 档即可对上第 N 级。
+      // 不能拿「悬停那一行」的文字左沿当基准：那行的文字本身就带着自己的缩进，再加 depth 档会多缩一级。
       const step = Math.max(0, o.depth) * INDENT_STEP
-      const start = (o.indentBase ?? firstAnchor) + (rtl ? -step : step)
+      const start = firstAnchor + (rtl ? -step : step)
       // 线只画到名称列那一头：整行在宽表格里是两三千像素，一条贯穿屏幕的蓝线读起来像进度条，
       // 反而把「落在哪一行、第几级」这两个真正的信息淹了。卡片布局量不到 td（nameEdge 为 null）才退回整行。
       const far = box!.nameEdge ?? (rtl ? box!.left : box!.right)
-      const width = Math.max(120, Math.abs(far - start) - 8)
+      // 不再用 120px 兜底硬撑：名称列窄到放不下时（三级只剩 100 出头），硬撑会让线越过 nameEdge
+      // 压到右侧列上；宁可短一点，也要让「线尾 = 名称列右沿」这个对应关系成立。
+      const width = Math.max(32, Math.abs(far - start) - 8)
       return {
         y: o.y,
         left: rtl ? start - width : start,
@@ -489,10 +493,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const afterId = kids.length ? kids[kids.length - 1].id : ''
       const y = appendAnchor(overId) ?? box.bottom
       if (maxDepth && depth + heightOf(activeNode) - 1 > maxDepth) {
-        return plan({ y, indentBase: box.nameStart, depth, mode: 'blocked', parentId: overId, afterId, reason: 'dataTable.maxDepthReached' })
+        return plan({ y, depth, mode: 'blocked', parentId: overId, afterId, reason: 'dataTable.maxDepthReached' })
       }
       const reason = blockNest?.(activeNode, overNode) ?? null
-      return plan({ y, indentBase: box.nameStart, depth, mode: reason ? 'blocked' : 'move', parentId: overId, afterId, reason: reason ?? undefined })
+      return plan({ y, depth, mode: reason ? 'blocked' : 'move', parentId: overId, afterId, reason: reason ?? undefined })
     }
     if (dx < -NEST_OFFSET && onMove && activeParent !== null) {
       // 往左拖过几档缩进就升几级：一次拖拽能从第 3 级直接回到第 1 级，
@@ -515,7 +519,6 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const rootReason = parentId === null ? (blockNest?.(activeNode, null) ?? null) : null
       return plan({
         y,
-        indentBase: parentId === null ? null : (rects.get(parentId)?.nameStart ?? null),
         depth: parentId === null ? 0 : (depthOf(tree, parentId) ?? 0) + 1,
         mode: rootReason ? 'blocked' : 'move',
         parentId,
@@ -527,7 +530,6 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     if (overParent === activeParent) {
       return plan({
         y: edge === 'before' ? box.top : box.bottom,
-        indentBase: box.nameStart,
         depth: depthOf(tree, overId) ?? 0,
         mode: 'reorder',
         parentId: overParent,
@@ -540,7 +542,6 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     const groupReason = overParent === null ? (blockNest?.(activeNode, null) ?? null) : null
     return plan({
       y: edge === 'before' ? box.top : box.bottom,
-      indentBase: box.nameStart,
       depth: depthOf(tree, overId) ?? 0,
       mode: groupReason ? 'blocked' : 'move',
       parentId: overParent,
@@ -550,6 +551,13 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragId, pointer, rects, scrollShift, tree, expanded, onMove, onReorder, blockNest, maxDepth])
+
+  // 落点层级文案：拖拽浮层的徽标 + 落位线的 sr-only 播报共用一份，避免两处各写一遍分叉
+  const dropLevelText = !drop
+    ? ''
+    : drop.depth === 0
+      ? t('dataTable.dropTopLevel')
+      : t('dataTable.dropLevel', { level: drop.depth + 1 })
 
   const onDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id)
@@ -731,6 +739,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   // 起拖时不收起被拖节点的子树：整表会在抓起的瞬间向上重排，目标位置从指针底下跑掉——
   // 这是树形表拖动「发涩/乱跳」的主因。布局保持稳定，只有被拖行压暗。
 
+  /**
+   * 展开箭头；叶子行留同尺寸空位（不画箭头但占位），否则同层「有子级/没子级」的名称左沿会参差，
+   * 而且每级 24px 的缩进也就断了——空位是层级的一部分，不能省，只能决定它排在把手前面还是后面。
+   */
   const renderToggle = (node: T, big?: boolean) => {
     // md: 必须显式写同值：Button size=icon 自带 md:h-9 md:w-9，twMerge 不会让无前缀的
     // h-6 w-6 覆盖它，否则 md 以上箭头按钮 36px、叶子占位 24px，目录行图标与文字整体右移 12px。
@@ -852,14 +864,17 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               <TableCell key={c.key} className={cn('whitespace-nowrap', alignClass(c.align))}>
                 {ci === 0 ? (
                   <div className={cn('flex items-center gap-1', indent)}>
+                    {/* 箭头（叶子是等宽空位）在前、拖动把手贴着名称：两者顺序反过来时，
+                        叶子行的 24px 空位正落在把手与名称之间，hover 一出把手就露出一大块空白。
+                        换个先后，名称坐标一分不差（24+把手20+两个 gap），空位并进左侧缩进里。 */}
+                    {renderToggle(node)}
                     {onReorder ? (
-                      // 把手静默（见 drag-handle-quiet），hover 浮现；占的 24px 折进首列左内边距的观感里
+                      // 把手静默（见 drag-handle-quiet），hover 浮现；20px 折进首列左内边距的观感里
                       <span className="inline-flex" onKeyDown={(e) => onRowKeyDown(e, node.id)}>
                         <SortableHandle className="drag-handle-quiet h-8 w-5 md:h-8 md:w-5" />
                       </span>
                     ) : null}
-                    {renderToggle(node)}
-                    <div className="min-w-0">{renderCell(c, node, index)}</div>
+                    <div className="min-w-0" data-name-anchor="1">{renderCell(c, node, index)}</div>
                   </div>
                 ) : (
                   renderCell(c, node, index)
@@ -990,12 +1005,15 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                       label={t('dataTable.selectRow')}
                     />
                   ) : null}
+                  {/* 顺序跟桌面表格一致：箭头（叶子是等宽空位）在前、把手贴着标题。
+                      卡片里把手常显（不挂 drag-handle-quiet），叶子行那个 36px 空位要是在把手
+                      后面，就等于在把手和标题之间硬生生空出一截；卡片本身窄，这截空档更显眼。 */}
+                  {renderToggle(node, true)}
                   {onReorder ? (
                     <span className="inline-flex" onKeyDown={(e) => onRowKeyDown(e, node.id)}>
                       <SortableHandle />
                     </span>
                   ) : null}
-                  {renderToggle(node, true)}
                 </>
               }
               actions={
@@ -1115,7 +1133,20 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               表现就是拖拽时浮层离指针很远（偏一个侧栏/顶栏的距离）。 */}
           {createPortal(
             <DragOverlay dropAnimation={null}>
-              {dragChip?.label ? <DragChip width={dragChip.width}>{dragChip.label}</DragChip> : null}
+              {dragChip?.label ? (
+                <DragChip
+                  width={dragChip.width}
+                  hint={
+                    drop
+                      ? drop.mode === 'blocked' && drop.reason
+                        ? { text: t(drop.reason, { count: maxDepth }), danger: true }
+                        : { text: dropLevelText }
+                      : null
+                  }
+                >
+                  {dragChip.label}
+                </DragChip>
+              ) : null}
             </DragOverlay>,
             document.body,
           )}
@@ -1124,47 +1155,37 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                 <div
                   data-drop-line="1"
                   className="pointer-events-none fixed z-60"
-                  style={{ left: drop.left - scrollShift.x, top: drop.y - 1 - scrollShift.y, width: drop.width }}
+                  style={{ left: drop.left - scrollShift.x, top: drop.y - 12 - scrollShift.y, width: drop.width }}
                   role="status"
                   aria-live="polite"
                 >
-                  {/* 落位线：3px + 外发光；两端各一个大圆点，被拖的浮层盖住一端时另一端仍能看见。
-                      右侧再标一句「会放到第几级」——树形拖拽最容易搞不清的就是落点的层级。 */}
-                  <div
-                    className={cn(
-                      'relative h-[3px] rounded-full',
-                      drop.mode === 'blocked'
-                        ? 'bg-destructive shadow-[0_0_10px_hsl(var(--destructive)/0.45)]'
-                        : 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.45)]',
-                    )}
+                  {/* 落位线画成 └ 形：横线回答「插到哪一行之后」，起点的竖拐角回答「插到第几级」——
+                      每级只差 24px 缩进，光靠横线起点位移，在宽名称列里读不出级差；竖段把层级变成一个
+                      能和上方同级行对齐的坐标。竖段 12px 只压在上一行下半截，离行文字还留 3px，不碰字。
+                      仍不画端点圆点：圆点会把插入缝读成可拖动的滑轨，而它本身不可交互。
+                      层级文案不挂在线尾：线尾外面紧接着链接列，放过去会压住列内容；改由拖拽浮层的徽标承担，
+                      这里只留一段 sr-only 文本给读屏，图形本身 decorative。 */}
+                  <span className="sr-only">
+                    {dropLevelText}
+                    {drop.mode === 'blocked' && drop.reason ? `，${t(drop.reason, { count: maxDepth })}` : ''}
+                  </span>
+                  <svg
+                    aria-hidden="true"
+                    width={drop.width + 1}
+                    height={14}
+                    viewBox={`0 0 ${drop.width + 1} 14`}
+                    className={cn('block overflow-visible', drop.mode === 'blocked' ? 'text-destructive' : 'text-primary')}
+                    style={isRtl() ? { transform: 'scaleX(-1)', transformOrigin: 'center' } : undefined}
                   >
-                    <span
-                      className={cn(
-                        'absolute -inset-s-2 top-[-5px] size-[13px] rounded-full ring-2 ring-background',
-                        drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary',
-                      )}
+                    <path
+                      d={`M 1 1 V 12 H ${drop.width}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
-                    <span
-                      className={cn(
-                        'absolute -inset-e-2 top-[-5px] size-[13px] rounded-full ring-2 ring-background',
-                        drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary',
-                      )}
-                    />
-                    {/* 落点层级一律标出来（顶级也标「第 1 级」）：树形拖拽最容易搞不清的就是会落到第几级 */}
-                    <span
-                      className={cn(
-                        'absolute inset-s-4 top-[-11px] whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium shadow-xs',
-                        drop.mode === 'blocked'
-                          ? 'bg-destructive text-destructive-foreground'
-                          : 'bg-primary text-primary-foreground',
-                      )}
-                    >
-                      {t('dataTable.dropLevel', { level: drop.depth + 1 })}
-                    </span>
-                  </div>
-                  {drop.mode === 'blocked' && drop.reason ? (
-                    <div className="mt-1 text-xs font-medium text-destructive">{t(drop.reason, { count: maxDepth })}</div>
-                  ) : null}
+                  </svg>
                 </div>,
                 document.body,
               )

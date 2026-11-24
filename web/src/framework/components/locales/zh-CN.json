@@ -25,6 +25,7 @@
     "dropToRoot": "拖到这里移到顶级",
     "maxDepthReached": "最多 {{count}} 级，不能再往下了",
     "dropLevel": "第 {{level}} 级",
+    "dropTopLevel": "顶级",
     "collapse": "收起",
     "expandAll": "全部展开",
     "collapseAll": "全部收起",

@@ -25,6 +25,7 @@
     "dropToRoot": "Drop here to move to the top level",
     "maxDepthReached": "Maximum {{count}} levels deep",
     "dropLevel": "Level {{level}}",
+    "dropTopLevel": "Top level",
     "collapse": "Collapse",
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",

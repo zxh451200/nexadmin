@@ -51,8 +51,19 @@ export function SortableItem({ id, as = 'div', className, children, ...rest }: I
  * 拖动时跟随光标的浮层。表格行必须用浮层：行在 `overflow-x-auto` 的滚动容器里，
  * 浏览器会把纵向溢出也算作裁剪（overflow-x:auto 会让 overflow-y 变成 auto），
  * 直接 transform 整行会被容器裁掉、还会撑出滚动条——这就是「拖起来发涩」的主因。
+ *
+ * hint 是落点层级徽标（「顶级」「第 2 级」/ 超层级时的红字原因）：层级信息挂在浮层上，
+ * 就不必在落位线旁边外挂一段文字——线尾外面通常紧接着下一列的内容，文字放过去会压住链接/状态列。
  */
-export function DragChip({ width, children }: { width: number; children: ReactNode }) {
+export function DragChip({
+  width,
+  hint,
+  children,
+}: {
+  width: number
+  hint?: { text: string; danger?: boolean } | null
+  children: ReactNode
+}) {
   return (
     <div
       className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm shadow-lg"
@@ -60,6 +71,16 @@ export function DragChip({ width, children }: { width: number; children: ReactNo
     >
       <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{children}</span>
+      {hint ? (
+        <span
+          className={cn(
+            'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium',
+            hint.danger ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary',
+          )}
+        >
+          {hint.text}
+        </span>
+      ) : null}
     </div>
   )
 }
