@@ -12,7 +12,9 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { FieldHint } from '@/framework/components/FieldHint'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { FormSection } from '@/framework/components/FormLayout'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { usePageActive } from '@/framework/hooks/use-page-active'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -90,27 +92,26 @@ const ID_TYPES = ['id_card', 'passport', 'officer_card', 'hmt_permit', 'other'] 
 const isLinked = (cu: CrmCustomer) => !!cu.externalSource && !!cu.externalNo
 
 // 合并预览里「将补空的字段」的列名 → 展示名（与 fields.* 同一份文案，不造第二套）
-const MERGE_FIELD_LABELS: Record<string, string> = {
-  level: 'plugin_crm.fields.level',
-  owner: 'plugin_crm.fields.owner',
-  phone: 'plugin_crm.fields.phone',
-  email: 'plugin_crm.fields.email',
-  remark: 'plugin_crm.fields.remark',
-  nationality: 'plugin_crm.fields.nationality',
-  id_type: 'plugin_crm.fields.idType',
-  id_no: 'plugin_crm.fields.idNo',
-  tax_no: 'plugin_crm.fields.taxNo',
-  industry: 'plugin_crm.fields.industry',
-  address: 'plugin_crm.fields.address',
-  country: 'plugin_crm.fields.country',
-  external_source: 'plugin_crm.fields.externalSource',
-  external_no: 'plugin_crm.fields.externalNo',
-  tags: 'plugin_crm.fields.tags',
-}
-
-function mergeFieldLabel(col: string, t: (key: string) => string) {
-  const key = MERGE_FIELD_LABELS[col]
-  return key ? t(key) : col
+function MergeFieldLabel({ col }: { col: string }) {
+  const { t } = useTranslation()
+  const labels: Record<string, string> = {
+    level: t('plugin_crm.fields.level'),
+    owner: t('plugin_crm.fields.owner'),
+    phone: t('plugin_crm.fields.phone'),
+    email: t('plugin_crm.fields.email'),
+    remark: t('plugin_crm.fields.remark'),
+    nationality: t('plugin_crm.fields.nationality'),
+    id_type: t('plugin_crm.fields.idType'),
+    id_no: t('plugin_crm.fields.idNo'),
+    tax_no: t('plugin_crm.fields.taxNo'),
+    industry: t('plugin_crm.fields.industry'),
+    address: t('plugin_crm.fields.address'),
+    country: t('plugin_crm.fields.country'),
+    external_source: t('plugin_crm.fields.externalSource'),
+    external_no: t('plugin_crm.fields.externalNo'),
+    tags: t('plugin_crm.fields.tags'),
+  }
+  return <>{labels[col] ?? col}</>
 }
 
 // 类型徽标：客户是个人还是单位，列表、详情、商机三处都要一眼分得清。
@@ -228,71 +229,48 @@ function CustomerFormDialog({
         </>
       }
     >
-      <div className="flex flex-col gap-3 text-sm">
-        <div className="flex flex-col gap-1.5">
-          <Label id="crm-customer-type">{t('plugin_crm.fields.type')}</Label>
-          <RadioGroup
-            aria-labelledby="crm-customer-type"
-            value={value.type ?? 'person'}
-            onValueChange={(v) => setType(v as CustomerType)}
-            className="grid-cols-1 gap-1"
-          >
-            {TYPES.map((tp) => (
-              <Label
-                key={tp}
-                htmlFor={`crm-customer-type-${tp}`}
-                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-normal md:min-h-9"
-              >
-                <RadioGroupItem id={`crm-customer-type-${tp}`} value={tp} />
-                {t(`plugin_crm.type.${tp}`)}
-              </Label>
-            ))}
-          </RadioGroup>
-        </div>
-        <label className="flex flex-col gap-1">
-          <span>
-            {t(isCompany ? 'plugin_crm.fields.nameCompany' : 'plugin_crm.fields.namePerson')}
-            <RequiredMark />
-          </span>
-          <Input
-            value={value.name ?? ''}
-            aria-invalid={showErrors && nameMissing}
-            placeholder={t(`plugin_crm.customer.namePlaceholder.${isCompany ? 'company' : 'person'}`)}
-            onChange={(e) => set({ name: e.target.value })}
-          />
-          {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_crm.nameRequired')}</span> : null}
-        </label>
-        <div className="grid grid-cols-1 gap-3">
+      <div className="flex flex-col gap-5 text-sm">
+        <FormSection title={t('plugin_crm.customer.section.basic')}>
+          <div className="flex flex-col gap-1.5">
+            <span className="flex items-center gap-1.5">
+              <Label id="crm-customer-type">{t('plugin_crm.fields.type')}</Label>
+              <FieldHint
+                text={t(isCompany ? 'plugin_crm.customer.typeHintCompany' : 'plugin_crm.customer.typeHintPerson')}
+              />
+            </span>
+            <RadioGroup
+              aria-labelledby="crm-customer-type"
+              value={value.type ?? 'person'}
+              onValueChange={(v) => setType(v as CustomerType)}
+              className="flex flex-wrap gap-x-6"
+            >
+              {TYPES.map((tp) => (
+                <Label
+                  key={tp}
+                  htmlFor={`crm-customer-type-${tp}`}
+                  className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-normal md:min-h-9"
+                >
+                  <RadioGroupItem id={`crm-customer-type-${tp}`} value={tp} />
+                  {t(`plugin_crm.type.${tp}`)}
+                </Label>
+              ))}
+            </RadioGroup>
+          </div>
           <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.code')}
+            <span>
+              {t(isCompany ? 'plugin_crm.fields.nameCompany' : 'plugin_crm.fields.namePerson')}
+              <RequiredMark />
+            </span>
             <Input
-              maxLength={64}
-              value={value.code ?? ''}
-              placeholder={t('plugin_crm.customer.codePlaceholder')}
-              onChange={(e) => set({ code: e.target.value })}
+              value={value.name ?? ''}
+              aria-invalid={showErrors && nameMissing}
+              placeholder={t(`plugin_crm.customer.namePlaceholder.${isCompany ? 'company' : 'person'}`)}
+              onChange={(e) => set({ name: e.target.value })}
             />
+            {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_crm.nameRequired')}</span> : null}
           </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.level')}
-            <Select value={value.level || NO_LEVEL} onValueChange={(v) => set({ level: v === NO_LEVEL ? '' : v })}>
-              <SelectTrigger aria-label={t('plugin_crm.fields.level')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_LEVEL}>{t('plugin_crm.level.none')}</SelectItem>
-                {levelOptions.map((lv) => (
-                  <SelectItem key={lv} value={lv}>
-                    {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-        </div>
-        <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.codeHint')}</p>
-        {isCompany ? (
-          <>
-            <div className="grid grid-cols-1 gap-3">
+          {isCompany ? (
+            <>
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.taxNo')}
                 <Input
@@ -304,38 +282,28 @@ function CustomerFormDialog({
               </label>
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.industry')}
-                <Input maxLength={64} value={value.industry ?? ''} onChange={(e) => set({ industry: e.target.value })} />
-              </label>
-            </div>
-            <div className="grid grid-cols-1 gap-3">
-              <label className="flex flex-col gap-1">
-                {t('plugin_crm.fields.country')}
-                <CountrySelect
-                  value={value.country}
-                  onChange={(v) => set({ country: v })}
-                  placeholder={t('plugin_crm.picker.country')}
+                <Input
+                  maxLength={64}
+                  value={value.industry ?? ''}
+                  placeholder={t('plugin_crm.customer.industryPlaceholder')}
+                  onChange={(e) => set({ industry: e.target.value })}
                 />
-                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.countryHint')}</span>
               </label>
+            </>
+          ) : (
+            <>
+              {/* 个人只收法定国籍（配证件做实名）。「国家/地区」是企业侧的所在地、跟着注册地址走，
+                  个人表单不再放第二个同款国家下拉——并排看就是重复字段（历史/导入数据仍照常展示）。 */}
               <label className="flex flex-col gap-1">
-                {t('plugin_crm.fields.address')}
-                <Input maxLength={200} value={value.address ?? ''} onChange={(e) => set({ address: e.target.value })} />
-              </label>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* 个人只收法定国籍（配证件做实名）。「国家/地区」是企业侧的所在地、跟着注册地址走，
-                个人表单不再放第二个同款国家下拉——并排看就是重复字段（历史/导入数据仍照常展示）。 */}
-            <div className="grid grid-cols-1 gap-3">
-              <label className="flex flex-col gap-1">
-                {t('plugin_crm.fields.nationality')}
+                <span className="flex items-center gap-1.5">
+                  {t('plugin_crm.fields.nationality')}
+                  <FieldHint text={t('plugin_crm.customer.nationalityHint')} />
+                </span>
                 <CountrySelect
                   value={value.nationality}
                   onChange={(v) => set({ nationality: v })}
                   placeholder={t('plugin_crm.picker.nationality')}
                 />
-                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.nationalityHint')}</span>
               </label>
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.idType')}
@@ -353,37 +321,99 @@ function CustomerFormDialog({
                   </SelectContent>
                 </Select>
               </label>
-            </div>
+              <label className="flex flex-col gap-1">
+                {t('plugin_crm.fields.idNo')}
+                <Input
+                  maxLength={64}
+                  value={value.idNo ?? ''}
+                  aria-invalid={showErrors && idPairBroken}
+                  onChange={(e) => set({ idNo: e.target.value })}
+                />
+                {showErrors && idPairBroken ? (
+                  <span className="text-xs text-destructive">{t('plugin_crm.idPairRequired')}</span>
+                ) : null}
+              </label>
+            </>
+          )}
+        </FormSection>
+
+        {isCompany ? (
+          <FormSection title={t('plugin_crm.customer.section.location')}>
             <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.idNo')}
-              <Input
-                maxLength={64}
-                value={value.idNo ?? ''}
-                aria-invalid={showErrors && idPairBroken}
-                onChange={(e) => set({ idNo: e.target.value })}
+              <span className="flex items-center gap-1.5">
+                {t('plugin_crm.fields.country')}
+                <FieldHint text={t('plugin_crm.customer.countryHint')} />
+              </span>
+              <CountrySelect
+                value={value.country}
+                onChange={(v) => set({ country: v })}
+                placeholder={t('plugin_crm.picker.country')}
               />
-              {showErrors && idPairBroken ? <span className="text-xs text-destructive">{t('plugin_crm.idPairRequired')}</span> : null}
             </label>
-          </>
-        )}
-        <p className="text-xs text-muted-foreground">
-          {t(isCompany ? 'plugin_crm.customer.typeHintCompany' : 'plugin_crm.customer.typeHintPerson')}
-        </p>
-        <label className="flex flex-col gap-1">
-          {t('plugin_crm.fields.status')}
-          <Select value={value.status ?? 'active'} onValueChange={(v) => set({ status: v as CrmCustomerForm['status'] })}>
-            <SelectTrigger aria-label={t('plugin_crm.fields.status')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">{t('plugin_crm.status.active')}</SelectItem>
-              <SelectItem value="inactive">{t('plugin_crm.status.inactive')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </label>
-        <div className="grid grid-cols-1 gap-3">
+            <label className="flex flex-col gap-1">
+              {t('plugin_crm.fields.address')}
+              <Input
+                maxLength={200}
+                value={value.address ?? ''}
+                placeholder={t('plugin_crm.customer.addressPlaceholder')}
+                onChange={(e) => set({ address: e.target.value })}
+              />
+            </label>
+          </FormSection>
+        ) : null}
+
+        <FormSection title={t('plugin_crm.customer.section.classify')}>
           <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.externalSource')}
+            <span className="flex items-center gap-1.5">
+              {t('plugin_crm.fields.code')}
+              <FieldHint text={t('plugin_crm.customer.codeHint')} />
+            </span>
+            <Input
+              maxLength={64}
+              value={value.code ?? ''}
+              placeholder={t('plugin_crm.customer.codePlaceholder')}
+              onChange={(e) => set({ code: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="flex items-center gap-1.5">
+              {t('plugin_crm.fields.level')}
+              <FieldHint text={t('plugin_crm.customer.levelHint')} />
+            </span>
+            <Select value={value.level || NO_LEVEL} onValueChange={(v) => set({ level: v === NO_LEVEL ? '' : v })}>
+              <SelectTrigger aria-label={t('plugin_crm.fields.level')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_LEVEL}>{t('plugin_crm.level.none')}</SelectItem>
+                {levelOptions.map((lv) => (
+                  <SelectItem key={lv} value={lv}>
+                    {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.status')}
+            <Select value={value.status ?? 'active'} onValueChange={(v) => set({ status: v as CrmCustomerForm['status'] })}>
+              <SelectTrigger aria-label={t('plugin_crm.fields.status')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">{t('plugin_crm.status.active')}</SelectItem>
+                <SelectItem value="inactive">{t('plugin_crm.status.inactive')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+        </FormSection>
+
+        <FormSection title={t('plugin_crm.customer.section.external')}>
+          <label className="flex flex-col gap-1">
+            <span className="flex items-center gap-1.5">
+              {t('plugin_crm.fields.externalSource')}
+              <FieldHint text={t('plugin_crm.customer.anchorHint')} />
+            </span>
             <Select
               value={value.externalSource ?? ALL}
               onValueChange={(v) =>
@@ -419,9 +449,9 @@ function CustomerFormDialog({
               <span className="text-xs text-destructive">{t('plugin_crm.externalNoRequired')}</span>
             ) : null}
           </label>
-        </div>
-        <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.anchorHint')}</p>
-        <div className="grid grid-cols-1 gap-3">
+        </FormSection>
+
+        <FormSection title={t('plugin_crm.customer.section.contact')}>
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.owner')}
             <Input value={value.owner ?? ''} onChange={(e) => set({ owner: e.target.value })} />
@@ -430,15 +460,16 @@ function CustomerFormDialog({
             {t(isCompany ? 'plugin_crm.fields.switchboard' : 'plugin_crm.fields.mobile')}
             <Input value={value.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} />
           </label>
-        </div>
-        <label className="flex flex-col gap-1">
-          {t('plugin_crm.fields.email')}
-          <Input value={value.email ?? ''} onChange={(e) => set({ email: e.target.value })} />
-        </label>
-        <label className="flex flex-col gap-1">
-          {t('plugin_crm.fields.remark')}
-          <Textarea rows={3} maxLength={500} value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
-        </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.email')}
+            <Input value={value.email ?? ''} onChange={(e) => set({ email: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.remark')}
+            <Textarea rows={3} maxLength={500} value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
+          </label>
+        </FormSection>
+
         <CustomFieldsEditor
           values={(value.custom ?? {}) as Record<string, unknown>}
           onChange={(custom) => set({ custom: custom as CrmCustomerForm['custom'] })}
@@ -710,7 +741,7 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
                     <ul className="mt-1 space-y-0.5">
                       {preview.fillFields.map((f) => (
                         <li key={f.column} className="flex gap-2">
-                          <span className="text-muted-foreground">{mergeFieldLabel(f.column, t)}</span>
+                          <span className="text-muted-foreground"><MergeFieldLabel col={f.column} /></span>
                           <span className="num truncate">← {f.value}</span>
                         </li>
                       ))}
@@ -991,10 +1022,14 @@ export function CustomersTab() {
     sort: sort || undefined,
     desc,
   })
+  // 公海列表的筛选口径与客户列表一致（后端 ListPool 复用 applyCustomerFilter + orderOf）：
+  // 这里少传一个条件，用户就会看到「更多筛选」角标亮着、结果却按未筛选返回。
   const { data: pool, isLoading: poolLoading } = useCustomerPool({
-    keyword: filters.keyword, type: filters.type, status: filters.status, source: filters.source,
+    ...filters,
     page,
     pageSize,
+    sort: sort || undefined,
+    desc,
   })
   const inPool = ownerFilter === POOL
   // 「更多筛选」上的数字：收起时也能看出低频条件里还有生效项，避免以为筛选被重置了。
@@ -1177,6 +1212,8 @@ export function CustomersTab() {
       // 身份标识：企业看统一社会信用代码，个人看证件类型 + 号码——前台就是靠这两样认人。
       key: 'identity',
       title: t('plugin_crm.fields.identity'),
+      // 手机卡片只露 4 个字段：15-18 位代码在窄屏上是纯噪声，让位给电话（见下）。
+      mobile: 'hidden',
       render: (cu) => {
         const value =
           cu.type === 'company'
@@ -1195,10 +1232,9 @@ export function CustomersTab() {
       },
     },
     {
-      // 电话是销售联系客户的第一入口：个人看手机，企业看总机
+      // 电话是销售联系客户的第一入口：个人看手机，企业看总机。手机卡片里必须留着。
       key: 'phone',
       title: t('plugin_crm.fields.phone'),
-      mobile: 'hidden',
       render: (cu) => (cu.phone ? <span className="num">{cu.phone}</span> : <span className="text-muted-foreground">-</span>),
     },
     {
@@ -1238,7 +1274,12 @@ export function CustomersTab() {
           <Badge variant="outline">{t('plugin_crm.status.inactive')}</Badge>
         ),
     },
-    { key: 'owner', title: t('plugin_crm.fields.owner'), sortKey: 'owner', render: (cu) => cu.owner || '-' },
+    {
+      key: 'owner',
+      title: t('plugin_crm.fields.owner'),
+      sortKey: 'owner',
+      render: (cu) => cu.owner || <span className="text-muted-foreground">-</span>,
+    },
     {
       key: 'createdAt',
       title: t('plugin_crm.fields.createdAt'),
@@ -1285,7 +1326,14 @@ export function CustomersTab() {
           placeholder={t('plugin_crm.fields.status')}
         />
         {/* 归属：全部 / 只看我的 / 公海。公海走独立列表，对所有人开放。 */}
-        <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+        {/* 切视图等于换数据集，必须回第一页：留在第 4 页会先拿到空表，再被 DataTable 逐页回退连打好几次接口。 */}
+        <Select
+          value={ownerFilter}
+          onValueChange={(v) => {
+            setOwnerFilter(v)
+            setPage(1)
+          }}
+        >
           <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.owner')}>
             <SelectValue />
           </SelectTrigger>

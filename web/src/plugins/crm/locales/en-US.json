@@ -214,8 +214,18 @@
       "nationalityHint": "Legal nationality (which country the person holds), paired with ID type/number for real-name checks",
       "countryHint": "Where the customer is based, for both persons and companies; ISO codes shown in the UI language",
       "typeHintCompany": "Companies are identified by the unified social credit code; the people you deal with go in Contacts below, one per person, and the opportunity's default contact is picked from there.",
-      "codeHint": "Leave the code empty to auto-generate one (C- prefix); it is only used for list display and search. You can also enter your own code. Level is for display only.",
+      "industryPlaceholder": "e.g. Wholesale and retail",
+      "addressPlaceholder": "Province / city / district + street",
+      "codeHint": "Leave empty to auto-generate (C- prefix); used for list display and search only. You can also use your own numbering.",
+      "levelHint": "Affects display in the list and detail view only; no business rules.",
       "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation.",
+      "section": {
+        "basic": "Basics",
+        "location": "Location",
+        "classify": "Code & level",
+        "external": "External system",
+        "contact": "Contact"
+      },
       "field": {
         "title": "Custom fields",
         "hint": "Attach extra business info to every customer (e.g. member source, intent level). Values save with the customer; deleting a definition keeps stored history values.",

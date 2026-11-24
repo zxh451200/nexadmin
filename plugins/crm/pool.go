@@ -71,7 +71,8 @@ func applyCustomerFilter(db *gorm.DB, q CustomerQuery) *gorm.DB {
 }
 
 // ListPool 分页列出公海客户（owner 为空）。公海对持 crm:list 的所有人可见，
-// 不叠加数据范围；筛选与客户列表一致。
+// 不叠加数据范围；筛选与排序都与客户列表同一套（applyCustomerFilter / orderOf），
+// 否则前端「更多筛选」显示生效、结果却按未筛选返回。
 func (s *Service) ListPool(ctx context.Context, q CustomerQuery) ([]Customer, int64, error) {
 	q.Type = lowerAll(q.Type)
 	for _, t := range q.Type {
@@ -85,7 +86,7 @@ func (s *Service) ListPool(ctx context.Context, q CustomerQuery) ([]Customer, in
 		return nil, 0, err
 	}
 	var rows []Customer
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	if err := db.Order(q.orderOf()).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
