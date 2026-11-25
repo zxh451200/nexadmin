@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, ArrowLeft, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, TriangleAlert, User, Wifi, WifiOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ArrowLeft, Bell, BellOff, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, TriangleAlert, User, UserCheck, Wifi, WifiOff } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -29,7 +29,9 @@ import { formatAgo, formatTime, formatTimeSec } from './format'
 import {
   exportHistory,
   invalidateDeviceQueries,
+  useAckAlarmEvent,
   useAlarmEvents,
+  useClearAlarmEvent,
   useCommands,
   useCreateCommand,
   useDeleteAlarmRule,
@@ -47,9 +49,12 @@ import {
   useSaveAlarmRule,
   useSaveDevice,
   useSavePoint,
+  useSilenceAlarmEvent,
+  type AlarmEvent,
   type AlarmLevel,
   type AlarmOp,
   type AlarmRule,
+  type AlarmStatus,
   type CommandRow,
   type Device,
   type DeviceProtocol,
@@ -73,6 +78,12 @@ function levelVariant(l: string): 'warning' | 'destructive' | 'info' {
   if (l === 'critical') return 'destructive'
   if (l === 'warn') return 'warning'
   return 'info'
+}
+
+function alarmStatusVariant(s: AlarmStatus): 'warning' | 'info' | 'secondary' {
+  if (s === 'active') return 'warning'
+  if (s === 'ack') return 'info'
+  return 'secondary'
 }
 
 export default function DevicePage() {
@@ -1067,11 +1078,48 @@ function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
   // 「全部级别」用 'all' 而不是空串：Radix 的 Select 把 value='' 当成「未选中」，
   // 选项文字进不了触发器，筛选框会一直显示成一个空白胶囊（2026-11-23 实测）。
   const [level, setLevel] = useState('all')
+  // 未处理 = active + ack：认领后仍留在「未处理」视图里，直到人工/自动恢复。
+  const [status, setStatus] = useState('all')
   const [page, setPage] = useState(1)
-  const events = useAlarmEvents(deviceNo, { level: level === 'all' ? undefined : level, page, pageSize: EVENTS_PAGE_SIZE })
+  const [silenceEvent, setSilenceEvent] = useState<AlarmEvent | null>(null)
+  const confirm = useConfirm()
+  const ack = useAckAlarmEvent()
+  const clear = useClearAlarmEvent()
+  const events = useAlarmEvents(deviceNo, {
+    level: level === 'all' ? undefined : level,
+    status: status === 'all' ? undefined : status,
+    page,
+    pageSize: EVENTS_PAGE_SIZE,
+  })
   const eventRows = events.data?.list ?? []
   const eventTotal = events.data?.total ?? 0
   const eventPages = Math.max(1, Math.ceil(eventTotal / EVENTS_PAGE_SIZE))
+
+  const onAck = async (event: AlarmEvent) => {
+    try {
+      await ack.mutateAsync(event.id)
+      toast.success(t('plugin_devicehub.alarm.ackDone'))
+    } catch {
+      // 失败原因由 http 拦截器统一提示
+    }
+  }
+
+  const onClear = async (event: AlarmEvent) => {
+    if (
+      !(await confirm({
+        title: t('plugin_devicehub.alarm.clearTitle'),
+        description: t('plugin_devicehub.alarm.clearConfirm'),
+        confirmText: t('plugin_devicehub.alarm.clear'),
+      }))
+    )
+      return
+    try {
+      await clear.mutateAsync(event.id)
+      toast.success(t('plugin_devicehub.alarm.clearDone'))
+    } catch {
+      // 失败原因由 http 拦截器统一提示
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -1108,33 +1156,105 @@ function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
           ))}
       </section>
       <section className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-foreground">{t('plugin_devicehub.alarm.eventsTitle')}</h3>
-          <SimpleSelect
-            className="w-32"
-            aria-label={t('plugin_devicehub.alarm.levelText')}
-            value={level}
-            onChange={(v) => {
-              setLevel(v)
-              setPage(1)
-            }}
-            options={[
-              { value: 'all', label: t('plugin_devicehub.alarm.levelAll') },
-              ...LEVELS.map((l) => ({ value: l, label: t(`plugin_devicehub.alarm.level.${l}`) })),
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <SimpleSelect
+              className="w-32"
+              aria-label={t('plugin_devicehub.alarm.statusText')}
+              value={status}
+              onChange={(v) => {
+                setStatus(v)
+                setPage(1)
+              }}
+              options={[
+                { value: 'all', label: t('plugin_devicehub.alarm.statusAll') },
+                { value: 'unsettled', label: t('plugin_devicehub.alarm.unsettled') },
+                { value: 'cleared', label: t('plugin_devicehub.alarm.status.cleared') },
+              ]}
+            />
+            <SimpleSelect
+              className="w-32"
+              aria-label={t('plugin_devicehub.alarm.levelText')}
+              value={level}
+              onChange={(v) => {
+                setLevel(v)
+                setPage(1)
+              }}
+              options={[
+                { value: 'all', label: t('plugin_devicehub.alarm.levelAll') },
+                ...LEVELS.map((l) => ({ value: l, label: t(`plugin_devicehub.alarm.level.${l}`) })),
+              ]}
+            />
+          </div>
         </div>
         {eventRows.length === 0 ? (
           <EmptyState title={t('plugin_devicehub.alarm.empty')} className="py-6" />
         ) : (
           <div className="divide-y divide-border rounded-lg border border-border">
-            {eventRows.map((e) => (
-              <div key={e.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                <Badge variant={levelVariant(e.level)}>{t(`plugin_devicehub.alarm.level.${e.level}`)}</Badge>
-                <span className="min-w-0 flex-1 truncate">{e.message}</span>
-                <span className="text-xs text-muted-foreground">{formatTime(e.createdAt)}</span>
-              </div>
-            ))}
+            {eventRows.map((e) => {
+              const silenced = !!e.silencedUntil && new Date(e.silencedUntil).getTime() > Date.now()
+              return (
+                <div key={e.id} className={cn('px-3 py-2 text-sm', e.status === 'cleared' && 'opacity-70')}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={levelVariant(e.level)}>{t(`plugin_devicehub.alarm.level.${e.level}`)}</Badge>
+                    <Badge variant={alarmStatusVariant(e.status)}>{t(`plugin_devicehub.alarm.status.${e.status}`)}</Badge>
+                    {silenced ? (
+                      <Badge variant="outline">
+                        <BellOff className="size-3" aria-hidden="true" />
+                        {t('plugin_devicehub.alarm.silenced')}
+                      </Badge>
+                    ) : null}
+                    <span className="min-w-0 flex-1 truncate">{e.message}</span>
+                    <span className="text-xs text-muted-foreground">{formatTime(e.createdAt)}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {e.ackByName ? <span>{t('plugin_devicehub.alarm.ackedBy', { name: e.ackByName })}</span> : null}
+                    {silenced ? (
+                      <span>{t('plugin_devicehub.alarm.silencedUntil', { time: formatTime(e.silencedUntil!) })}</span>
+                    ) : null}
+                    {e.clearedAt ? (
+                      <span>{t('plugin_devicehub.alarm.clearedAt', { time: formatTime(e.clearedAt) })}</span>
+                    ) : null}
+                    {e.status !== 'cleared' ? (
+                      <Can perm="devicehub:edit">
+                        <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
+                          {e.status === 'active' ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={ack.isPending}
+                              onClick={() => void onAck(e)}
+                            >
+                              <UserCheck aria-hidden="true" />
+                              {t('plugin_devicehub.alarm.ack')}
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={ack.isPending || clear.isPending}
+                            onClick={() => setSilenceEvent(e)}
+                          >
+                            {silenced ? <Bell aria-hidden="true" /> : <BellOff aria-hidden="true" />}
+                            {t(silenced ? 'plugin_devicehub.alarm.unsilence' : 'plugin_devicehub.alarm.silence')}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={ack.isPending || clear.isPending}
+                            onClick={() => void onClear(e)}
+                          >
+                            <CircleCheck aria-hidden="true" />
+                            {t('plugin_devicehub.alarm.clear')}
+                          </Button>
+                        </div>
+                      </Can>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
         {eventTotal > EVENTS_PAGE_SIZE ? (
@@ -1165,7 +1285,59 @@ function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
         ) : null}
       </section>
       {ruleOpen ? <AlarmRuleDialog points={points} rule={editingRule} onOpenChange={setRuleOpen} /> : null}
+      {silenceEvent ? (
+        <AlarmSilenceDialog event={silenceEvent} onOpenChange={(v) => !v && setSilenceEvent(null)} />
+      ) : null}
     </div>
+  )
+}
+
+// AlarmSilenceDialog 选择静默时长；已静默的事件提供「取消静默」。
+function AlarmSilenceDialog({ event, onOpenChange }: { event: AlarmEvent; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const silence = useSilenceAlarmEvent()
+  const current = !!event.silencedUntil && new Date(event.silencedUntil).getTime() > Date.now()
+  const [minutes, setMinutes] = useState(current ? '0' : '60')
+  const durations = [
+    { value: '60', label: t('plugin_devicehub.alarm.duration.1h') },
+    { value: '480', label: t('plugin_devicehub.alarm.duration.8h') },
+    { value: '1440', label: t('plugin_devicehub.alarm.duration.24h') },
+    { value: '10080', label: t('plugin_devicehub.alarm.duration.7d') },
+  ]
+  const submit = async () => {
+    try {
+      await silence.mutateAsync({ id: event.id, minutes: Number(minutes) })
+      toast.success(minutes === '0' ? t('plugin_devicehub.alarm.unsilenceDone') : t('plugin_devicehub.alarm.silenceDone'))
+      onOpenChange(false)
+    } catch {
+      // 失败原因由 http 拦截器统一提示
+    }
+  }
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_devicehub.alarm.silenceTitle')}
+      description={t('plugin_devicehub.alarm.silenceDesc')}
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button disabled={silence.isPending} onClick={() => void submit()}>
+            {silence.isPending ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+            {t(minutes === '0' ? 'plugin_devicehub.alarm.unsilence' : 'plugin_devicehub.alarm.silence')}
+          </Button>
+        </>
+      }
+    >
+      <SimpleSelect
+        className="w-full"
+        aria-label={t('plugin_devicehub.alarm.silenceDuration')}
+        value={minutes}
+        onChange={setMinutes}
+        options={current ? [{ value: '0', label: t('plugin_devicehub.alarm.unsilence') }, ...durations] : durations}
+      />
+    </ResponsiveDialog>
   )
 }
 

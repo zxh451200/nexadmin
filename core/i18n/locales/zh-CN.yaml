@@ -1093,6 +1093,9 @@ devicehub:
   alarm_op_invalid: 比较符无效，可选 gt / lt / ge / le / eq / ne
   alarm_level_invalid: 告警级别只能是 info / warn / critical
   alarm_not_found: 告警规则不存在
+  alarm_event_not_found: 告警事件不存在
+  alarm_already_cleared: 告警已恢复，不能再操作
+  alarm_silence_invalid: 静默时长无效，可选 0（取消静默）或 1~10080 分钟
   location_invalid: 位置信息不合法（需要 lat/lng 数值）
 saml:
   acs:

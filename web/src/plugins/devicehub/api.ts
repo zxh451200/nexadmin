@@ -101,6 +101,8 @@ export interface AlarmRule {
   lastFiredAt?: string | null
 }
 
+export type AlarmStatus = 'active' | 'ack' | 'cleared'
+
 export interface AlarmEvent {
   id: string
   ruleId: string
@@ -109,6 +111,14 @@ export interface AlarmEvent {
   value: number
   level: AlarmLevel
   message: string
+  /** 生命周期：active 未处理 / ack 已认领 / cleared 已恢复 */
+  status: AlarmStatus
+  ackBy?: string
+  ackByName?: string
+  ackAt?: string | null
+  clearedAt?: string | null
+  /** 静默截止时间；非空且未过期时，同一规则后续告警不再发站内信 */
+  silencedUntil?: string | null
   createdAt: string
 }
 
@@ -336,13 +346,44 @@ export function useCreateCommand(deviceNo: string) {
   })
 }
 
-export function useAlarmEvents(deviceNo?: string, query: { level?: string; page?: number; pageSize?: number } = {}) {
+export function useAlarmEvents(
+  deviceNo?: string,
+  query: { level?: string; status?: string; page?: number; pageSize?: number } = {},
+) {
   return useQuery({
     queryKey: [...KEY, 'alarms', deviceNo, query],
     queryFn: () =>
       api.get<Page<AlarmEvent>>(`${BASE}/alarms`, deviceNo ? { deviceNo, ...query } : query),
     placeholderData: keepPreviousData,
     refetchInterval: useHiddenPause(8000),
+  })
+}
+
+/** 认领告警：active → ack，列表上显示谁在处理。 */
+export function useAckAlarmEvent() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.post<AlarmEvent>(`${BASE}/alarms/${id}/ack`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 人工恢复告警：active/ack → cleared。 */
+export function useClearAlarmEvent() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.post<AlarmEvent>(`${BASE}/alarms/${id}/clear`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 静默告警；minutes=0 表示取消静默。 */
+export function useSilenceAlarmEvent() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, minutes }: { id: string; minutes: number }) =>
+      api.post<AlarmEvent>(`${BASE}/alarms/${id}/silence`, { minutes }),
+    onSuccess: invalidate,
   })
 }
 

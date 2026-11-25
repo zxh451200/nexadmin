@@ -7,6 +7,7 @@ package devicehub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -557,12 +558,25 @@ func (s *Service) setDeviceStatus(ctx context.Context, d *Device, status string)
 	// 状态真正变化才补设备级告警事件（RuleID=0 表示不是阈值规则触发）。
 	// 离线给 critical、恢复给 info；事件写失败只记日志——状态已经提交，不回头撤销。
 	recordStatusAlarm := func(level, msg string) {
-		event := AlarmEvent{RuleID: 0, DeviceID: d.ID, PointID: 0, Value: 0, Level: level, Message: msg}
+		now := time.Now().UTC()
+		status, clearedAt := AlarmStatusActive, (*time.Time)(nil)
+		if level == LevelInfo {
+			// 设备恢复在线：把此前未结的离线告警统一收口，再记一条恢复事件。
+			status, clearedAt = AlarmStatusCleared, &now
+			s.clearActiveAlarmEvents(ctx, 0, d.ID, 0, now)
+		}
+		event := AlarmEvent{
+			RuleID: 0, DeviceID: d.ID, PointID: 0, Value: 0, Level: level, Message: msg,
+			Status: status, ClearedAt: clearedAt,
+		}
 		if err := s.db.WithContext(ctx).Create(&event).Error; err != nil {
 			s.logWarn("devicehub: store status alarm failed", "deviceNo", d.DeviceNo, "err", err.Error())
 			return
 		}
-		s.notifyAlarm(ctx, d, level, msg)
+		// 静默只压制业务告警通知；恢复通知照常送达，否则坐席不知道设备已回来。
+		if level == LevelInfo || !s.alarmSilenced(ctx, 0, d.ID) {
+			s.notifyAlarm(ctx, d, level, msg)
+		}
 	}
 	switch {
 	case status == StatusOffline:
@@ -797,12 +811,17 @@ func (s *Service) evaluateAlarms(ctx context.Context, d *Device, p *Point, tick 
 			fmt.Sprintf("%s / %s = %.3g %s（%s %.3g）", d.Name, p.Name, *tick.Num, p.Unit, opLabel(r.Op), r.Threshold),
 			fmt.Sprintf("%s / %s = %.3g %s (%s %.3g)", d.Name, p.Name, *tick.Num, p.Unit, opLabel(r.Op), r.Threshold),
 		)
-		event := AlarmEvent{RuleID: r.ID, DeviceID: d.ID, PointID: p.ID, Value: *tick.Num, Level: r.Level, Message: msg}
+		event := AlarmEvent{
+			RuleID: r.ID, DeviceID: d.ID, PointID: p.ID, Value: *tick.Num, Level: r.Level,
+			Message: msg, Status: AlarmStatusActive,
+		}
 		if err := s.db.Create(&event).Error; err != nil {
 			s.logWarn("devicehub: store alarm event failed", "err", err.Error())
 			continue
 		}
-		s.notifyAlarm(ctx, d, r.Level, msg)
+		if !s.alarmSilenced(ctx, r.ID, d.ID) {
+			s.notifyAlarm(ctx, d, r.Level, msg)
+		}
 		s.publish(ctx, EventAlarm, EventData{
 			DeviceNo: d.DeviceNo, DeviceID: int64(d.ID), PointID: int64(p.ID),
 			Address: p.Address, Value: *tick.Num, Level: r.Level, Message: msg,
@@ -812,14 +831,19 @@ func (s *Service) evaluateAlarms(ctx context.Context, d *Device, p *Point, tick 
 	}
 }
 
-// recoverAlarm 写告警恢复事件（info 级）并清规则的触发标记；随后照常走通知与事件总线，
-// 订阅方按 Level 区分触发/恢复。
+// recoverAlarm 把该规则未结的事件收口为 cleared，再写一条 info 级恢复事件；
+// 随后照常走通知与事件总线，订阅方按 Level 区分触发/恢复。
 func (s *Service) recoverAlarm(ctx context.Context, d *Device, p *Point, r AlarmRule, v float64) {
 	msg := s.text(
 		fmt.Sprintf("%s / %s 已恢复（阈值 %s %.3g，当前 %.3g）", d.Name, p.Name, opLabel(r.Op), r.Threshold, v),
 		fmt.Sprintf("%s / %s recovered (threshold %s %.3g, now %.3g)", d.Name, p.Name, opLabel(r.Op), r.Threshold, v),
 	)
-	event := AlarmEvent{RuleID: r.ID, DeviceID: d.ID, PointID: p.ID, Value: v, Level: LevelInfo, Message: msg}
+	now := time.Now().UTC()
+	s.clearActiveAlarmEvents(ctx, r.ID, d.ID, p.ID, now)
+	event := AlarmEvent{
+		RuleID: r.ID, DeviceID: d.ID, PointID: p.ID, Value: v, Level: LevelInfo, Message: msg,
+		Status: AlarmStatusCleared, ClearedAt: &now,
+	}
 	if err := s.db.Create(&event).Error; err != nil {
 		s.logWarn("devicehub: store alarm recovery failed", "err", err.Error())
 		return
@@ -901,14 +925,25 @@ type AlarmRuleInput struct {
 // validLevels 是合法告警级别（筛选参数只认这几个，其余一律当「全部」）。
 var validLevels = map[string]bool{LevelInfo: true, LevelWarn: true, LevelCritical: true}
 
-// ListAlarmEvents 分页返回告警事件（监控页的告警流）：level 为空 = 全部级别。
-func (s *Service) ListAlarmEvents(ctx context.Context, deviceID idgen.ID, level string, page, pageSize int) ([]AlarmEvent, int64, error) {
+// validAlarmStatuses 是事件筛选允许的状态；unsettled 是「未处理」聚合态（active + ack）。
+var validAlarmStatuses = map[string]bool{
+	AlarmStatusActive: true, AlarmStatusAck: true, AlarmStatusCleared: true,
+}
+
+// ListAlarmEvents 分页返回告警事件（监控页的告警流）：level/status 为空 = 不过滤。
+func (s *Service) ListAlarmEvents(ctx context.Context, deviceID idgen.ID, level, status string, page, pageSize int) ([]AlarmEvent, int64, error) {
 	q := s.db.WithContext(ctx).Model(&AlarmEvent{})
 	if deviceID > 0 {
 		q = q.Where("device_id = ?", deviceID)
 	}
 	if validLevels[level] {
 		q = q.Where("level = ?", level)
+	}
+	switch {
+	case status == "unsettled":
+		q = q.Where("status IN ?", []string{AlarmStatusActive, AlarmStatusAck})
+	case validAlarmStatuses[status]:
+		q = q.Where("status = ?", status)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -917,6 +952,143 @@ func (s *Service) ListAlarmEvents(ctx context.Context, deviceID idgen.ID, level 
 	var rows []AlarmEvent
 	err := q.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error
 	return rows, total, err
+}
+
+func (s *Service) alarmEventByID(ctx context.Context, id idgen.ID) (*AlarmEvent, error) {
+	var event AlarmEvent
+	if err := s.db.WithContext(ctx).Take(&event, int64(id)).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, response.NotFound("devicehub.alarm_event_not_found")
+		}
+		return nil, err
+	}
+	return &event, nil
+}
+
+// AckAlarmEvent 认领一条告警：active → ack。重复认领幂等；已恢复的告警拒绝再认领。
+func (s *Service) AckAlarmEvent(ctx context.Context, id idgen.ID, operatorID idgen.ID, operatorName string) (*AlarmEvent, error) {
+	event, err := s.alarmEventByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if event.Status == AlarmStatusCleared {
+		return nil, response.Conflict("devicehub.alarm_already_cleared")
+	}
+	if event.Status == AlarmStatusAck {
+		return event, nil
+	}
+	now := time.Now().UTC()
+	res := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Where("id = ?", id).Where("status = ?", AlarmStatusActive).
+		Updates(map[string]any{
+			"status": AlarmStatusAck, "ack_by": operatorID, "ack_by_name": operatorName,
+			"ack_at": now, "updated_at": now,
+		})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return s.alarmEventByID(ctx, id)
+	}
+	event.Status, event.AckBy, event.AckByName, event.AckAt = AlarmStatusAck, operatorID, operatorName, &now
+	event.UpdatedAt = now
+	return event, nil
+}
+
+// ClearAlarmEvent 人工恢复：active/ack → cleared。重复恢复幂等。
+func (s *Service) ClearAlarmEvent(ctx context.Context, id idgen.ID) (*AlarmEvent, error) {
+	event, err := s.alarmEventByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if event.Status == AlarmStatusCleared {
+		return event, nil
+	}
+	now := time.Now().UTC()
+	res := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Where("id = ?", id).Where("status <> ?", AlarmStatusCleared).
+		Updates(map[string]any{"status": AlarmStatusCleared, "cleared_at": now, "updated_at": now})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return s.alarmEventByID(ctx, id)
+	}
+	event.Status, event.ClearedAt, event.UpdatedAt = AlarmStatusCleared, &now, now
+	return event, nil
+}
+
+// SilenceAlarmEvent 静默一条告警直到指定分钟数；minutes=0 表示取消静默。
+// 静默不改变生命周期状态，只压制同一规则后续告警的站内信。
+func (s *Service) SilenceAlarmEvent(ctx context.Context, id idgen.ID, minutes int) (*AlarmEvent, error) {
+	const maxMinutes = 7 * 24 * 60
+	if minutes < 0 || minutes > maxMinutes {
+		return nil, response.BadRequest("devicehub.alarm_silence_invalid")
+	}
+	event, err := s.alarmEventByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if event.Status == AlarmStatusCleared {
+		return nil, response.Conflict("devicehub.alarm_already_cleared")
+	}
+	now := time.Now().UTC()
+	var until *time.Time
+	if minutes > 0 {
+		t := now.Add(time.Duration(minutes) * time.Minute)
+		until = &t
+	}
+	res := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Where("id = ?", id).Where("status <> ?", AlarmStatusCleared).
+		Updates(map[string]any{"silenced_until": until, "updated_at": now})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return s.alarmEventByID(ctx, id)
+	}
+	event.SilencedUntil, event.UpdatedAt = until, now
+	return event, nil
+}
+
+// clearActiveAlarmEvents 把某条规则（或设备状态告警）未结的事件统一收口为 cleared。
+// ruleID=0 时按设备匹配 RuleID=0 的状态告警，兼容离线/恢复这条不挂规则的链路。
+func (s *Service) clearActiveAlarmEvents(ctx context.Context, ruleID, deviceID, pointID idgen.ID, now time.Time) {
+	q := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Where("status IN ?", []string{AlarmStatusActive, AlarmStatusAck}).
+		Where("device_id = ?", deviceID)
+	if ruleID > 0 {
+		q = q.Where("rule_id = ?", ruleID)
+	} else {
+		q = q.Where("rule_id = 0")
+	}
+	if pointID > 0 {
+		q = q.Where("point_id = ?", pointID)
+	}
+	if err := q.Updates(map[string]any{
+		"status": AlarmStatusCleared, "cleared_at": now, "updated_at": now,
+	}).Error; err != nil {
+		s.logWarn("devicehub: clear active alarm events failed", "err", err.Error())
+	}
+}
+
+// alarmSilenced 判断同一规则（状态告警按设备）是否还有未结且未到期的静默。
+// 只压制业务告警通知，事件照常落库；恢复通知不走这个判断。
+func (s *Service) alarmSilenced(ctx context.Context, ruleID, deviceID idgen.ID) bool {
+	q := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Where("status <> ?", AlarmStatusCleared).
+		Where("silenced_until IS NOT NULL AND silenced_until > ?", time.Now().UTC()).
+		Where("device_id = ?", deviceID)
+	if ruleID > 0 {
+		q = q.Where("rule_id = ?", ruleID)
+	} else {
+		q = q.Where("rule_id = 0")
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
 }
 
 // ListAlarmRulesByDevice 一次返回设备的全部告警规则（按测点分组在消费端做）。

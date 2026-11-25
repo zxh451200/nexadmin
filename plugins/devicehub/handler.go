@@ -90,6 +90,9 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	// 告警
 	g.GET("/alarms", core.Perm("devicehub:list"), h.listAlarms)
+	g.POST("/alarms/:id/ack", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "ack"), h.ackAlarm)
+	g.POST("/alarms/:id/clear", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "clear"), h.clearAlarm)
+	g.POST("/alarms/:id/silence", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "silence"), h.silenceAlarm)
 	g.GET("/devices/:no/rules", core.Perm("devicehub:list"), h.listDeviceRules)
 	g.GET("/points/:pid/rules", core.Perm("devicehub:list"), h.listRules)
 	g.POST("/points/:pid/rules", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "create"), h.saveRule)
@@ -286,12 +289,47 @@ func (h *handler) listAlarms(c *gin.Context) {
 		}
 		deviceID = d.ID
 	}
-	rows, total, err := h.svc.ListAlarmEvents(c.Request.Context(), deviceID, c.Query("level"), page, pageSize)
+	rows, total, err := h.svc.ListAlarmEvents(c.Request.Context(), deviceID, c.Query("level"), c.Query("status"), page, pageSize)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
 	response.Page(c, rows, total, page, pageSize)
+}
+
+// ackAlarm 认领一条告警：坐席 ID 落库，列表上能看出「谁在处理」。
+func (h *handler) ackAlarm(c *gin.Context) {
+	id, err := parseIDParam(c.Param("id"))
+	if err != nil {
+		return
+	}
+	uid, name := claimsOperator(c)
+	row, err := h.svc.AckAlarmEvent(c.Request.Context(), id, uid, name)
+	respond(c, row, err)
+}
+
+func (h *handler) clearAlarm(c *gin.Context) {
+	id, err := parseIDParam(c.Param("id"))
+	if err != nil {
+		return
+	}
+	row, err := h.svc.ClearAlarmEvent(c.Request.Context(), id)
+	respond(c, row, err)
+}
+
+func (h *handler) silenceAlarm(c *gin.Context) {
+	id, err := parseIDParam(c.Param("id"))
+	if err != nil {
+		return
+	}
+	var in struct {
+		Minutes int `json:"minutes"`
+	}
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	row, err := h.svc.SilenceAlarmEvent(c.Request.Context(), id, in.Minutes)
+	respond(c, row, err)
 }
 
 // listDeviceRules 一次拉回设备全部告警规则：监控页不再对每个测点单独发请求。

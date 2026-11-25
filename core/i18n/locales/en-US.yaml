@@ -1094,6 +1094,9 @@ devicehub:
   alarm_op_invalid: Invalid comparison operator; pick gt, lt, ge, le, eq or ne
   alarm_level_invalid: The alarm level must be info, warn or critical
   alarm_not_found: The alarm rule does not exist
+  alarm_event_not_found: The alarm event does not exist
+  alarm_already_cleared: This alarm has already been cleared and cannot be changed
+  alarm_silence_invalid: Invalid silence duration; use 0 to unsilence or 1-10080 minutes
   location_invalid: Invalid location (numeric lat/lng required)
 saml:
   acs:

@@ -53,6 +53,14 @@ const (
 	LevelCritical = "critical"
 )
 
+// 告警事件生命周期：新建即 active；坐席认领转 ack；条件恢复或人工恢复转 cleared。
+// 静默不是独立状态：silenced_until 只负责压制通知，告警本身仍是 active/ack。
+const (
+	AlarmStatusActive  = "active"
+	AlarmStatusAck     = "ack"
+	AlarmStatusCleared = "cleared"
+)
+
 // Device 是一台可采集的工业设备（变频器 / PLC / 网关上位机）。
 type Device struct {
 	database.PlatformModel
@@ -171,6 +179,15 @@ type AlarmEvent struct {
 	Value    float64  `gorm:"not null" json:"value"`
 	Level    string   `gorm:"size:8;not null" json:"level"`
 	Message  string   `gorm:"size:255;not null;default:''" json:"message"`
+	// Status 是事件生命周期：active（未处理）/ ack（已认领）/ cleared（已恢复）。
+	Status string `gorm:"size:16;not null;default:active" json:"status"`
+	// 认领人：站内坐席 ID + 用户名，便于告警列表直接显示「谁在处理」。
+	AckBy     idgen.ID   `gorm:"not null;default:0" json:"ackBy,omitempty"`
+	AckByName string     `gorm:"size:64;not null;default:''" json:"ackByName,omitempty"`
+	AckAt     *time.Time `json:"ackAt,omitempty"`
+	ClearedAt *time.Time `json:"clearedAt,omitempty"`
+	// SilencedUntil 非空且晚于当前时间时，同一规则的后续告警不再发站内信。
+	SilencedUntil *time.Time `json:"silencedUntil,omitempty"`
 }
 
 func (AlarmEvent) TableName() string { return "plg_devhub_alarm_event" }

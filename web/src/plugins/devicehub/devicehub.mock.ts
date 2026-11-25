@@ -57,6 +57,13 @@ const alarmRules = [
   { id: '2', pointId: '2', name: '母线过压', op: 'gt', threshold: 550, level: 'critical', enabled: false, cooldownSeconds: 600, lastFiredAt: null },
 ]
 
+// 告警事件是可变数组：认领/恢复/静默会直接改这里，让开发态也能走完整闭环。
+const alarmEvents = [
+  { id: '1', ruleId: '1', deviceId: '901', pointId: '1', value: 52.3, level: 'warn', message: '1# 变频器 / 输出频率 = 52.3 Hz（> 50）', status: 'active', ackBy: '', ackByName: '', ackAt: null, clearedAt: null, silencedUntil: null, createdAt: new Date(Date.now() - 7200_000).toISOString() },
+  { id: '2', ruleId: '2', deviceId: '901', pointId: '2', value: 561, level: 'critical', message: '1# 变频器 / 母线电压 = 561 V（> 550）', status: 'ack', ackBy: '2', ackByName: '张工', ackAt: new Date(Date.now() - 3600_000).toISOString(), clearedAt: null, silencedUntil: new Date(Date.now() + 3600_000).toISOString(), createdAt: new Date(Date.now() - 5400_000).toISOString() },
+  { id: '3', ruleId: '1', deviceId: '901', pointId: '1', value: 0, level: 'info', message: '1# 变频器 / 输出频率 已恢复（阈值 > 50，当前 48.2）', status: 'cleared', ackBy: '', ackByName: '', ackAt: null, clearedAt: new Date(Date.now() - 1800_000).toISOString(), silencedUntil: null, createdAt: new Date(Date.now() - 1800_000).toISOString() },
+]
+
 defineMock([
   {
     // 设备列表：kw 模糊匹配 + 分页；在线在前、离线其次、停用沉底，同后端排序
@@ -216,15 +223,51 @@ defineMock([
     },
   },
   {
-    // 告警事件：deviceNo + level 筛选 + 分页，与真后端同形状（Page）
+    // 告警事件：deviceNo + level/status 筛选 + 分页，与真后端同形状（Page）
     method: 'GET', url: '/plugins/devicehub/alarms',
     handler: ({ query }) => {
-      let rows = [
-        { id: '1', ruleId: '1', deviceId: '901', pointId: '1', value: 52.3, level: 'warn', message: '1# 变频器 / 输出频率 = 52.3 Hz（> 50）', createdAt: new Date(Date.now() - 7200_000).toISOString() },
-      ]
+      let rows = alarmEvents
       if (query.deviceNo) rows = rows.filter((e) => e.deviceId === deviceOf(String(query.deviceNo))?.id)
       if (query.level) rows = rows.filter((e) => e.level === query.level)
+      if (query.status === 'unsettled') rows = rows.filter((e) => e.status !== 'cleared')
+      else if (query.status) rows = rows.filter((e) => e.status === query.status)
       return paginate(rows, query)
+    },
+  },
+  {
+    method: 'POST', url: '/plugins/devicehub/alarms/:id/ack',
+    handler: ({ params }) => {
+      const event = alarmEvents.find((e) => e.id === params.id)
+      if (!event) throw Object.assign(new Error('alarm event not found'), { code: 404 })
+      if (event.status === 'cleared') throw Object.assign(new Error('alarm already cleared'), { code: 409 })
+      if (event.status === 'active') {
+        event.status = 'ack'
+        event.ackBy = '1'
+        event.ackByName = '当前用户'
+        event.ackAt = new Date().toISOString()
+      }
+      return event
+    },
+  },
+  {
+    method: 'POST', url: '/plugins/devicehub/alarms/:id/clear',
+    handler: ({ params }) => {
+      const event = alarmEvents.find((e) => e.id === params.id)
+      if (!event) throw Object.assign(new Error('alarm event not found'), { code: 404 })
+      event.status = 'cleared'
+      event.clearedAt = new Date().toISOString()
+      return event
+    },
+  },
+  {
+    method: 'POST', url: '/plugins/devicehub/alarms/:id/silence',
+    handler: ({ params, body }) => {
+      const event = alarmEvents.find((e) => e.id === params.id)
+      if (!event) throw Object.assign(new Error('alarm event not found'), { code: 404 })
+      if (event.status === 'cleared') throw Object.assign(new Error('alarm already cleared'), { code: 409 })
+      const minutes = Number(body?.minutes ?? 0)
+      event.silencedUntil = minutes > 0 ? new Date(Date.now() + minutes * 60_000).toISOString() : null
+      return event
     },
   },
   { method: 'GET', url: '/plugins/devicehub/devices/:no/rules', handler: ({ params }) => {
