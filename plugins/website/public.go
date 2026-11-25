@@ -86,6 +86,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
 		SiteOrigin: set.SiteOrigin, FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
+		BrandCSS:    brandOverrideCSS(set.BrandColor, set.BrandColorDark),
 		TitleSuffix: set.TitleSuffix, HomeSlug: set.HomeSlug,
 		HeroImageURL: set.HeroImageURL, HeroImageDarkURL: set.HeroImageDarkURL,
 		ChatEnabled: set.ChatEnabled,

@@ -53,6 +53,9 @@ type SettingForm struct {
 	HeroImageDarkURL string `json:"heroImageDarkUrl"`
 	// RobotsTxt 非空时覆盖 robots.txt，{sitemap} 替换为站点地图绝对地址；空 = 服务端生成的默认规则。
 	RobotsTxt string `json:"robotsTxt"`
+	// BrandColor / BrandColorDark 覆盖 default 主题的强调色（浅色 / 深色皮肤）；空 = 主题内置色。
+	BrandColor     string `json:"brandColor"`
+	BrandColorDark string `json:"brandColorDark"`
 	// HomeSlug 是用作首页的自定义单页 slug；空 = 内置首页。服务层校验页面存在。
 	HomeSlug string `json:"homeSlug"`
 	// Theme 是公开站主题 id；空 = 内置 default。服务层校验主题已注册。

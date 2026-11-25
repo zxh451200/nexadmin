@@ -57,7 +57,9 @@
       "officesEmpty": "还没有办公地点，点「添加地点」创建第一个。",
       "capUnsupported": "当前主题「{{theme}}」不渲染“{{what}}”，保存后官网上看不到效果。",
       "capCurrency": "币种换算",
-      "messageRecipientInvalid": "询盘抄送邮箱格式不正确"
+      "messageRecipientInvalid": "询盘抄送邮箱格式不正确",
+      "brandColorInvalid": "品牌色请填 #RGB 或 #RRGGBB，如 #5e6ad2",
+      "capBrandColor": "品牌强调色"
     },
     "social": {
       "github": "GitHub",
@@ -559,6 +561,8 @@
       "responseTime": "平均响应",
       "heroImageUrl": "首页主视觉（浅色）",
       "heroImageDarkUrl": "首页主视觉（深色）",
+      "brandColor": "品牌强调色（浅色）",
+      "brandColorDark": "品牌强调色（深色）",
       "robotsTxt": "robots.txt 自定义",
       "messageRecipientEmail": "询盘抄送邮箱"
     },
@@ -585,6 +589,8 @@
       "certifications": "多个用逗号分隔，如 CE, UL 1973, UN38.3；详情页会渲染成认证徽章，识别的认证自动配图标。",
       "heroImageUrl": "覆盖首页首屏截图（支持上传/文件库）；留空继续用当前主题内置图。品牌主题也会优先使用这张图",
       "heroImageDarkUrl": "仅默认主题深浅双图布局使用：深色配色时优先这张；留空则回退到「首页主视觉（浅色）」或内置深色图",
+      "brandColor": "仅内置官网主题生效：覆盖按钮、链接等强调色。填 #RGB 或 #RRGGBB；留空沿用内置配色",
+      "brandColorDark": "深色皮肤下的强调色；留空则跟随「品牌强调色（浅色）」。两者都留空 = 主题内置色",
       "robotsTxt": "整段替换官网的 robots.txt；留空则用内置规则（已挡后台/API/机器入口并附 Sitemap）。可写 {sitemap} 占位自动填站点地图绝对地址",
       "messageRecipientEmail": "留言邮件抄送到这里；留空则发到「联系邮箱」。适合销售组共用收件箱，站内信不受影响"
     },

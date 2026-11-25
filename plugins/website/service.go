@@ -322,6 +322,14 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	}
 	// robots 允许运营整段覆盖（如禁爬某目录、加多条 User-agent）；限长防误粘整页文本。
 	row.RobotsTxt = trimLen(f.RobotsTxt, 5000)
+	// 品牌强调色：#rgb / #rrggbb，存前统一成小写 #rrggbb。深色留空 = 跟随浅色；
+	// 两者都空 = 主题内置色。非法值当场拦下，避免存进去却看不到效果。
+	brandLight, okL := normalizeBrandColor(f.BrandColor)
+	brandDark, okD := normalizeBrandColor(f.BrandColorDark)
+	if !okL || !okD {
+		return nil, response.BadRequest("website.brand_color_invalid")
+	}
+	row.BrandColor, row.BrandColorDark = brandLight, brandDark
 	// 设为首页只存 slug 不存 ID：页面被删时首页自动回退内置首页，不留悬空引用。
 	// 校验只要求页面存在（草稿也行——发布后首页即生效）；下线后在首页自动回退，不用改设置。
 	row.HomeSlug = trimLen(f.HomeSlug, 64)
