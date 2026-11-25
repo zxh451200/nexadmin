@@ -293,9 +293,14 @@ var uiIconPaths = map[string]string{
 	"dots":         `<path d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />`,
 	// 客服头部「放大/还原」是同一个按钮位上的两态，配「清空输入」；
 	// minimize 是 maximize 的向内收版本，切换只换图标不换按钮，避免和关闭 × 挤成三个。
-	"maximize": `<path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" />`,
-	"minimize": `<path d="M15 19v-2a2 2 0 0 1 2 -2h2" /><path d="M15 5v2a2 2 0 0 0 2 2h2" /><path d="M5 15h2a2 2 0 0 1 2 2v2" /><path d="M5 9h2a2 2 0 0 0 2 -2v-2" />`,
-	"eraser":   `<path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" /><path d="M18 13.3l-6.3 -6.3" />`,
+	"maximize":  `<path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" />`,
+	"minimize":  `<path d="M15 19v-2a2 2 0 0 1 2 -2h2" /><path d="M15 5v2a2 2 0 0 0 2 2h2" /><path d="M5 15h2a2 2 0 0 1 2 2v2" /><path d="M5 9h2a2 2 0 0 0 2 -2v-2" />`,
+	"eraser":    `<path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" /><path d="M18 13.3l-6.3 -6.3" />`,
+	"users":     `<path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />`,
+	"layout":    `<path d="M4 4h6v6h-6z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6h-6z" /><path d="M14 14h6v6h-6z" />`,
+	"user-plus": `<path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path d="M19 8v6" /><path d="M16 11h6" />`,
+	"power":     `<path d="M12 2l0 10" /><path d="M6.34 5.34a8 8 0 1 0 11.32 0" />`,
+	"plug":      `<path d="M9 7l0 -4" /><path d="M15 7l0 -4" /><path d="M6 7h12l0 4a6 6 0 0 1 -12 0z" /><path d="M12 17v5" />`,
 	// 「安全支付」贸易术语徽标，同样来自 Tabler v3.36.0 outline：
 	// bank=电汇 T/T、file-check=信用证 L/C、file-text=托收 D/P·D/A、
 	// file-invoice=赊账 O/A、wallet=电子钱包（支付宝/微信）、cash=现金。
