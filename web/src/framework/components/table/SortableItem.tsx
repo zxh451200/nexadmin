@@ -17,6 +17,7 @@ interface ItemProps {
   onClick?: () => void
   onKeyDown?: React.KeyboardEventHandler<HTMLElement>
   tabIndex?: number
+  'aria-selected'?: boolean
 }
 
 /** 可排序行/卡片；children 内用 <SortableHandle /> 作为拖动手柄 */

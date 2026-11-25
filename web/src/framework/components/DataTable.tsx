@@ -56,6 +56,8 @@ export interface DataTableProps<T> {
    */
   sort?: { key: string; desc: boolean; onChange: (key: string, desc: boolean) => void }
   onRowClick?: (row: T) => void
+  /** 独立于复选框的当前行，用于主从编辑等场景 */
+  activeRowId?: string
   toolbar?: ReactNode
   /** 提供后启用列显示/隐藏设置，并按此 key 存 localStorage */
   columnSettingsKey?: string
@@ -113,6 +115,7 @@ export function DataTable<T>({
   sortable,
   sort,
   onRowClick,
+  activeRowId,
   toolbar,
   columnSettingsKey,
   emptyText,
@@ -352,7 +355,8 @@ export function DataTable<T>({
           {!loading
             ? rows.map((row, index) => {
                 const id = getKey(row)
-                const cls = cn('group', onRowClick && 'cursor-pointer', selected.includes(id) && 'row-selected')
+                const active = selected.includes(id) || activeRowId === id
+                const cls = cn('group', onRowClick && 'cursor-pointer', active && 'row-selected')
                 const cells = (
                   <>
                     {selection ? (
@@ -387,7 +391,7 @@ export function DataTable<T>({
                         className={cn(
                           'w-px whitespace-nowrap text-end',
                           pinActions &&
-                            (selected.includes(id)
+                            (active
                               ? // 选中行不挂 hover 色：row-selected 不透明，行体与钉住的行尾同色
                                 'sticky inset-e-0 z-10 row-selected shadow-[inset_1px_0_0_hsl(var(--border))]'
                               : 'sticky inset-e-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:row-hover'),
@@ -400,11 +404,11 @@ export function DataTable<T>({
                   </>
                 )
                 return sortEnabled ? (
-                  <SortableItem key={id} id={id} as="tr" className={cls} {...clickProps(row)}>
+                  <SortableItem key={id} id={id} as="tr" className={cls} aria-selected={active ? true : undefined} {...clickProps(row)}>
                     {cells}
                   </SortableItem>
                 ) : (
-                  <TableRow key={id} className={cls} {...clickProps(row)}>
+                  <TableRow key={id} className={cls} aria-selected={active ? true : undefined} {...clickProps(row)}>
                     {cells}
                   </TableRow>
                 )
@@ -438,13 +442,14 @@ export function DataTable<T>({
       {!loading
         ? rows.map((row, index) => {
             const id = getKey(row)
+            const active = selected.includes(id) || activeRowId === id
             const cls = cn(
               dense
                 ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:row-hover'
                 : bare
                   ? 'border-b border-border/60 px-3 py-2.5 transition-colors last:border-0 hover:row-hover'
                   : 'card-edge rounded-xl border border-border bg-card px-3 py-2.5',
-              selected.includes(id) && 'row-selected',
+              active && 'row-selected',
             )
             const body = (
               <MobileCardContent
@@ -481,7 +486,7 @@ export function DataTable<T>({
                 {body}
               </SortableItem>
             ) : (
-              <div key={id} className={cls}>
+              <div key={id} className={cls} aria-current={active ? 'true' : undefined}>
                 {body}
               </div>
             )
