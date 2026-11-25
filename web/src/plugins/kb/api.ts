@@ -8,7 +8,9 @@ export interface KbDocument {
   sourceName: string
   mime: string
   size: number
-  status: 'ready' | 'failed'
+  status: 'pending' | 'processing' | 'ready' | 'failed'
+  /** 异步入库进度说明，如「向量化 12/40 块」；就绪/失败后为空。 */
+  stage?: string
   chunkCount: number
   /** 向量化时的 embedding 模型；与当前配置不一致时列表提示「需重新向量化」。 */
   model: string
@@ -31,6 +33,8 @@ export interface KbChunk {
   seq: number
   /** 该块的入库文本（与向量一起参与检索的原文）。 */
   content: string
+  /** false = 已停用，不参与检索但保留可恢复；老数据缺省视为启用。 */
+  enabled?: boolean
 }
 
 export interface KbAnswer {
@@ -60,6 +64,8 @@ export interface KbStats {
   chunks: number
   ready: number
   failed: number
+  /** 排队 + 处理中的文档数（不算失败）。 */
+  queued: number
   size: number
   /** 未命中问题池里待补的条数。 */
   pendingMiss: number
@@ -100,6 +106,11 @@ export function useDocuments(status?: string, sort?: string, desc?: boolean, pag
         page,
         pageSize,
       }),
+    // 有文档在异步入库时自动轮询，全部落定后停止；避免用户对着「排队中」干等。
+    refetchInterval: (query) =>
+      query.state.data?.list?.some((d) => d.status === 'pending' || d.status === 'processing')
+        ? 1500
+        : false,
   })
 }
 
@@ -149,6 +160,15 @@ export function useReembedDocument() {
   })
 }
 
+/** 失败文档重新排队：原文已在库里，不用重传文件。 */
+export function useRetryDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<KbDocument>(`${BASE}/documents/${id}/retry`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
 /** 知识块预览：一篇文档切出来的全部块（按切分顺序），排查「AI 为什么这么答」用。 */
 export function useDocumentChunks(id: string | null) {
   return useQuery({
@@ -156,6 +176,26 @@ export function useDocumentChunks(id: string | null) {
     queryFn: () =>
       api.get<{ document: KbDocument; chunks: KbChunk[] }>(`${BASE}/documents/${id}/chunks`),
     enabled: !!id,
+  })
+}
+
+/** 编辑单块文案：后端会重算这一块的向量，其余块不动。 */
+export function useUpdateChunk() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, seq, content }: { id: string; seq: number; content: string }) =>
+      api.put<KbChunk>(`${BASE}/documents/${id}/chunks/${seq}`, { content }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+/** 启停单块：停用后不参与检索，可随时恢复。 */
+export function useToggleChunk() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, seq, enabled }: { id: string; seq: number; enabled: boolean }) =>
+      api.post<KbChunk>(`${BASE}/documents/${id}/chunks/${seq}/toggle`, { enabled }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   })
 }
 

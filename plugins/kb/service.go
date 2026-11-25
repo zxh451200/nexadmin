@@ -587,6 +587,7 @@ func (s *Service) index(ctx context.Context, model string) (*indexSnapshot, erro
 	err := s.db.WithContext(ctx).Table("plg_kb_chunk AS c").
 		Select("c.document_id AS doc_id, d.title AS title, c.content AS content, c.vector AS vector").
 		Joins("JOIN plg_kb_document d ON d.id = c.document_id AND d.status = ? AND d.model = ?", StatusReady, model).
+		Where("c.enabled = ?", true).
 		Order("c.document_id, c.seq").Scan(&rows).Error
 	built := &indexSnapshot{chunks: make([]indexedChunk, 0, len(rows)), df: make(map[string]int, 1024)}
 	terms, totalLen := 0, 0
@@ -657,6 +658,8 @@ func roundScore(v float64) float64 { return math.Round(v*1000) / 1000 }
 // 这个派生态原先由前端在整表上过滤，分页后必须落到 SQL，否则只在当前页里筛。
 type DocumentQuery struct {
 	Status     string
+	// Queued 筛选排队+处理中的文档（异步入库中间态，不是一个真实 status 值）。
+	Queued     bool
 	StaleModel string
 	Sort       string
 	Desc       bool
@@ -683,8 +686,12 @@ func (s *Service) ListDocuments(ctx context.Context, q DocumentQuery) ([]Documen
 	scope := func() *gorm.DB {
 		db := s.db.WithContext(ctx).Model(&Document{})
 		switch {
+		case q.Queued:
+			return db.Where("status IN ?", []string{StatusPending, StatusProcessing})
 		case q.StaleModel != "":
-			return db.Where("status <> ? OR (model <> '' AND model <> ?)", StatusReady, q.StaleModel)
+			// 排队/处理中的文档正在走正常流程，不算「需重新向量化」，否则批量重嵌会和 worker 撞车。
+			return db.Where("status = ? OR (status = ? AND model <> '' AND model <> ?)",
+				StatusFailed, StatusReady, q.StaleModel)
 		case q.Status != "":
 			return db.Where("status = ?", q.Status)
 		}
@@ -811,6 +818,16 @@ func (s *Service) RenameDocument(ctx context.Context, id, title string) (*Docume
 }
 
 // Reembed 用当前配置的 embedding 模型重跑一篇文档（模型切换后的旧文档补救）。
+// requireSettledDoc 拒绝在异步入库尚未结束时做重嵌/重切：worker 正持有这篇文档，
+// 并发改写切块会产生半套向量。排队/处理中请等状态落定再操作。
+func requireSettledDoc(doc *Document) *response.Error {
+	switch doc.Status {
+	case StatusPending, StatusProcessing:
+		return response.Conflict("kb.document_busy")
+	}
+	return nil
+}
+
 func (s *Service) Reembed(ctx context.Context, id string) (*Document, error) {
 	if s.gw == nil {
 		return nil, response.Unavailable("kb.plugin_inactive")
@@ -830,6 +847,9 @@ func (s *Service) Reembed(ctx context.Context, id string) (*Document, error) {
 	var doc Document
 	if err := s.db.WithContext(ctx).Take(&doc, int64(docID)).Error; err != nil {
 		return nil, response.NotFound("kb.document_not_found")
+	}
+	if busy := requireSettledDoc(&doc); busy != nil {
+		return nil, busy
 	}
 	var chunks []Chunk
 	if err := s.db.WithContext(ctx).Where("document_id = ?", docID).Order("seq").Find(&chunks).Error; err != nil {
@@ -910,6 +930,9 @@ func (s *Service) RechunkPreview(ctx context.Context, id string) (*Document, []s
 	if err != nil {
 		return nil, nil, err
 	}
+	if busy := requireSettledDoc(doc); busy != nil {
+		return nil, nil, busy
+	}
 	if strings.TrimSpace(text) == "" {
 		return nil, nil, response.BadRequest("kb.document_empty")
 	}
@@ -940,9 +963,12 @@ func (s *Service) Rechunk(ctx context.Context, id string) (*Document, error) {
 	if err != nil {
 		return nil, response.BadRequest("error.bad_request")
 	}
-	_, text, err := s.docText(ctx, docID)
+	doc, text, err := s.docText(ctx, docID)
 	if err != nil {
 		return nil, err
+	}
+	if busy := requireSettledDoc(doc); busy != nil {
+		return nil, busy
 	}
 	if strings.TrimSpace(text) == "" {
 		return nil, response.BadRequest("kb.document_empty")

@@ -48,6 +48,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/documents", core.Perm("kb:edit"), h.upload)
 	g.POST("/documents/from-file", core.Perm("kb:edit"), h.uploadFromLibrary)
 	g.GET("/documents/:id/chunks", core.Perm("kb:list"), h.chunks)
+	g.PUT("/documents/:id/chunks/:seq", core.Perm("kb:edit"), d.OperLogMiddleware("kb", "edit"), h.updateChunk)
+	g.POST("/documents/:id/chunks/:seq/toggle", core.Perm("kb:edit"), h.toggleChunk)
 	g.PUT("/documents/:id", core.Perm("kb:edit"), h.rename)
 	g.DELETE("/documents/:id", core.Perm("kb:delete"), d.OperLogMiddleware("kb", "delete"), h.remove)
 	g.POST("/documents/:id/reembed", core.Perm("kb:edit"), h.reembed)
@@ -80,13 +82,17 @@ func (h *handler) list(c *gin.Context) {
 	page, pageSize := response.ParsePage(c)
 	q := DocumentQuery{Sort: sortField, Desc: desc, Page: page, PageSize: pageSize}
 	status := c.Query("status")
-	if status == "stale" {
+	switch status {
+	case "stale":
 		// 当前模型取不到（AI 未配置）时只有 failed 算 stale：用哨兵值让 SQL 走到模型比较分支。
 		q.StaleModel = h.embedModel(c)
 		if q.StaleModel == "" {
 			q.StaleModel = "-"
 		}
-	} else {
+	case "queued":
+		// 排队 + 处理中，异步入库的中间态。
+		q.Queued = true
+	default:
 		q.Status = status
 	}
 	rows, total, err := h.svc.ListDocuments(c.Request.Context(), q)
@@ -258,6 +264,40 @@ func (h *handler) chunks(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"document": doc, "chunks": list})
+}
+
+// PUT /plugins/kb/documents/:id/chunks/:seq —— 编辑单块文案并重算该块向量。
+func (h *handler) updateChunk(c *gin.Context) {
+	seq, err := strconv.Atoi(c.Param("seq"))
+	if err != nil || seq < 1 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	var in struct {
+		Content string `json:"content" binding:"required"`
+	}
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	chunk, err := h.svc.UpdateChunk(c.Request.Context(), c.Param("id"), seq, in.Content)
+	respond(c, chunk, err)
+}
+
+// POST /plugins/kb/documents/:id/chunks/:seq/toggle —— 启停单块（禁用后不参与检索，可恢复）。
+func (h *handler) toggleChunk(c *gin.Context) {
+	seq, err := strconv.Atoi(c.Param("seq"))
+	if err != nil || seq < 1 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	chunk, err := h.svc.SetChunkEnabled(c.Request.Context(), c.Param("id"), seq, in.Enabled)
+	respond(c, chunk, err)
 }
 
 // PUT /plugins/kb/documents/:id —— 重命名：只改展示标题，切块与向量不动（无需重嵌）。

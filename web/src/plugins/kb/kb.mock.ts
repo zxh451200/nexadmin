@@ -1,17 +1,26 @@
 import { defineMock, genId } from '@/framework/request/mock'
 import type { KbAnswer, KbChunk, KbDocument, KbHit, KbMiss } from './api'
 
-// 知识库 mock：文档 / 设置 / 状态 / 测试提问 / 知识块预览 / 重命名 / 删除 / 重嵌。
-// 开发态没有 AI 网关，mock 让整条管理链路（含召回调试候选）都能走通。
+// 知识库 mock：文档 / 设置 / 状态 / 测试提问 / 知识块运营 / 重命名 / 删除 / 重嵌 / 重排队。
+// 开发态没有 AI 网关，mock 让整条管理链路（含异步入库、召回调试候选）都能走通。
 
 const NOW = new Date().toISOString()
 const EMBED_MODEL = 'text-embedding-v3'
+
+// 单块启停的开发态覆盖：key 是 `${docId}:${seq}`，缺省视为启用。
+const chunkEnabled = new Map<string, boolean>()
 
 const docs: KbDocument[] = [
   {
     id: genId(), title: '产品常见问题 FAQ', sourceName: 'faq.txt', mime: 'text/plain',
     size: 18_400, status: 'ready', chunkCount: 12, model: EMBED_MODEL, dimension: 1024,
     createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
+  },
+  {
+    // 异步入库中间态：列表会自动轮询到落定，用来验证 stage 展示与排队筛选。
+    id: genId(), title: '新版价格表（入库中）', sourceName: 'pricing-2026.pdf', mime: 'application/pdf',
+    size: 63_000, status: 'processing', stage: '向量化 12/40 块', chunkCount: 0, model: EMBED_MODEL, dimension: 1024,
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
   },
   {
     id: genId(), title: '售后与退换政策', sourceName: 'after-sales.md', mime: 'text/markdown',
@@ -40,11 +49,15 @@ const misses: KbMiss[] = [
 /** 伪分块：按标题生成几条像样的段落文本，块数与 doc.chunkCount 对齐。 */
 function makeChunks(doc: KbDocument): KbChunk[] {
   const n = Math.max(1, Math.min(doc.chunkCount, 8))
-  return Array.from({ length: n }, (_, i) => ({
-    id: `${doc.id}-c${i + 1}`,
-    seq: i + 1,
-    content: `【${doc.title}】第 ${i + 1} 段：这是入库时切分出来的知识块原文——与向量一起参与余弦检索，也是「AI 为什么这么答」的直接依据。实际内容来自上传文档的空行分段；每块约 500 字，过短碎块会并入上一块。`,
-  }))
+  return Array.from({ length: n }, (_, i) => {
+    const seq = i + 1
+    return {
+      id: `${doc.id}-c${seq}`,
+      seq,
+      content: `【${doc.title}】第 ${seq} 段：这是入库时切分出来的知识块原文——与向量一起参与余弦检索，也是「AI 为什么这么答」的直接依据。实际内容来自上传文档的空行分段；每块约 500 字，过短碎块会并入上一块。`,
+      enabled: chunkEnabled.get(`${doc.id}:${seq}`) !== false,
+    }
+  })
 }
 
 defineMock([
@@ -62,7 +75,8 @@ defineMock([
       docs: docs.length,
       chunks: docs.reduce((n, d) => n + d.chunkCount, 0),
       ready: docs.filter((d) => d.status === 'ready').length,
-      failed: docs.filter((d) => d.status !== 'ready').length,
+      failed: docs.filter((d) => d.status === 'failed').length,
+      queued: docs.filter((d) => d.status === 'pending' || d.status === 'processing').length,
       size: docs.reduce((n, d) => n + d.size, 0),
       pendingMiss: misses.filter((m) => m.status === 'pending').length,
     }),
@@ -70,12 +84,16 @@ defineMock([
   {
     method: 'GET',
     url: '/plugins/kb/documents',
-    // 分页 + 状态筛选都在「服务端」（这里）做：stale = 失败或向量模型与当前配置不一致。
+    // 分页 + 状态筛选都在「服务端」（这里）做：stale = 失败或向量模型与当前配置不一致
+    // （排队/处理中的文档正在走正常流程，不算 stale，否则批量重嵌会和后台写切块撞车）；
+    // queued = pending + processing 两个异步入库中间态。
     handler: ({ query }) => {
       const status = String(query.status ?? '')
+      const isBusy = (d: KbDocument) => d.status === 'pending' || d.status === 'processing'
       const matched = docs.filter((d) => {
         if (!status) return true
-        if (status === 'stale') return d.status !== 'ready' || (d.model !== '' && d.model !== EMBED_MODEL)
+        if (status === 'queued') return isBusy(d)
+        if (status === 'stale') return !isBusy(d) && (d.status === 'failed' || (d.model !== '' && d.model !== EMBED_MODEL))
         return d.status === status
       })
       const page = Math.max(1, Number(query.page) || 1)
@@ -95,6 +113,33 @@ defineMock([
       const doc = docs.find((x) => x.id === params.id)
       if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
       return { document: doc, chunks: makeChunks(doc) }
+    },
+  },
+  {
+    // 编辑单块文案：只改这一块的原文，其余块不变（后端会重算该块向量）。
+    method: 'PUT',
+    url: '/plugins/kb/documents/:id/chunks/:seq',
+    handler: ({ params, body }) => {
+      const doc = docs.find((x) => x.id === params.id)
+      if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
+      const seq = Number(params.seq)
+      const content = String(body?.content ?? '')
+      return { id: `${doc.id}-c${seq}`, seq, content, enabled: chunkEnabled.get(`${doc.id}:${seq}`) !== false }
+    },
+  },
+  {
+    // 启停单块：禁用后不参与检索，可随时恢复。
+    method: 'POST',
+    url: '/plugins/kb/documents/:id/chunks/:seq/toggle',
+    handler: ({ params, body }) => {
+      const doc = docs.find((x) => x.id === params.id)
+      if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
+      const seq = Number(params.seq)
+      const enabled = body?.enabled !== false
+      chunkEnabled.set(`${doc.id}:${seq}`, enabled)
+      const chunk = makeChunks(doc).find((c) => c.seq === seq)
+      if (!chunk) throw Object.assign(new Error('知识块不存在'), { code: 404 })
+      return chunk
     },
   },
   {
@@ -151,6 +196,20 @@ defineMock([
       doc.model = EMBED_MODEL
       doc.dimension = 1024
       doc.error = ''
+      doc.stage = ''
+      return doc
+    },
+  },
+  {
+    // 失败文档重新排队：原文已在库里，无需重传；mock 里直接落到 processing 并给个 stage。
+    method: 'POST',
+    url: '/plugins/kb/documents/:id/retry',
+    handler: ({ params }) => {
+      const doc = docs.find((x) => x.id === params.id)
+      if (!doc) throw Object.assign(new Error('文档不存在'), { code: 404 })
+      doc.status = 'processing'
+      doc.stage = '切分中'
+      doc.error = ''
       return doc
     },
   },
@@ -158,12 +217,12 @@ defineMock([
     method: 'POST',
     url: '/plugins/kb/documents',
     handler: () => {
-      // multipart 在 mock 适配器里拿不到文件内容：给一个确定的伪入库结果，
-      // 让「上传 → 列表 → 预览」的开发态链路能走通。
+      // multipart 在 mock 适配器里拿不到文件内容：给一个确定的伪入库结果。
+      // 与真实接口一致——投递即返回 pending，列表轮询到落定（mock 不推进，停在中间态）。
       const doc: KbDocument = {
         id: genId(), title: `新入库文档 ${new Date().toLocaleTimeString()}`,
         sourceName: 'uploaded.txt', mime: 'text/plain', size: 8_000,
-        status: 'ready', chunkCount: 3, model: EMBED_MODEL, dimension: 1024, createdAt: NOW,
+        status: 'pending', stage: '排队中', chunkCount: 0, model: EMBED_MODEL, dimension: 1024, createdAt: NOW,
       }
       docs.unshift(doc)
       return doc

@@ -174,6 +174,10 @@ kb:
   document_no_text: This PDF has no text layer (typically a scan / image-only PDF); run OCR or convert it to Word/text first
   document_empty: The document has no usable content
   document_not_found: Document not found
+  document_busy: Document is being ingested; please retry later
+  chunk_not_found: Chunk not found
+  chunk_too_long: A chunk can contain at most 4000 characters
+  chunk_model_stale: The document's embedding model differs from the current one; re-embed it first
   embed_unavailable: Embedding is not enabled; configure an Embedding model under System Settings → Advanced → AI first
   embed_failed: Embedding call failed; check the AI settings or retry later
   chat_unavailable: Chat model is not configured; complete the AI settings under System Settings → Advanced → AI first

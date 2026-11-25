@@ -173,6 +173,10 @@ kb:
   document_no_text: 这个 PDF 没有文本层（典型是扫描件/纯图片），请先用 OCR 或转成 Word/文本再上传
   document_empty: 文档没有可用内容
   document_not_found: 文档不存在
+  document_busy: 文档正在入库，请稍后再试
+  chunk_not_found: 知识块不存在
+  chunk_too_long: 单块内容最多 4000 字
+  chunk_model_stale: 文档向量模型与当前配置不一致，请先重新向量化
   embed_unavailable: 向量化未启用：请先在「系统设置 → 高级 → AI」里配置 Embedding 模型
   embed_failed: 向量化调用失败，请检查 AI 配置或稍后重试
   chat_unavailable: 对话模型未配置：请先在「系统设置 → 高级 → AI」里完成 AI 配置

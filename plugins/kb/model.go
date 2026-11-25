@@ -36,6 +36,8 @@ type Document struct {
 	Model      string `gorm:"size:128;not null;default:''" json:"model"`
 	Dimension  int    `gorm:"not null;default:0" json:"dimension"`
 	Error      string `gorm:"size:500;not null;default:''" json:"error,omitempty"`
+	// Fingerprint 是原文归一化后的 sha256：同一内容重传覆盖同一篇，不再重复入库稀释 topK。
+	Fingerprint string `gorm:"size:64;not null;default:'';index:idx_plg_kb_doc_fp" json:"-"`
 	// Stage 是异步入库的进度说明（"切分中" / "向量化 12/40 块"），失败后留空。
 	Stage string `gorm:"size:128;not null;default:''" json:"stage,omitempty"`
 	// SourceText 是抽取出的原文（不参与检索、不外发）：改分块参数重新切分时以它为输入。
@@ -53,6 +55,8 @@ type Chunk struct {
 	DocumentID idgen.ID `gorm:"not null;uniqueIndex:uk_plg_kb_chunk_doc,priority:1" json:"-"`
 	Seq        int      `gorm:"not null;uniqueIndex:uk_plg_kb_chunk_doc,priority:2" json:"-"`
 	Content    string   `gorm:"type:text;not null" json:"content"`
+	// Enabled=false 的块不参与检索，但保留在库里可随时恢复（改坏了不必整篇重传）。
+	Enabled bool `gorm:"not null;default:1" json:"enabled"`
 	// Vector 是 JSON 浮点数组文本；列类型按引擎在迁移里定义（MySQL/MariaDB MEDIUMTEXT、PG TEXT）。
 	Vector string `gorm:"type:text;not null" json:"-"`
 }

@@ -247,16 +247,44 @@ func (s *Service) Enqueue(ctx context.Context, in IngestInput) (*Document, error
 	if text == "" {
 		return nil, response.BadRequest("kb.document_empty")
 	}
+	now := s.now()
+	fp := fingerprint(text)
+	model := cfg.Normalize().EmbedModel
+	meta := map[string]any{
+		"title": strings.TrimSpace(in.Title), "source_name": strings.TrimSpace(in.Source),
+		"mime": strings.TrimSpace(in.Mime), "size": in.Size,
+		"source_text": text, "fingerprint": fp, "model": model,
+		"status": StatusPending, "stage": "排队中", "error": "", "chunk_count": 0,
+		"updated_at": now,
+	}
+
+	// 同内容重传：覆盖原文档而不是再建一篇。重复文档会占满 topK，把别的资料挤掉。
+	var existing Document
+	if err := s.db.WithContext(ctx).Where("fingerprint = ? AND fingerprint <> ''", fp).
+		Order("id DESC").Take(&existing).Error; err == nil {
+		err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("document_id = ?", existing.ID).Delete(&Chunk{}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&Document{}).Where("id = ?", int64(existing.ID)).Updates(meta).Error
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.cache.invalidate()
+		s.queue.notify()
+		return s.reload(ctx, existing.ID)
+	}
+
 	id, err := idgen.Next()
 	if err != nil {
 		return nil, err
 	}
-	now := s.now()
 	doc := Document{
 		Title: strings.TrimSpace(in.Title), SourceName: strings.TrimSpace(in.Source),
 		Mime: strings.TrimSpace(in.Mime), Size: in.Size,
 		Status: StatusPending, Stage: "排队中", ChunkCount: 0,
-		Model: cfg.Normalize().EmbedModel,
+		Model: model, Fingerprint: fp,
 		SourceText: sql.NullString{String: text, Valid: true},
 		CreatedAt: now, UpdatedAt: now,
 	}
