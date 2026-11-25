@@ -28,6 +28,7 @@ import {
   useDeleteConfigs,
   useDownload,
   useInstall,
+  useInstallPlan,
   usePreview,
   useSaveConfig,
   useSchema,
@@ -131,6 +132,8 @@ export default function CodegenPage() {
       ? { ...base, define: source.def }
       : { ...base, table: source?.kind === 'table' ? source.name : '' }
   }
+  const installPlan = useInstallPlan({ ...request(), overwrite, register: autoRegister }, installOpen)
+  const validationOK = output?.validation?.ok !== false
 
   const onPreview = async () => {
     try {
@@ -440,13 +443,13 @@ export default function CodegenPage() {
               {t('plugin_codegen.action.back')}
             </Button>
             <Can perm="codegen:install">
-              <Button variant="outline" onClick={() => { setOverwrite(false); setInstallOpen(true) }} disabled={!isPlatform || !output}>
+              <Button variant="outline" onClick={() => { setOverwrite(false); setInstallOpen(true) }} disabled={!isPlatform || !output || !validationOK}>
                 <FolderInput aria-hidden="true" />
                 {t('plugin_codegen.action.install')}
               </Button>
             </Can>
             <Can perm="codegen:download">
-              <Button onClick={onDownload} disabled={!output || download.isPending}>
+              <Button onClick={onDownload} disabled={!output || !validationOK || download.isPending}>
                 <Download aria-hidden="true" />
                 {t('plugin_codegen.action.download')}
               </Button>
@@ -496,7 +499,7 @@ export default function CodegenPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setInstallOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => void onInstall()} disabled={install.isPending}>
+            <Button onClick={() => void onInstall()} disabled={install.isPending || installPlan.isFetching || !installPlan.data?.canInstall}>
               {t('plugin_codegen.action.install')}
             </Button>
           </>
@@ -515,6 +518,28 @@ export default function CodegenPage() {
           </label>
           <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.registerHint')}</p>
           <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.restartHint')}</p>
+          {installPlan.isFetching ? <p className="text-xs text-muted-foreground">{t('common.loading')}</p> : null}
+          {installPlan.isError ? <p className="text-xs text-destructive">{t('plugin_codegen.install.planFailed')}</p> : null}
+          {installPlan.data ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.resultRoot')}</p>
+                <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs">{installPlan.data.root}</code>
+              </div>
+              {!installPlan.data.canInstall ? <p className="text-xs text-destructive">{t('plugin_codegen.install.planBlocked')}</p> : null}
+              <ul className="max-h-52 divide-y divide-border overflow-y-auto overscroll-contain rounded-md border border-border">
+                {installPlan.data.files.map((f) => (
+                  <li key={f.path} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+                    <code className="min-w-0 flex-1 break-all font-mono text-[11px]" dir="ltr">{f.path}</code>
+                    <Badge variant={f.action === 'protected' ? 'destructive' : f.action === 'overwrite' || f.action === 'register' ? 'warning' : 'secondary'}>
+                      {t(`plugin_codegen.install.actions.${f.action}`)}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              {installPlan.data.registerError ? <p className="break-all text-xs text-destructive">{installPlan.data.registerError}</p> : null}
+            </div>
+          ) : null}
         </div>
       </ResponsiveDialog>
 
@@ -525,15 +550,11 @@ export default function CodegenPage() {
         description={t('plugin_codegen.install.resultSummary', {
           written: result?.written.length ?? 0,
           skipped: result?.skipped.length ?? 0,
+          overwritten: result?.overwritten.length ?? 0,
         })}
         footer={
           <>
             <Button variant="outline" onClick={() => setResultOpen(false)}>{t('common.close')}</Button>
-            {result && result.skipped.length > 0 ? (
-              <Button onClick={() => void onInstall(true)} disabled={install.isPending}>
-                {t('plugin_codegen.install.overwriteRetry')}
-              </Button>
-            ) : null}
           </>
         }
       >
@@ -542,7 +563,16 @@ export default function CodegenPage() {
             <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.resultRoot')}</p>
             <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs">{result?.root}</code>
           </div>
+          {result?.backupDir ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.resultBackup')}</p>
+              <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs">{result.backupDir}</code>
+            </div>
+          ) : null}
           <PathList title={t('plugin_codegen.install.resultWritten', { count: result?.written.length ?? 0 })} paths={result?.written ?? []} />
+          {result && result.overwritten.length > 0 ? (
+            <PathList title={t('plugin_codegen.install.resultOverwritten', { count: result.overwritten.length })} paths={result.overwritten} warn />
+          ) : null}
           {result && result.skipped.length > 0 ? (
             <PathList title={t('plugin_codegen.install.resultSkipped', { count: result.skipped.length })} paths={result.skipped} warn />
           ) : null}

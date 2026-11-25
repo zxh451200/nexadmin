@@ -244,13 +244,17 @@ func (s *Service) migrationIssues(files []File) []ValidationIssue {
 	applied := map[string]bool{}
 	if s.db != nil {
 		store, err := migrate.NewGormStore(s.db)
-		if err == nil {
-			if exists, _ := store.HasTable(migrate.Table); exists {
-				if rows, err := store.Applied(); err == nil {
-					for _, rec := range rows {
-						if rec.Scope == migrate.ScopeBusiness {
-							applied[rec.Version] = true
-						}
+		if err != nil {
+			out = append(out, ValidationIssue{Code: "migration_check_failed", Severity: "failed", Detail: err.Error()})
+		} else if exists, err := store.HasTable(migrate.Table); err != nil {
+			out = append(out, ValidationIssue{Code: "migration_check_failed", Severity: "failed", Detail: err.Error()})
+		} else if exists {
+			if rows, err := store.Applied(); err != nil {
+				out = append(out, ValidationIssue{Code: "migration_check_failed", Severity: "failed", Detail: err.Error()})
+			} else {
+				for _, rec := range rows {
+					if rec.Scope == migrate.ScopeBusiness {
+						applied[rec.Version] = true
 					}
 				}
 			}

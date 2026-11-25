@@ -38,7 +38,7 @@ const TABLES: Record<string, Def[]> = {
 }
 
 const CONTROLS: Record<string, ColumnConfig['control'][]> = {
-  string: ['input', 'textarea', 'dict'], text: ['textarea', 'input'], int: ['number', 'input'], float: ['number', 'input'],
+  string: ['input', 'textarea', 'dict'], text: ['textarea', 'input'], int: ['number', 'input'], float: ['number', 'input'], decimal: ['number', 'input'],
   id: ['input'], bool: ['switch'], date: ['date'], datetime: ['datetime'],
 }
 
@@ -58,7 +58,7 @@ let savedConfigs: SavedGenConfig[] = [
   },
 ]
 
-const REQUIRABLE_KINDS: Kind[] = ['string', 'text', 'date', 'datetime']
+const REQUIRABLE_KINDS: Kind[] = ['string', 'text', 'decimal', 'date', 'datetime']
 
 const moduleName = (table: string) => {
   const base = table.replace(/^biz_/, '').replace(/_/g, '')
@@ -269,7 +269,21 @@ function generate(req: GenRequest): GenOutput {
   } else {
     notes.push({ code: 'null_zero', value: '' })
   }
-  return { files, notes }
+  return {
+    files,
+    notes,
+    validation: {
+      ok: true,
+      checkedAt: new Date().toISOString(),
+      checks: [
+        { code: 'go_build', status: 'passed' },
+        { code: 'typescript', status: 'passed' },
+        { code: 'sql', status: 'passed' },
+        { code: 'migrations', status: 'passed' },
+      ],
+      issues: [],
+    },
+  }
 }
 
 defineMock([
@@ -293,11 +307,28 @@ defineMock([
   { method: 'POST', url: '/plugins/codegen/download', handler: ({ body }) => generate(body as GenRequest) },
   {
     method: 'POST',
+    url: '/plugins/codegen/install/plan',
+    handler: ({ body }) => {
+      const req = body as GenRequest & { register?: boolean }
+      const out = generate(req)
+      return {
+        root: '(mock)',
+        canInstall: true,
+        validation: out.validation,
+        files: [
+          ...out.files.map((f) => ({ path: f.path, action: 'new', generatedHash: f.path })),
+          ...(req.register ? [{ path: 'internal/modules/modules.go', action: 'register', generatedHash: 'mock' }] : []),
+        ],
+      }
+    },
+  },
+  {
+    method: 'POST',
     url: '/plugins/codegen/install',
     handler: ({ body }) => {
       const out = generate(body as GenRequest)
       // mock 模式没有真实磁盘：全部算写入、模拟注册成功，给界面走通回执链路。
-      return { root: '(mock)', written: out.files.map((f) => f.path), skipped: [], registered: true }
+      return { root: '(mock)', written: out.files.map((f) => f.path), skipped: [], overwritten: [], backupDir: '(mock)', registered: true, validation: out.validation }
     },
   },
   { method: 'GET', url: '/plugins/codegen/configs', handler: () => savedConfigs },

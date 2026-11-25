@@ -14,6 +14,35 @@ interface Props {
   output: GenOutput
 }
 
+function ValidationReportView({ report }: { report: ValidationReport }) {
+  const { t } = useTranslation()
+  return (
+    <section className={cn(cardSurface, 'flex flex-col gap-3 p-3')} aria-live="polite">
+      <div className="flex flex-wrap items-center gap-2">
+        {report.ok ? <CheckCircle2 className="size-4 text-success" aria-hidden="true" /> : <AlertTriangle className="size-4 text-destructive" aria-hidden="true" />}
+        <h3 className="text-sm font-medium">{t(`plugin_codegen.validation.${report.ok ? 'passed' : 'failed'}`)}</h3>
+        <div className="flex flex-wrap gap-1.5">
+          {report.checks.map((check) => (
+            <Badge key={check.code} variant={check.status === 'passed' ? 'success' : check.status === 'failed' ? 'destructive' : 'warning'}>
+              {t(`plugin_codegen.validation.checks.${check.code}`, { defaultValue: check.code })} · {t(`plugin_codegen.validation.status.${check.status}`)}
+            </Badge>
+          ))}
+        </div>
+      </div>
+      {report.issues.map((issue, i) => (
+        <div key={`${issue.code}-${i}`} className="flex flex-col gap-1 rounded-md border border-border p-2">
+          <p className="flex flex-wrap items-center gap-2 text-xs font-medium">
+            <Badge variant={issue.severity === 'failed' ? 'destructive' : 'warning'}>{t(`plugin_codegen.validation.status.${issue.severity}`)}</Badge>
+            <span>{t(`plugin_codegen.validation.issues.${issue.code}`, { defaultValue: issue.code })}</span>
+            {issue.path ? <code className="break-all font-mono text-muted-foreground">{issue.path}</code> : null}
+          </p>
+          {issue.detail ? <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-[11px]" dir="ltr">{issue.detail}</pre> : null}
+        </div>
+      ))}
+    </section>
+  )
+}
+
 /** 只读代码查看：左侧文件列表，右侧内容。代码恒为从左到右，不随界面 RTL 翻转。 */
 export function PreviewStep({ output }: Props) {
   const { t } = useTranslation()

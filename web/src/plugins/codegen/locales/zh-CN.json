@@ -104,6 +104,32 @@
       "le": "小于等于",
       "between": "区间"
     },
+    "validation": {
+      "passed": "生成物校验通过",
+      "failed": "生成物校验未通过，请修复后再下载或写入",
+      "status": { "passed": "通过", "failed": "失败", "warning": "已跳过" },
+      "checks": {
+        "go_build": "Go 编译",
+        "typescript": "TypeScript 类型检查",
+        "sql": "SQL 解析",
+        "migrations": "迁移保护",
+        "go_build_failed": "Go 编译",
+        "typescript_failed": "TypeScript 类型检查",
+        "sql_failed": "SQL 解析",
+        "go_build_skipped": "Go 编译",
+        "typescript_skipped": "TypeScript 类型检查"
+      },
+      "issues": {
+        "go_build_failed": "生成的 Go 代码编译失败",
+        "typescript_failed": "生成的前端代码类型检查失败",
+        "sql_failed": "生成的 SQL 无法解析",
+        "go_build_skipped": "当前环境缺少 Go 工具链，未执行编译",
+        "typescript_skipped": "当前环境缺少 Node.js 或 TypeScript，未执行类型检查",
+        "migration_applied": "迁移已执行，禁止覆盖",
+        "migration_exists": "相同编号的迁移已存在且内容不同",
+        "migration_check_failed": "无法读取迁移执行记录，已阻止安装"
+      }
+    },
     "preview": {
       "files": "文件",
       "empty": "没有生成任何文件",
@@ -120,7 +146,7 @@
       "import_line": "在 internal/modules/modules.go 加一行空导入，重新编译并重启后自动补菜单（「写入项目」可勾选自动注册）：",
       "api_prefix": "所有接口都挂在{{value}}下",
       "migration": "已附带三份建表迁移，按你项目的编号放进 migrations/business 后重启自动建表：",
-      "null_zero": "表已存在，不生成迁移；值为 NULL 的列读出为零值，保存时写回零值。"
+      "null_zero": "表已存在，不生成迁移；可空字段在接口和表单中保留 NULL，不再统一写回零值。"
     },
     "action": { "back": "上一步", "preview": "预览文件", "download": "下载 zip", "install": "写入项目", "saveConfig": "保存配置" },
     "saved": {
@@ -139,14 +165,19 @@
       "title": "写入项目",
       "desc": "把生成的文件写入项目根目录（后端进程的工作目录，可用环境变量 NEXADMIN_ROOT 指定；目录里必须有 go.mod）。",
       "overwrite": "覆盖已存在的文件",
-      "overwriteHint": "默认只新增不覆盖：已存在的文件会跳过，并在写入回执里逐个列出。",
+      "overwriteHint": "默认只新增不覆盖。写入前先展示安装计划；覆盖文件会先备份，失败时自动回滚。",
+      "planFailed": "安装计划读取失败，请重试",
+      "planBlocked": "存在校验失败或受保护迁移，当前不能写入",
+      "actions": { "new": "新增", "unchanged": "无需改动", "skipped": "跳过", "overwrite": "覆盖", "protected": "受保护", "register": "注册模块" },
       "register": "自动注册模块",
       "registerHint": "在 internal/modules/modules.go 的标记区加一行空导入，重启后路由与菜单才会生效；已注册过则不动。",
       "restartHint": "写入后需要重新编译并重启后端；新建表的迁移文件放进 migrations/business 后重启自动建表。",
       "resultTitle": "写入回执",
-      "resultSummary": "写入 {{written}} 个文件，跳过 {{skipped}} 个已存在文件",
+      "resultSummary": "写入 {{written}} 个文件，覆盖 {{overwritten}} 个，跳过 {{skipped}} 个",
       "resultRoot": "写入目录",
       "resultWritten": "已写入（{{count}}）",
+      "resultOverwritten": "已覆盖并备份（{{count}}）",
+      "resultBackup": "原文件备份与回滚清单",
       "resultSkipped": "已存在、已跳过（{{count}}）",
       "overwriteRetry": "覆盖并重写",
       "registerDone": "已把模块空导入写进 internal/modules/modules.go。",

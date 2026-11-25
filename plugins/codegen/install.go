@@ -60,7 +60,7 @@ func (s *Service) PlanInstall(ctx context.Context, req GenRequest, overwrite, re
 	if err != nil {
 		return nil, response.BadRequest("codegen.install_no_root").Wrap(err)
 	}
-	plan, err := buildInstallPlan(root, spec, out, overwrite, register)
+	plan, err := buildInstallPlan(root, out)
 	if err != nil {
 		return nil, response.BadRequest("codegen.install_conflict").Wrap(err)
 	}
@@ -105,7 +105,8 @@ func (s *Service) PlanInstall(ctx context.Context, req GenRequest, overwrite, re
 		if regErr != nil {
 			plan.RegisterNote, plan.RegisterError = "failed", regErr.Error()
 		} else if changed {
-			plan.Files = append(plan.Files, InstallFile{Path: "internal/modules/modules.go", Action: "register", GeneratedHash: contentHash(content), Content: content})
+			old, _ := os.ReadFile(filepath.Join(root, "internal", "modules", "modules.go"))
+			plan.Files = append(plan.Files, InstallFile{Path: "internal/modules/modules.go", Action: "register", CurrentHash: contentHash(string(old)), GeneratedHash: contentHash(content), Content: content})
 		}
 	}
 	for _, f := range plan.Files {
@@ -116,7 +117,7 @@ func (s *Service) PlanInstall(ctx context.Context, req GenRequest, overwrite, re
 	return plan, nil
 }
 
-func buildInstallPlan(root string, spec *Spec, out *Output, overwrite, register bool) (*InstallPlan, error) {
+func buildInstallPlan(root string, out *Output) (*InstallPlan, error) {
 	resolved, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return nil, err
@@ -200,6 +201,16 @@ func commitInstall(plan *InstallPlan) error {
 			return fmt.Errorf("stage %s: %w", f.Path, err)
 		}
 		old, err := os.ReadFile(full)
+		if f.CurrentHash != "" && (err != nil || contentHash(string(old)) != f.CurrentHash) {
+			return fmt.Errorf("target changed after planning: %s", f.Path)
+		}
+		if f.CurrentHash == "" {
+			if _, statErr := os.Lstat(full); statErr == nil {
+				return fmt.Errorf("new target appeared after planning: %s", f.Path)
+			} else if !errors.Is(statErr, fs.ErrNotExist) {
+				return statErr
+			}
+		}
 		rec := installBackup{Path: f.Path, Action: f.Action, Mode: 0o644, Hash: f.GeneratedHash, CurrentHash: f.CurrentHash}
 		if err == nil {
 			if st, statErr := os.Stat(full); statErr == nil {
@@ -224,6 +235,7 @@ func commitInstall(plan *InstallPlan) error {
 	}
 	written := make([]installBackup, 0, len(writes))
 	rollback := func(cause error) error {
+		keep = true
 		var errs []error
 		for i := len(written) - 1; i >= 0; i-- {
 			rec := written[i]

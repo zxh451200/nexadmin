@@ -866,6 +866,8 @@ codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"
   install_no_root: "找不到项目根目录：后端进程的工作目录下没有 go.mod。请在环境变量 NEXADMIN_ROOT 里指定项目根，或从项目根启动后端。"
+  install_conflict: "目标文件冲突或路径不安全，未写入任何文件"
+  validation_failed: "生成物校验未通过，请修复预览中的诊断后再下载或写入"
   config_too_many: "保存的配置太多（上限 200），请先清理不需要的配置"
 report:
   record_not_found: "记录不存在"
