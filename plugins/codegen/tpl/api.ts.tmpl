@@ -36,7 +36,7 @@ export interface [[.Sub.Pascal]] {
 
 export interface [[.Sub.Pascal]]Form {
 [[- range .Sub.FormFields]]
-  [[.Camel]]: [[if eq .Kind "bool"]]boolean[[else if or (eq .Kind "int") (eq .Kind "float")]]number[[else]]string[[end]]
+  [[.Camel]]: [[.TSType]]
 [[- end]]
 }
 [[- end]]

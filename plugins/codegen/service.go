@@ -5,11 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/format"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gorm.io/gorm"
@@ -196,20 +193,9 @@ func (s *Service) generate(ctx context.Context, req GenRequest) (*Spec, *Output,
 	if err != nil {
 		return nil, nil, response.Internal().Wrap(err)
 	}
+	root, _ := projectRoot()
+	s.validateOutput(ctx, spec, out, root)
 	return spec, out, nil
-}
-
-// InstallResult 是直写项目的回执：写入了哪些文件、哪些因已存在被跳过，
-// 以及模块是否已注册进 internal/modules/modules.go。
-type InstallResult struct {
-	Root     string   `json:"root"`
-	Written  []string `json:"written"`
-	Skipped  []string `json:"skipped"`
-	// Registered 表示本次是否新写了 modules.go 的空导入。
-	Registered bool `json:"registered"`
-	// RegisterNote 说明未写入的原因：already（已有）/ no_file / no_markers / failed。
-	RegisterNote  string `json:"registerNote,omitempty"`
-	RegisterError string `json:"registerError,omitempty"`
 }
 
 // projectRoot 解析写入根目录：优先 NEXADMIN_ROOT 环境变量，否则用后端进程的工作目录
@@ -266,111 +252,6 @@ func goModuleLine(path string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// Install 把渲染结果写进项目根目录；已存在的文件默认跳过（overwrite=false）。
-// register=true 时再把模块空导入写进 internal/modules/modules.go 的标记区（幂等）：
-// 生成的模块靠 init 里的 RegisterBuiltin 挂路由，不注册的话接口在重启后依然 404。
-// 路径在渲染层已过白名单，这里再核一道并确保没有逃逸出根目录。
-func (s *Service) Install(ctx context.Context, req GenRequest, overwrite, register bool) (*InstallResult, error) {
-	spec, out, err := s.generate(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	root, err := projectRoot()
-	if err != nil {
-		return nil, response.BadRequest("codegen.install_no_root").Wrap(err)
-	}
-	res := &InstallResult{Root: root, Written: []string{}, Skipped: []string{}}
-	for _, f := range out.Files {
-		if !validOutPath(f.Path) {
-			return nil, response.Internal().Wrap(fmt.Errorf("unsafe output path %q", f.Path))
-		}
-		full := filepath.Join(root, filepath.FromSlash(f.Path))
-		if rel, err := filepath.Rel(root, full); err != nil || rel == ".." || filepath.IsAbs(rel) {
-			return nil, response.Internal().Wrap(fmt.Errorf("output path escapes project root: %q", f.Path))
-		}
-		if !overwrite {
-			if _, err := os.Stat(full); err == nil {
-				res.Skipped = append(res.Skipped, f.Path)
-				continue
-			}
-		}
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(full, []byte(f.Content), 0o644); err != nil {
-			return nil, err
-		}
-		res.Written = append(res.Written, f.Path)
-	}
-	if register {
-		changed, note, rerr := registerModule(root, spec.GoModule+"/internal/modules/"+spec.Module)
-		res.Registered, res.RegisterNote = changed, note
-		if rerr != nil {
-			// 文件已经写下去了：不让整个安装回执变成失败，但把原因如实带回界面。
-			res.RegisterNote = "failed"
-			res.RegisterError = rerr.Error()
-		}
-	}
-	return res, nil
-}
-
-const (
-	modulesMarkBegin = "// nexadmin:modules:begin"
-	modulesMarkEnd   = "// nexadmin:modules:end"
-)
-
-// registerModule 在 internal/modules/modules.go 的标记区里幂等追加空导入。
-// 未改写时 note 说明原因（already / no_file / no_markers），不当作错误。
-func registerModule(root, importPath string) (changed bool, note string, err error) {
-	file := filepath.Join(root, "internal", "modules", "modules.go")
-	src, err := os.ReadFile(file)
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, "no_file", nil
-	}
-	if err != nil {
-		return false, "", err
-	}
-	line := fmt.Sprintf(`_ %q`, importPath)
-	lines := strings.Split(string(src), "\n")
-	begin, end := -1, -1
-	for i, l := range lines {
-		switch strings.TrimSpace(l) {
-		case modulesMarkBegin:
-			begin = i
-		case modulesMarkEnd:
-			end = i
-		}
-	}
-	if begin < 0 || end <= begin {
-		return false, "no_markers", nil
-	}
-	specs := make([]string, 0, end-begin)
-	for _, l := range lines[begin+1 : end] {
-		if t := strings.TrimSpace(l); t != "" {
-			if t == line {
-				return false, "already", nil
-			}
-			specs = append(specs, t)
-		}
-	}
-	specs = append(specs, line)
-	sort.Strings(specs)
-	out := make([]string, 0, len(lines))
-	out = append(out, lines[:begin+1]...)
-	for _, s := range specs {
-		out = append(out, "\t"+s)
-	}
-	out = append(out, lines[end:]...)
-	formatted, err := format.Source([]byte(strings.Join(out, "\n")))
-	if err != nil {
-		return false, "", err
-	}
-	if err := os.WriteFile(file, formatted, 0o644); err != nil {
-		return false, "", err
-	}
-	return true, "", nil
 }
 
 // ---- 保存的生成配置 ----

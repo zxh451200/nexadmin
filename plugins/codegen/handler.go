@@ -63,6 +63,10 @@ func (h *handler) download(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	if out.Validation == nil || !out.Validation.OK {
+		response.Fail(c, response.BadRequest("codegen.validation_failed"))
+		return
+	}
 	data, err := out.Zip()
 	if err != nil {
 		response.Fail(c, response.Internal().Wrap(err))
@@ -81,6 +85,16 @@ type InstallForm struct {
 	GenRequest
 	Overwrite bool `json:"overwrite"`
 	Register  bool `json:"register"`
+}
+
+// POST /plugins/codegen/install/plan：只读预检，展示新增、冲突与受保护迁移。
+func (h *handler) installPlan(c *gin.Context) {
+	var f InstallForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	plan, err := h.svc.PlanInstall(c.Request.Context(), f.GenRequest, f.Overwrite, f.Register)
+	respond(c, plan, err)
 }
 
 // POST /plugins/codegen/install：把渲染结果写进项目根目录（后端进程工作目录，

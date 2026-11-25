@@ -69,6 +69,9 @@ func (h *Handler) List(c *gin.Context) {
 			return
 		}
 		q.[[.Pascal]]From = &f
+[[- else if or (eq .Kind "string") (eq .Kind "decimal")]]
+		s := strings.TrimSpace(v)
+		q.[[.Pascal]]From = &s
 [[- else]]
 		t, err := parseQueryTime(v)
 		if err != nil {
@@ -93,6 +96,9 @@ func (h *Handler) List(c *gin.Context) {
 			return
 		}
 		q.[[.Pascal]]To = &f
+[[- else if or (eq .Kind "string") (eq .Kind "decimal")]]
+		s := strings.TrimSpace(v)
+		q.[[.Pascal]]To = &s
 [[- else]]
 		t, err := parseQueryTime(v)
 		if err != nil {
@@ -102,7 +108,7 @@ func (h *Handler) List(c *gin.Context) {
 		q.[[.Pascal]]To = &t
 [[- end]]
 	}
-[[- else if eq .Kind "string"]]
+[[- else if or (eq .Kind "string") (eq .Kind "decimal")]]
 	q.[[.Pascal]] = strings.TrimSpace(c.Query("[[.Camel]]"))
 [[- else if eq .Kind "int"]]
 	if v := strings.TrimSpace(c.Query("[[.Camel]]")); v != "" {

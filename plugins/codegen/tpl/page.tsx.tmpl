@@ -227,8 +227,7 @@ export default function [[.Pascal]]Page() {
           placeholder={t('[[$.Module]].field.[[.Camel]]')}
           ariaLabel={t('[[$.Module]].field.[[.Camel]]')}
         />
-[[- else if or (eq .Kind "int") (eq .Kind "float")]]
-        <Input
+[[- else if or (eq .Kind "int") (eq .Kind "float")]]        <Input
           type="number"
           className="md:w-48"
           value={(draft.[[.Camel]] as string | undefined) ?? ''}

@@ -17,6 +17,8 @@ type RawColumn struct {
 	HasDefault bool
 	Comment    string
 	Length     int64
+	Precision  int64
+	Scale      int64
 	// Dict 是新建表定义携带的字典编码；真实库读不到这个信息，恒为空串。
 	Dict string
 }
@@ -61,6 +63,9 @@ func (r *gormReader) Columns(ctx context.Context, table string) ([]RawColumn, er
 		}
 		if v, ok := ct.Length(); ok {
 			c.Length = v
+		}
+		if precision, scale, ok := ct.DecimalSize(); ok {
+			c.Precision, c.Scale = int64(precision), int64(scale)
 		}
 		out = append(out, c)
 	}

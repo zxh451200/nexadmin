@@ -63,6 +63,47 @@ func parseTime(s *string) (*time.Time, error) {
 }
 [[- end]]
 
+[[- if .HasDecimal]]
+
+func parseDecimal(raw *string, precision, scale int) (*string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	s := strings.TrimSpace(*raw)
+	if s == "" {
+		return nil, nil
+	}
+	if precision <= 0 {
+		precision, scale = 18, 18
+	}
+	if scale < 0 {
+		scale = 0
+	}
+	if strings.HasPrefix(s, "-") {
+		s = s[1:]
+	}
+	parts := strings.SplitN(s, ".", 2)
+	if len(parts) > 2 {
+		return nil, errors.New("invalid decimal")
+	}
+	integer, fraction := parts[0], ""
+	if len(parts) == 2 {
+		fraction = parts[1]
+	}
+	for _, r := range integer + fraction {
+		if r < '0' || r > '9' {
+			return nil, errors.New("invalid decimal")
+		}
+	}
+	if integer == "" || (len(parts) == 2 && fraction == "") ||
+		len(strings.TrimLeft(integer, "0")) > precision-scale || len(fraction) > scale {
+		return nil, errors.New("invalid decimal")
+	}
+	value := strings.TrimSpace(*raw)
+	return &value, nil
+}
+[[- end]]
+
 func toView(m *[[.Pascal]]) View {
 	return View{
 		ID: m.ID,
@@ -90,6 +131,33 @@ func (f Form) apply(m *[[.Pascal]]) error {
 	}
 [[- end]]
 	m.[[.Pascal]] = t[[.Pascal]]
+[[- else if eq .Kind "decimal"]]
+[[- if .Nullable]]
+	v[[.Pascal]], err := parseDecimal(f.[[.Pascal]], [[.Precision]], [[.Scale]])
+	if err != nil {
+		return response.BadRequest("error.bad_request").WithMsg("invalid [[.Camel]]")
+	}
+	m.[[.Pascal]] = v[[.Pascal]]
+[[- if .Required]]
+	if m.[[.Pascal]] == nil {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- else]]
+	v[[.Pascal]], err := parseDecimal(&f.[[.Pascal]], [[.Precision]], [[.Scale]])
+	if err != nil {
+		return response.BadRequest("error.bad_request").WithMsg("invalid [[.Camel]]")
+	}
+	m.[[.Pascal]] = ""
+	if v[[.Pascal]] != nil {
+		m.[[.Pascal]] = *v[[.Pascal]]
+	}
+[[- if .Required]]
+	if m.[[.Pascal]] == "" {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- end]]
 [[- else if eq .Kind "string"]]
 	m.[[.Pascal]] = strings.TrimSpace(f.[[.Pascal]])
 [[- if .Required]]
@@ -99,7 +167,7 @@ func (f Form) apply(m *[[.Pascal]]) error {
 [[- end]]
 [[- else]]
 	m.[[.Pascal]] = f.[[.Pascal]]
-[[- if and .Required (eq .Kind "text")]]
+[[- if and .Required (or (eq .Kind "text") (eq .Kind "decimal"))]]
 	if m.[[.Pascal]] == "" {
 		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
 	}
@@ -123,6 +191,33 @@ func (f [[.Sub.Pascal]]Form) apply(m *[[.Sub.Pascal]]) error {
 	}
 [[- end]]
 	m.[[.Pascal]] = t[[.Pascal]]
+[[- else if eq .Kind "decimal"]]
+[[- if .Nullable]]
+	v[[.Pascal]], err := parseDecimal(f.[[.Pascal]], [[.Precision]], [[.Scale]])
+	if err != nil {
+		return response.BadRequest("error.bad_request").WithMsg("invalid [[.Camel]]")
+	}
+	m.[[.Pascal]] = v[[.Pascal]]
+[[- if .Required]]
+	if m.[[.Pascal]] == nil {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- else]]
+	v[[.Pascal]], err := parseDecimal(&f.[[.Pascal]], [[.Precision]], [[.Scale]])
+	if err != nil {
+		return response.BadRequest("error.bad_request").WithMsg("invalid [[.Camel]]")
+	}
+	m.[[.Pascal]] = ""
+	if v[[.Pascal]] != nil {
+		m.[[.Pascal]] = *v[[.Pascal]]
+	}
+[[- if .Required]]
+	if m.[[.Pascal]] == "" {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- end]]
 [[- else if eq .Kind "string"]]
 	m.[[.Pascal]] = strings.TrimSpace(f.[[.Pascal]])
 [[- if .Required]]
@@ -132,7 +227,7 @@ func (f [[.Sub.Pascal]]Form) apply(m *[[.Sub.Pascal]]) error {
 [[- end]]
 [[- else]]
 	m.[[.Pascal]] = f.[[.Pascal]]
-[[- if and .Required (eq .Kind "text")]]
+[[- if and .Required (or (eq .Kind "text") (eq .Kind "decimal"))]]
 	if m.[[.Pascal]] == "" {
 		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
 	}
@@ -181,7 +276,7 @@ func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) 
 		base = base.Where(clause.Lte{Column: clause.Column{Name: "[[.Name]]"}, Value: *q.[[.Pascal]]To})
 [[- end]]
 	}
-[[- else if eq .Kind "string"]]
+[[- else if or (eq .Kind "string") (eq .Kind "decimal")]]
 	if q.[[.Pascal]] != "" {
 		base = base.Where(clause.[[clause .QueryOp]]{Column: clause.Column{Name: "[[.Name]]"}, Value: q.[[.Pascal]]})
 	}

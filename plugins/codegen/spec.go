@@ -17,6 +17,7 @@ type Field struct {
 	// 可安全嵌进生成的 TSX 属性。
 	Dict                  string
 	MaxLen                int
+	Precision, Scale      int64
 	Nullable              bool
 	Required, List, Query bool
 	// QueryOp 是查询运算符（like / eq / ne / gt / ge / lt / le / between），只在 Query 为真时有意义。
@@ -76,50 +77,81 @@ func (s *SubSpec) FormFields() []Field {
 	return out
 }
 
-// HasStamps: 子表嵌入基座（保存时一并写入时间戳）。
-func (s *SubSpec) HasStamps() bool { return s.Shape != ShapePlain }
-
-// HasStringForm: 子行编辑器里有短文本字段。
-func (s *SubSpec) HasStringForm() bool {
+func (s *SubSpec) HasDecimal() bool {
 	for _, f := range s.Fields {
-		if f.Form && f.Kind == KindString {
+		if f.Form && f.Kind == KindDecimal {
 			return true
 		}
 	}
 	return false
 }
 
-func goType(k Kind) string {
-	switch k {
-	case KindInt:
-		return "int64"
-	case KindFloat:
-		return "float64"
-	case KindBool:
-		return "bool"
-	case KindID:
-		return "idgen.ID"
-	case KindDate, KindDateTime:
-		return "*time.Time"
+// HasStamps: 子表嵌入基座（保存时一并写入时间戳）。
+func (s *SubSpec) HasStamps() bool { return s.Shape != ShapePlain }
+
+// HasStringForm: 子行编辑器里有短文本字段。
+func (s *SubSpec) HasStringForm() bool {
+	for _, f := range s.Fields {
+		if f.Form && (f.Kind == KindString || f.Kind == KindDecimal) {
+			return true
+		}
 	}
-	return "string"
+	return false
 }
 
-func formType(k Kind) string {
+func goType(k Kind, nullable bool) string {
+	var typ string
+	switch k {
+	case KindInt:
+		typ = "int64"
+	case KindFloat:
+		typ = "float64"
+	case KindBool:
+		typ = "bool"
+	case KindID:
+		typ = "idgen.ID"
+	case KindDate, KindDateTime:
+		return "*time.Time"
+	case KindDecimal:
+		if nullable {
+			return "*string"
+		}
+		return "string"
+	default:
+		return "string"
+	}
+	if nullable {
+		return "*" + typ
+	}
+	return typ
+}
+
+func formType(k Kind, nullable bool) string {
 	if k == KindDate || k == KindDateTime {
 		return "*string"
 	}
-	return goType(k)
+	return goType(k, nullable)
 }
 
-func tsType(k Kind) string {
+func tsType(k Kind, nullable bool) string {
 	switch k {
 	case KindInt, KindFloat:
+		if nullable {
+			return "number | null"
+		}
 		return "number"
 	case KindBool:
+		if nullable {
+			return "boolean | null"
+		}
 		return "boolean"
 	case KindDate, KindDateTime:
 		return "string | null"
+	case KindDecimal:
+		if nullable {
+			return "string | null"
+		}
+		return "string"
 	}
 	return "string"
 }
@@ -252,9 +284,10 @@ func validateColumnCfg(col *ColumnInfo, cc ColumnConfig) (ColumnConfig, error) {
 func newField(col ColumnInfo, c ColumnConfig) Field {
 	f := Field{
 		Name: col.Name, Pascal: Pascal(col.Name), Camel: Camel(col.Name), Title: Title(col.Name),
-		Comment: col.Comment, Kind: col.Kind, GoType: goType(col.Kind), FormType: formType(col.Kind),
-		TSType: tsType(col.Kind), Control: c.Control, Dict: c.Dict, Nullable: col.Nullable,
+		Comment: col.Comment, Kind: col.Kind, GoType: goType(col.Kind, col.Nullable), FormType: formType(col.Kind, col.Nullable),
+		TSType: tsType(col.Kind, col.Nullable), Control: c.Control, Dict: c.Dict, Nullable: col.Nullable,
 		Required: c.Required, List: c.List, Query: c.Query, QueryOp: c.QueryOp, Form: c.Form, MaxLen: 255,
+		Precision: col.Precision, Scale: col.Scale,
 	}
 	if col.Length > 0 && col.Length <= 4000 {
 		f.MaxLen = int(col.Length)
@@ -375,11 +408,15 @@ func (s *Spec) UsesTimeModel() bool { return s.HasStamps() || s.has(isTime) }
 func (s *Spec) UsesDatabase() bool  { return s.Shape != ShapePlain }
 func (s *Spec) HasFormTime() bool   { return s.has(func(f Field) bool { return f.Form && isTime(f) }) }
 func (s *Spec) HasStringForm() bool {
-	return s.has(func(f Field) bool { return f.Form && f.Kind == KindString })
+	return s.has(func(f Field) bool { return f.Form && (f.Kind == KindString || f.Kind == KindDecimal) })
+}
+func (s *Spec) HasDecimal() bool {
+	return s.has(func(f Field) bool { return f.Form && f.Kind == KindDecimal }) ||
+		(s.Sub != nil && s.Sub.HasDecimal())
 }
 func (s *Spec) HasQuery() bool { return s.has(func(f Field) bool { return f.Query }) }
 func (s *Spec) HasStringQuery() bool {
-	return s.has(func(f Field) bool { return f.Query && f.Kind == KindString })
+	return s.has(func(f Field) bool { return f.Query && f.Kind == KindString || f.Query && f.Kind == KindDecimal })
 }
 
 // HasInputQuery: 有用 Input 渲染的查询条件（布尔、日期与字典列走专用控件）。

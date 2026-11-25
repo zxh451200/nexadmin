@@ -55,7 +55,7 @@ type KidDraft = Record<string, string | boolean>
 function toValues(r: [[.Pascal]]): FormValues {
   return {
 [[- range .FormFields]]
-    [[.Camel]]: [[if or (eq .Kind "int") (eq .Kind "float")]]String(r.[[.Camel]])[[else if isTime .]]r.[[.Camel]] ?? ''[[else]]r.[[.Camel]][[end]],
+    [[.Camel]]: [[if or (eq .Kind "int") (eq .Kind "float")]](r.[[.Camel]] == null ? '' : String(r.[[.Camel]]))[[else if isTime .]]r.[[.Camel]] ?? ''[[else if eq .Kind "decimal"]]r.[[.Camel]] ?? ''[[else if eq .Kind "bool"]]r.[[.Camel]] ?? false[[else]]r.[[.Camel]][[end]],
 [[- end]]
   }
 }
@@ -63,7 +63,7 @@ function toValues(r: [[.Pascal]]): FormValues {
 function toBody(v: FormValues): [[.Pascal]]Form {
   return {
 [[- range .FormFields]]
-    [[.Camel]]: [[if eq .Kind "string"]]v.[[.Camel]].trim()[[else if eq .Kind "int"]]Math.trunc(Number(v.[[.Camel]]) || 0)[[else if eq .Kind "float"]]Number(v.[[.Camel]]) || 0[[else if isTime .]]v.[[.Camel]] || null[[else]]v.[[.Camel]][[end]],
+    [[.Camel]]: [[if eq .Kind "string"]]v.[[.Camel]].trim()[[else if eq .Kind "decimal"]][[if .Nullable]]v.[[.Camel]].trim() || null[[else]]v.[[.Camel]].trim()[[end]][[else if eq .Kind "int"]][[if .Nullable]](v.[[.Camel]].trim() === '' ? null : Math.trunc(Number(v.[[.Camel]])))[[else]]Math.trunc(Number(v.[[.Camel]]) || 0)[[end]][[else if eq .Kind "float"]][[if .Nullable]](v.[[.Camel]].trim() === '' ? null : Number(v.[[.Camel]]))[[else]]Number(v.[[.Camel]]) || 0[[end]][[else if isTime .]]v.[[.Camel]] || null[[else]]v.[[.Camel]][[end]],
 [[- end]]
   }
 }
@@ -88,7 +88,7 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
     () =>
       z.object({
 [[- range .FormFields]]
-        [[.Camel]]: [[if eq .Kind "string"]]z.string().trim().max([[.MaxLen]])[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "text"]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "int"]]z.string().regex(/^-?\d*$/)[[else if eq .Kind "float"]]z.string().regex(/^-?\d*\.?\d*$/)[[else if eq .Kind "bool"]]z.boolean()[[else if isTime .]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else]]z.string()[[end]],
+        [[.Camel]]: [[if eq .Kind "string"]]z.string().trim().max([[.MaxLen]])[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "text"]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "int"]]z.string().regex(/^-?\d*$/)[[else if eq .Kind "float"]]z.string().regex(/^-?\d*\.?\d*$/)[[else if eq .Kind "decimal"]]z.string().trim()[[if not .Nullable]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]].refine((v) => v === '' || /[[decimalPattern .]]/.test(v), t('[[$.Module]].validation.[[.Camel]]Invalid'))[[else if eq .Kind "bool"]]z.boolean()[[else if isTime .]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else]]z.string()[[end]],
 [[- end]]
       }),
     [t],
@@ -115,7 +115,7 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
         data: {
           ...toBody(v),
 [[- if .Sub]]
-          [[.Sub.JSONPlural]]: kids.map((k) => ({ [[range $i, $f := .Sub.FormFields]][[if $i]], [[end]][[$f.Camel]]: [[if eq $f.Kind "bool"]]!!k.[[$f.Camel]][[else if eq $f.Kind "int"]]Math.trunc(Number(k.[[$f.Camel]]) || 0)[[else if eq $f.Kind "float"]]Number(k.[[$f.Camel]]) || 0[[else if isTime $f]](String(k.[[$f.Camel]] || '') || null) as string | null[[else]]String(k.[[$f.Camel]] ?? '').trim()[[end]][[end]] })) as [[.Sub.Pascal]]Form[],
+          [[.Sub.JSONPlural]]: kids.map((k) => ({ [[range $i, $f := .Sub.FormFields]][[if $i]], [[end]][[$f.Camel]]: [[if eq $f.Kind "bool"]]!!k.[[$f.Camel]][[else if eq $f.Kind "int"]][[if $f.Nullable]](String(k.[[$f.Camel]] ?? '').trim() === '' ? null : Math.trunc(Number(k.[[$f.Camel]])))[[else]]Math.trunc(Number(k.[[$f.Camel]]) || 0)[[end]][[else if eq $f.Kind "float"]][[if $f.Nullable]](String(k.[[$f.Camel]] ?? '').trim() === '' ? null : Number(k.[[$f.Camel]]))[[else]]Number(k.[[$f.Camel]]) || 0[[end]][[else if eq $f.Kind "decimal"]]String(k.[[$f.Camel]] ?? '').trim() || null[[else if isTime $f]](String(k.[[$f.Camel]] || '') || null) as string | null[[else]]String(k.[[$f.Camel]] ?? '').trim()[[end]][[end]] })) as [[.Sub.Pascal]]Form[],
 [[- end]]
         },
       })
@@ -156,7 +156,7 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
                 <FormItem className="flex items-center justify-between gap-3">
                   <FormLabel>{t('[[$.Module]].field.[[.Camel]]')}</FormLabel>
                   <FormControl>
-                    <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
+                    <Switch checked={!!field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                 </FormItem>
 [[- else]]

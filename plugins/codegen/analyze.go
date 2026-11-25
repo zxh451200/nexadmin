@@ -13,6 +13,7 @@ const (
 	KindText     Kind = "text"
 	KindInt      Kind = "int"
 	KindFloat    Kind = "float"
+	KindDecimal  Kind = "decimal"
 	KindBool     Kind = "bool"
 	KindDate     Kind = "date"
 	KindDateTime Kind = "datetime"
@@ -57,6 +58,8 @@ type ColumnInfo struct {
 	Supported  bool   `json:"supported"`
 	Reason     string `json:"reason,omitempty"`
 	Length     int64  `json:"length,omitempty"`
+	Precision  int64  `json:"precision,omitempty"`
+	Scale      int64  `json:"scale,omitempty"`
 	// Dict 是推荐配置里的字典编码（仅新建表定义了 dict 字段时非空）。
 	Dict   string       `json:"dict,omitempty"`
 	Config ColumnConfig `json:"config"`
@@ -78,7 +81,7 @@ type TableSchema struct {
 // 存储与 string 相同（VARCHAR），渲染交给框架的 DictSelect / DictTag。
 var controlsByKind = map[Kind][]string{
 	KindString: {"input", "textarea", "dict"}, KindText: {"textarea", "input"},
-	KindInt: {"number", "input"}, KindFloat: {"number", "input"}, KindID: {"input"},
+	KindInt: {"number", "input"}, KindFloat: {"number", "input"}, KindDecimal: {"number", "input"}, KindID: {"input"},
 	KindBool: {"switch"}, KindDate: {"date"}, KindDateTime: {"datetime"},
 }
 
@@ -88,6 +91,7 @@ var queryOpsByKind = map[Kind][]string{
 	KindString:   {"like", "eq", "ne"},
 	KindInt:      {"eq", "ne", "gt", "ge", "lt", "le", "between"},
 	KindFloat:    {"eq", "ne", "gt", "ge", "lt", "le", "between"},
+	KindDecimal:  {"eq", "ne", "gt", "ge", "lt", "le", "between"},
 	KindID:       {"eq", "ne"},
 	KindBool:     {"eq"},
 	KindDate:     {"eq", "ne", "gt", "ge", "lt", "le", "between"},
@@ -106,7 +110,7 @@ func queryable(k Kind) bool {
 }
 
 func requirable(k Kind) bool {
-	return k == KindString || k == KindText || k == KindDate || k == KindDateTime
+	return k == KindString || k == KindText || k == KindDate || k == KindDateTime || k == KindDecimal
 }
 
 // classify 把数据库类型映射到逻辑类型。
@@ -124,9 +128,10 @@ func classify(c RawColumn) Kind {
 	case t == "tinyint" || t == "smallint" || t == "mediumint" || t == "int" || t == "integer" ||
 		t == "int2" || t == "int4" || t == "smallserial" || t == "serial":
 		return KindInt
-	case t == "float" || t == "float4" || t == "float8" || t == "double" || t == "double precision" ||
-		t == "real" || t == "decimal" || t == "numeric":
+	case t == "float" || t == "float4" || t == "float8" || t == "double" || t == "double precision" || t == "real":
 		return KindFloat
+	case t == "decimal" || t == "numeric" || strings.HasPrefix(full, "decimal(") || strings.HasPrefix(full, "numeric("):
+		return KindDecimal
 	case t == "varchar" || t == "char" || t == "bpchar" || t == "character varying" || t == "character" ||
 		t == "nvarchar" || t == "nchar" || t == "varchar2" || t == "citext" || t == "uuid" || t == "enum":
 		return KindString
@@ -168,7 +173,7 @@ func analyze(table string, raw []RawColumn) (*Analysis, error) {
 	has := map[string]Kind{}
 	for _, r := range raw {
 		ci := ColumnInfo{Name: r.Name, Type: sanitizeComment(r.TypeName), Nullable: r.Nullable, PrimaryKey: r.PrimaryKey,
-			Comment: sanitizeComment(r.Comment), Length: r.Length, Dict: r.Dict, hasDefault: r.HasDefault}
+			Comment: sanitizeComment(r.Comment), Length: r.Length, Precision: r.Precision, Scale: r.Scale, Dict: r.Dict, hasDefault: r.HasDefault}
 		switch {
 		case ValidIdent(r.Name) != nil:
 			ci.Reason = "invalid column name"
@@ -216,6 +221,9 @@ func analyze(table string, raw []RawColumn) (*Analysis, error) {
 	pascal, camel := map[string]string{}, map[string]string{}
 	for i := range a.Cols {
 		c := &a.Cols[i]
+		if !c.Supported && !c.Nullable && !c.hasDefault {
+			return nil, fmt.Errorf("table %q: required column %q has unsupported type %q", table, c.Name, c.Type)
+		}
 		if !c.Supported {
 			continue
 		}
@@ -279,7 +287,7 @@ func (a *Analysis) recommend() {
 		switch {
 		case c.Kind == KindString && strQueries < 2:
 			c.Config.Query, strQueries, queries = true, strQueries+1, queries+1
-		case c.Kind == KindBool, isStateName(c.Name) && (c.Kind == KindInt || c.Kind == KindString):
+		case c.Kind == KindBool, isStateName(c.Name) && (c.Kind == KindInt || c.Kind == KindString || c.Kind == KindDecimal):
 			c.Config.Query, queries = true, queries+1
 		}
 		if c.Config.Query {

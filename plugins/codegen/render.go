@@ -28,8 +28,9 @@ type File struct {
 
 // Output 是一次生成的全部结果。
 type Output struct {
-	Files []File `json:"files"`
-	Notes []Note `json:"notes"`
+	Files      []File            `json:"files"`
+	Notes      []Note            `json:"notes"`
+	Validation *ValidationReport `json:"validation,omitempty"`
 }
 
 // Note 是给用户的后续步骤提示；Code 由前端翻译，Value 是需要原样展示的内容。
@@ -86,6 +87,8 @@ func queryType(f Field) string {
 		return "*int64"
 	case KindFloat:
 		return "*float64"
+	case KindDecimal:
+		return "*string"
 	case KindID:
 		return "*idgen.ID"
 	case KindBool:
@@ -136,6 +139,8 @@ func mockValue(f Field, i int) string {
 		return fmt.Sprint(i * 10)
 	case KindFloat:
 		return fmt.Sprintf("%d.5", i)
+	case KindDecimal:
+		return tsStr(fmt.Sprintf("%d.50", i))
 	case KindBool:
 		return fmt.Sprint(i%2 == 0)
 	case KindDate:
@@ -159,9 +164,19 @@ func mockValue(f Field, i int) string {
 func mockEmpty(f Field) string {
 	switch f.Kind {
 	case KindInt, KindFloat:
+		if f.Nullable {
+			return "null"
+		}
 		return "0"
 	case KindBool:
+		if f.Nullable {
+			return "null"
+		}
 		return "false"
+	case KindID:
+		return "null"
+	case KindDecimal:
+		return "null"
 	case KindDate, KindDateTime:
 		return "null"
 	}
@@ -177,6 +192,20 @@ func (s *Spec) HasTimeList() bool {
 func parseTemplates() (*template.Template, error) {
 	funcs := template.FuncMap{
 		"bind": bindTag, "queryType": queryType, "isTime": isTime, "clause": clauseOp, "jsOp": jsOp,
+		"decimalPattern": func(f Field) string {
+			precision, scale := f.Precision, f.Scale
+			if precision <= 0 {
+				precision, scale = 18, 18
+			}
+			integer := precision - scale
+			if integer <= 0 {
+				integer = 1
+			}
+			if scale <= 0 {
+				return fmt.Sprintf(`^-?\d{1,%d}$`, integer)
+			}
+			return fmt.Sprintf(`^-?\d{1,%d}(\.\d{1,%d})?$`, integer, scale)
+		},
 		"mock": mockValue, "mockEmpty": mockEmpty,
 		"mockid": func(i int) string { return fmt.Sprintf("188000000000%07d", i) },
 	}
@@ -237,24 +266,37 @@ func localeJSON(s *Spec, zh bool) string {
 		}
 		b.WriteString("      }\n    }")
 	}
-	var req []Field
+	type validationEntry struct {
+		key, zh, en string
+	}
+	var validations []validationEntry
 	for _, f := range s.Fields {
-		if f.Form && f.Required && f.Kind != KindBool && f.Kind != KindInt && f.Kind != KindFloat && f.Kind != KindID {
-			req = append(req, f)
+		if !f.Form {
+			continue
+		}
+		label := f.Title
+		if zh {
+			label = f.LabelZh()
+		}
+		if f.Required && f.Kind != KindBool && f.Kind != KindInt && f.Kind != KindFloat && f.Kind != KindID {
+			validations = append(validations, validationEntry{f.Camel + "Required", label + "不能为空", label + " is required"})
+		}
+		if f.Kind == KindDecimal {
+			validations = append(validations, validationEntry{f.Camel + "Invalid", label + "格式或小数位数不正确", label + " has an invalid format or scale"})
 		}
 	}
-	if len(req) > 0 {
+	if len(validations) > 0 {
 		b.WriteString(",\n    \"validation\": {\n")
-		for i, f := range req {
+		for i, v := range validations {
 			sep := ","
-			if i == len(req)-1 {
+			if i == len(validations)-1 {
 				sep = ""
 			}
-			label := f.Title
+			label := v.en
 			if zh {
-				label = f.LabelZh()
+				label = v.zh
 			}
-			fmt.Fprintf(&b, "      %s: %s%s\n", str(f.Camel+"Required"), str(pick(label+"不能为空", label+" is required")), sep)
+			fmt.Fprintf(&b, "      %s: %s%s\n", str(v.key), str(label), sep)
 		}
 		b.WriteString("    }")
 	}
