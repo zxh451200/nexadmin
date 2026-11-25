@@ -76,10 +76,10 @@ body:has(.pd-page) .topbar-in{max-width:1360px;padding-inline:24px}
 .pd-qty-label{font-weight:600}
 .pd-stepper{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid rgba(128,128,128,.32);border-radius:999px;background:var(--panel,Canvas)}
 .pd-stepper:focus-within{border-color:var(--pc-accent,currentColor)}
-.pd-step{display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:16px;line-height:1;cursor:pointer}
+.pd-step{display:flex;align-items:center;justify-content:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:16px;line-height:1;cursor:pointer}
 .pd-step:hover:not(:disabled){background:rgba(128,128,128,.16)}
 .pd-step:disabled{opacity:.3;cursor:not-allowed}
-.pd-step-input{width:46px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:14px;text-align:center;appearance:textfield}
+.pd-step-input{width:56px;height:40px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:14px;text-align:center;appearance:textfield}
 .pd-step-input:focus{outline:0}
 .pd-qty-unit{font-size:12px;opacity:.7}
 .pd-subtotal{margin:0 0 2px;font-size:11.5px;line-height:1.6;opacity:.75}
@@ -112,7 +112,7 @@ body:has(.pd-page) .topbar-in{max-width:1360px;padding-inline:24px}
 .pd-inq-row span:first-child{opacity:.7}
 .pd-service{display:flex;flex-direction:column;gap:6px}
 .pd-service span{color:var(--pc-accent,currentColor);font-weight:700}
-.pd-cta{display:block;box-sizing:border-box;width:100%;margin-top:8px;padding:11px 12px;border:1px solid var(--pc-accent,currentColor);border-radius:3px;font-size:13px;font-weight:600;text-align:center;text-decoration:none}
+.pd-cta{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-height:44px;margin-top:8px;padding:11px 12px;border:1px solid var(--pc-accent,currentColor);border-radius:3px;font-size:13px;font-weight:600;text-align:center;text-decoration:none}
 /* 表单里的「立即购买」是 <button>：浏览器默认不继承字体，不补就会跟旁边的 <a> 两套字形。 */
 button.pd-cta{font-family:inherit;cursor:pointer}
 .pd-cta-primary{background:var(--pc-accent,currentColor);color:#fff}
@@ -125,7 +125,7 @@ button.pd-cta{font-family:inherit;cursor:pointer}
 .pd-buy-fields{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 /* 脚本靠 hidden 属性控制展开；flex 会盖掉 UA 的 display:none，这里显式还回去 */
 .pd-buy-fields[hidden]{display:none}
-.pd-buy-fields input{box-sizing:border-box;width:100%;height:34px;padding:0 10px;border:1px solid rgba(128,128,128,.32);border-radius:3px;background:transparent;color:inherit;font:inherit;font-size:13px;line-height:1.4;transition:border-color .15s,box-shadow .15s}
+.pd-buy-fields input{box-sizing:border-box;width:100%;height:44px;padding:0 10px;border:1px solid rgba(128,128,128,.32);border-radius:3px;background:transparent;color:inherit;font:inherit;font-size:13px;line-height:1.4;transition:border-color .15s,box-shadow .15s}
 .pd-buy-fields input::placeholder{color:currentColor;opacity:.45}
 .pd-buy-fields input:hover{border-color:rgba(128,128,128,.5)}
 .pd-buy-fields input:focus{outline:none;border-color:var(--pc-accent,currentColor);box-shadow:0 0 0 3px rgba(128,128,128,.16)}
@@ -185,12 +185,13 @@ button.pd-cta{font-family:inherit;cursor:pointer}
 .pd-rec-name{display:block;margin-top:6px;overflow:hidden;font-size:12px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
 .pd-rec-price{display:block;margin-top:3px;font-size:13px;font-weight:600}
 .pd-rec-moq{display:block;font-size:11px;opacity:.7}
-.pd-tabs{position:sticky;top:64px;z-index:5;display:flex;gap:24px;margin-top:18px;border-bottom:1px solid rgba(128,128,128,.25);background:var(--pd-bg,var(--panel,Canvas))}
-.pd-tabs [role="tab"]{padding:12px 2px;border:0;border-bottom:2px solid transparent;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}
+.pd-tabs{position:sticky;top:64px;z-index:5;display:flex;gap:24px;margin-top:18px;border-bottom:1px solid rgba(128,128,128,.25);background:var(--pd-bg,var(--panel,Canvas));overflow-x:auto;scrollbar-width:none}
+.pd-tabs::-webkit-scrollbar{display:none}
+.pd-tabs [role="tab"]{display:inline-flex;align-items:center;flex:none;min-height:44px;padding:12px 8px;border:0;border-bottom:2px solid transparent;background:transparent;color:inherit;font:inherit;font-size:14px;white-space:nowrap;cursor:pointer}
 .pd-tabs [role="tab"][aria-selected="true"]{border-bottom-color:var(--pc-accent,currentColor);font-weight:600}
-.pd-tabs .pd-tab-anchor{padding:12px 2px;border-bottom:2px solid transparent;color:inherit;font-size:14px;text-decoration:none}
+.pd-tabs .pd-tab-anchor{display:inline-flex;align-items:center;flex:none;min-height:44px;padding:12px 8px;border-bottom:2px solid transparent;color:inherit;font-size:14px;text-decoration:none;white-space:nowrap}
 .pd-tabs .pd-tab-anchor:hover{color:var(--pc-accent,currentColor)}
-.pd-tabs>a{display:inline-flex;align-items:center;padding:12px 2px;border-bottom:2px solid transparent;color:inherit;text-decoration:none;font-size:14px}
+.pd-tabs>a{display:inline-flex;align-items:center;flex:none;min-height:44px;padding:12px 8px;border-bottom:2px solid transparent;color:inherit;text-decoration:none;font-size:14px;white-space:nowrap}
 .pd-tabs>a:hover{border-bottom-color:currentColor}
 .pd-panel{padding-top:20px}
 .pd-panel h2{margin:0 0 12px;font-size:17px;font-weight:600}
@@ -206,7 +207,7 @@ button.pd-cta{font-family:inherit;cursor:pointer}
 @media(max-width:760px){.pd-wrap{padding:0 16px}.pd-top{grid-template-columns:1fr}.pd-review-summary{grid-template-columns:1fr;gap:14px}.pd-review-score{flex-direction:row;justify-content:flex-start;gap:10px}.pd-review-score strong{font-size:30px}.pd-inquiry{grid-column:auto}.pd-attr-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-rec-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-spec-table{grid-template-columns:1fr}.pd-spec-cell:nth-child(odd){border-inline-end:0}.pd-tabs{top:0}.pd-info h1{font-size:21px}}
 @media(hover:none){.pd-zoom-tip{display:none}}
 @media(max-width:760px){.pd-sticky{display:none}.pd-sticky.is-on{display:flex}.pd-inquiry{max-height:none;overflow:visible}}
-@media(hover:none){.pd-step{width:32px;height:32px}.pd-step-input{width:52px}}
+@media(hover:none){.pd-step{width:44px;height:44px}.pd-step-input{width:64px;height:44px}}
 @media(max-width:760px){.pd-gallery{display:flex;flex-wrap:wrap;gap:8px}.pd-stage{flex:1 0 100%;min-height:0}.pd-stage>.pd-main-img{height:auto;min-height:0;object-fit:contain}.pd-stage.is-video{aspect-ratio:16/9}.pd-gallery .pd-thumb{flex:none;width:56px;height:56px}.pd-gallery>.pd-thumbs{grid-column:auto;grid-row:auto;align-self:auto;flex:1 0 100%;flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}}
 /* 右下客服挂件是 fixed，会长期压住 sticky 询盘栏底部的支付徽标与说明文字；
    页面滚动甩不掉它，所以让侧栏底边停在挂件上沿之上。侧栏本就 overflow-y:auto，

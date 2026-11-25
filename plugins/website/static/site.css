@@ -1546,10 +1546,8 @@ html[data-scheme="light"] .shot-light { display: block; }
 /* 文档正文很长，IntersectionObserver 的 5% 阈值在手机上可能永远达不到；正文不做入场隐藏 */
 .docs-body[data-reveal] { opacity: 1 !important; transform: none !important; }
 .docs-body :not(pre) > code { overflow-wrap: anywhere; }
-/* display:block 的表格块默认撑满容器宽度，浏览器表格算法会把列宽摊成与内容无关的比例
-   （权限码与接口对照表：模块列摊到 662px、接口列 1649px 被容器裁掉）。width:max-content
-   让表格先按内容收紧到自然宽度，超宽再整体横向滚动——GitHub 文档表格同款规则。 */
-.docs-body table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
+/* 表格自身作为滚动容器；手机端列宽下限保证长文可横向阅读，不逐字折断。 */
+.docs-body table { display: block; width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 /* 单元格不设 nowrap：nowrap 会让每列的最小内容宽巨大（权限码/接口清单一列上千像素），
    表格算法在容器内摊出离谱列宽（模块列摊到 662px、接口列被容器裁掉）。正常换行后
    只有不可断的 token 才会撑出横向滚动；单元格里的 <br> 仍分段，接口清单的分行结构保留。 */
@@ -1557,6 +1555,14 @@ html[data-scheme="light"] .shot-light { display: block; }
 .docs-body table th:first-child, .docs-body table td:first-child { min-width: 7.5em; }
 /* 首列合并后的分组名固定顶对齐，避免 rowspan 单元格被浏览器按基线居中 */
 .docs-body table td[rowspan] { vertical-align: top; }
+@media (max-width: 760px) {
+  .docs-body table { display: block; width: 100%; border-collapse: collapse; }
+  .docs-body table th:not(:first-child),
+  .docs-body table td:not(:first-child) { min-width: 9em; overflow-wrap: normal; word-break: normal; }
+  .docs-body table th:first-child,
+  .docs-body table td:first-child { position: sticky; inset-inline-start: 0; z-index: 1; min-width: 7.5em; background: var(--panel); }
+  .docs-toc-side .docs-disclosure[open] { max-height: 48dvh; overflow-y: auto; overscroll-behavior: contain; }
+}
 .docs-body h1 { margin-bottom: 0.8em; }
 /* 配图：宽度跟正文（图本身 960 宽，缩到 820 仍清楚），上下留白比段落大一点，读起来像独立的一块。
    窄屏按比例缩到容器宽——不强行撑到 640，否则整页会横向滚动。 */
@@ -1631,8 +1637,13 @@ html[data-scheme="light"] .shot-light { display: block; }
   gap: 12px;
   margin: 18px 0 10px;
 }
+.filter-group { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.filter-label { font-size: 12.5px; color: var(--text-3); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
   padding: 5px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2191,7 +2202,7 @@ html:not([data-scheme="light"]) .contact-page {
 
 @media (max-width: 760px) {
   .topnav { display: none; }
-  .nav-toggle { display: inline-flex; }
+  .nav-toggle { display: inline-flex; min-width: 44px; min-height: 44px; }
   .topbar-in { gap: 12px; }
   .topbar-actions { margin-left: auto; }
 
@@ -2228,6 +2239,7 @@ html:not([data-scheme="light"]) .contact-page {
   .mobile-nav .mobile-sub a { padding: 9px 0; font-size: 14px; }
   .mobile-lang { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .mobile-lang-label { font-size: 12px; color: var(--text-3); }
+  .mobile-nav .mobile-lang a { display: inline-flex; align-items: center; min-height: 44px; }
   .mobile-nav .mobile-lang a,
   .mobile-lang-current { padding: 6px 0; border: 0; font-size: 14px; color: var(--text-2); }
   .mobile-lang-current { color: var(--text); }
@@ -2394,7 +2406,7 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
 
 @media (max-width: 900px) {
   .topnav { display: none; }
-  .nav-toggle { display: inline-flex; }
+  .nav-toggle { display: inline-flex; min-width: 44px; min-height: 44px; }
   .topbar-in { gap: 12px; }
   .topbar-actions { margin-left: auto; }
 
@@ -2419,6 +2431,7 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
   .mobile-nav a:last-child { border-bottom: 0; color: var(--text); }
   .mobile-nav a[aria-current="page"],
   .mobile-nav a[aria-current="true"] { color: var(--text); }
+  .mobile-nav .mobile-lang a { display: inline-flex; align-items: center; min-height: 44px; }
   body.nav-open { overflow: hidden; }
 }
 
@@ -2616,7 +2629,7 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
   position: static; align-self: start; justify-self: end;
   margin: 8px 8px 0 0;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; padding: 0;
+  width: 44px; height: 44px; padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px;
   background: rgba(255, 255, 255, 0.06); color: #b8c0cc;
   cursor: pointer; opacity: 0.72;
@@ -5109,6 +5122,34 @@ html[data-scheme="light"] .hp-cta-glow {
 .hp-hero-lede { font-size: 17px; line-height: 1.55; letter-spacing: -0.011em; color: var(--text-2); }
 .hp-hero-sub { font-size: 14px; line-height: 1.6; color: var(--text-3); }
 .hp-hero-new a { font-size: 13px; color: var(--text-3); }
+
+@media (min-width: 361px) and (max-width: 560px) {
+  .hp-hero-actions { flex-wrap: nowrap; gap: 8px; }
+  .hp-hero-actions .btn { flex: 0 1 auto; min-width: 0; height: 44px; padding-inline: 14px; }
+  .hp-hero-link { flex: 1 1 0; min-width: 0; height: 44px; padding-inline: 0; }
+}
+
+@media (hover: none) {
+  .btn-sm,
+  .chip,
+  .footer-social a { min-width: 44px; min-height: 44px; }
+  .footer-social a { width: 44px; height: 44px; }
+}
+
+@media (max-width: 980px) {
+  .field input { height: 44px; font-size: 16px; }
+  .contact-form .btn-primary { height: auto; min-height: 44px; }
+  .market-search input { height: 44px; }
+  .notfound .hero-cta .btn-primary,
+  .notfound .hero-cta .btn-ghost { height: auto; min-height: 44px; }
+  .hp-demo-mode summary,
+  .hp-demo-tabs button,
+  .hp-demo-icon-btn,
+  .hp-demo-reset,
+  .hp-demo-quick-btn { min-width: 44px; min-height: 44px; }
+  .hp-hotspot { min-width: 44px; min-height: 44px; }
+  .hp-hotspot-dot { width: 44px; height: 44px; }
+}
 .hp-lead { font-size: 15px; line-height: 1.6; color: var(--text-3); }
 .hp-h2 { font-size: clamp(30px, 3.35vw, 48px); line-height: 1; }
 .hp-statement-text { font-size: 48px; font-weight: 510; line-height: 1.12; color: var(--text-3); }

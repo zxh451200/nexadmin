@@ -26,11 +26,17 @@
     </form>
 
     <div class="market-filters">
-      <div class="chips" role="group" aria-label="{{.T "market.filterCategory"}}">
-        {{range .MarketCategories}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL .Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+      <div class="filter-group" role="group" aria-label="{{.T "market.filterCategory"}}">
+        <span class="filter-label">{{.T "market.filterCategory"}}</span>
+        <div class="chips">
+          {{range .MarketCategories}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL .Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+        </div>
       </div>
-      <div class="chips" role="group" aria-label="{{.T "market.filterEdition"}}">
-        {{range .MarketEditions}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL .Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+      <div class="filter-group" role="group" aria-label="{{.T "market.filterEdition"}}">
+        <span class="filter-label">{{.T "market.filterEdition"}}</span>
+        <div class="chips">
+          {{range .MarketEditions}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL .Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+        </div>
       </div>
     </div>
 

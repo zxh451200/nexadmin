@@ -121,6 +121,29 @@
     if (e.key === 'Escape') closeNavItems(null);
   });
 
+  // ---- 品牌主题移动菜单：details 原生开合，脚本只补背景锁滚与关闭行为 ----
+  document.querySelectorAll('[data-mnav]').forEach(function (menu) {
+    var syncMenu = function () { document.body.classList.toggle('mnav-open', menu.open); };
+    menu.addEventListener('toggle', syncMenu);
+    menu.addEventListener('click', function (e) {
+      if (e.target.closest('a')) menu.open = false;
+    });
+    menu.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && menu.open) {
+        menu.open = false;
+        menu.querySelector('summary').focus();
+      }
+    });
+  });
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('[data-mnav][open]').forEach(function (menu) {
+      if (!menu.contains(e.target)) menu.open = false;
+    });
+  });
+  onWin(window, 'resize', function () {
+    if (window.innerWidth > 980) document.querySelectorAll('[data-mnav][open]').forEach(function (menu) { menu.open = false; });
+  }, { passive: true });
+
   // ---- 复制安装命令 / 复制邮箱（委托） ----
   document.addEventListener('click', function (e) {
     var copyBtn = e.target.closest('[data-copy]');
@@ -1615,7 +1638,7 @@
         '.inq-form{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}',
         '.inq-body{overflow:auto;min-height:0;flex:1 1 auto;padding-inline-end:2px;margin-inline-end:-2px}',
     '.inq-title{margin:0 0 14px;font-size:18px;font-weight:700;line-height:1.3}',
-    '.inq-x{position:absolute;inset-block-start:12px;inset-inline-end:12px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;opacity:.55;cursor:pointer}',
+    '.inq-x{position:absolute;inset-block-start:12px;inset-inline-end:12px;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;opacity:.55;cursor:pointer}',
     '.inq-x:hover{opacity:1;background:rgba(128,128,128,.12)}',
     '.inq-x svg{width:16px;height:16px}',
     '.inq-prod{display:flex;align-items:flex-start;gap:10px;margin:0 0 14px;padding:8px;border:1px solid rgba(128,128,128,.22);border-radius:4px}',
@@ -1632,16 +1655,17 @@
     '.inq-qty-label{opacity:.65}',
     '.inq-stepper{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid rgba(128,128,128,.32);border-radius:999px;background:var(--input-bg,Canvas)}',
     '.inq-stepper:focus-within{border-color:var(--pc-accent,currentColor)}',
-    '.inq-step{display:flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:14px;line-height:1;cursor:pointer}',
+    '.inq-step{display:flex;align-items:center;justify-content:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:14px;line-height:1;cursor:pointer}',
     '.inq-step:hover:not(:disabled){background:rgba(128,128,128,.16)}',
     '.inq-step:disabled{opacity:.3;cursor:not-allowed}',
-    '.inq-step-input{width:46px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:12.5px;text-align:center;appearance:textfield}',
+    '.inq-step-input{box-sizing:border-box;width:52px;height:40px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:16px;text-align:center;appearance:textfield}',
     '.inq-step-input:focus{outline:0}',
     '.inq-qty-unit{font-size:11.5px;opacity:.7}',
     '.inq-field{display:block;margin:0 0 10px;font-size:12.5px}',
     '.inq-label{display:block;margin-bottom:5px;font-weight:600}',
     '.inq-req{font-style:normal;margin-inline-end:2px;color:#d5232b}',
     '.inq-field textarea,.inq-field input{display:block;width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid rgba(128,128,128,.4);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:13px}',
+    '.inq-field input{min-height:44px}',
     '.inq-field textarea{min-height:104px;resize:vertical;line-height:1.6}',
     '.inq-field textarea:focus,.inq-field input:focus{outline:0;border-color:var(--pc-accent,currentColor)}',
     '.inq-hint{margin:-4px 0 12px;font-size:11.5px;line-height:1.6;opacity:.6}',
@@ -1676,7 +1700,8 @@
     '.inq-send:disabled{opacity:.6;cursor:default}',
     '.inq-done{padding:26px 0;text-align:center;font-size:14px;line-height:1.7}',
     'body.inq-lock{overflow:hidden}',
-    '@media (max-width:560px){.inq{padding:0;align-items:flex-end}.inq-card{width:100%;max-height:92dvh;border-radius:10px 10px 0 0;padding:18px 16px 20px}.inq-row{flex-direction:column;gap:0}}'
+    '@media (max-width:560px){.inq{padding:0;align-items:flex-end}.inq-card{width:100%;max-height:92dvh;border-radius:10px 10px 0 0;padding:18px 16px 20px}.inq-row{flex-direction:column;gap:0}.inq-field input{font-size:16px}}',
+    '@media (hover:none){.inq-step{width:44px;height:44px}.inq-step-input{width:60px;height:44px}.inq-attach-btn,.inq-chip{min-height:44px}.inq-att-x{width:44px;height:44px}}'
   ].join('');
 
   function initInquiry() {
@@ -2184,6 +2209,7 @@
     '.dt-share-btn.is-copied .dt-ico-copy,.dt-share-btn.is-failed .dt-ico-copy{display:none}',
     '.dt-share-btn.is-copied .dt-ico-check{display:inline-flex}',
     '.dt-share-btn.is-failed .dt-ico-fail{display:inline-flex}',
+    '@media (hover:none){.dt-share-btn{width:44px !important;height:44px !important}}',
     // 上一篇/下一篇导航：细边框 + 透明底（对齐 linear 文档底部的卡片口径，灰底块太像按钮）；
     // 箭头挂在标题行（模板 .dt-t），hover 往对应方向滑 3px，比小字上的箭头更有点击引导；
     // 标题允许两行内换行（原来 nowrap 直接截断，中文长标题截半不可读）；
