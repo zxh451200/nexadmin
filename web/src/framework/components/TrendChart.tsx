@@ -67,7 +67,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
         ))}
       </defs>
       <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" strokeOpacity={0.7} vertical={false} />
-      <XAxis dataKey={xKey} tick={axis} tickLine={false} axisLine={false} tickMargin={8} />
+      <XAxis dataKey={xKey} tick={axis} tickLine={false} axisLine={false} tickMargin={8} minTickGap={isMobile ? 48 : 32} interval="preserveStartEnd" />
       <YAxis allowDecimals={false} tick={axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v) => compact(Number(v))} />
       <Tooltip
         cursor={{ stroke: 'hsl(var(--primary))', strokeOpacity: 0.35, strokeDasharray: '4 4', fill: 'hsl(var(--muted) / 0.5)' }}

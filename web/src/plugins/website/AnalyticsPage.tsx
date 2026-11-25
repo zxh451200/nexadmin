@@ -108,7 +108,10 @@ export default function AnalyticsPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_website.analytics.title')} description={t('plugin_website.analytics.description')} />
+      <PageHeader
+        title={t('plugin_website.analytics.title')}
+        description={<span className="block max-w-2xl leading-relaxed">{t('plugin_website.analytics.description')}</span>}
+      />
 
       {/* KPI 行：浏览 / 访客 / 跳出率 / 访问时长 / 询盘 / 实时在站（近 5 分钟窗口，60s 轮询） */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 md:gap-4">
@@ -202,7 +205,7 @@ export default function AnalyticsPage() {
               <>
                 {kindRows}
                 <div className="space-y-3 border-t border-border pt-3">
-                  <p className="text-xs font-medium text-muted-foreground">{t('plugin_website.analytics.sources.topDomains')}</p>
+                  <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.sources.topDomains')}</p>
                   {refRows.map((r, i) => (
                     <div key={`${r.kind}-${r.host}-${i}`} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
@@ -238,11 +241,11 @@ export default function AnalyticsPage() {
             ) : (
               <>
                 <div className="space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground">{t('plugin_website.analytics.devices.browser')}</p>
+                  <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.devices.browser')}</p>
                   {deviceRows(data?.browsers ?? [])}
                 </div>
                 <div className="space-y-3 border-t border-border pt-3">
-                  <p className="text-xs font-medium text-muted-foreground">{t('plugin_website.analytics.devices.os')}</p>
+                  <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.devices.os')}</p>
                   {deviceRows(data?.oses ?? [])}
                 </div>
               </>

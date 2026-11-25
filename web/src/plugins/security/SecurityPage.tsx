@@ -23,7 +23,7 @@ export default function SecurityPage() {
     <PageContainer>
       <PageHeader title={t('plugin_security.title')} description={t('plugin_security.description')} />
       <Tabs defaultValue="twofa" className="flex flex-col gap-4">
-        <TabsList className="h-auto flex-wrap justify-start">
+        <TabsList className="w-full justify-start sm:w-fit">
           {tabs.map((x) => (
             <TabsTrigger key={x.key} value={x.key}>
               {t(`plugin_security.tabs.${x.key}`)}

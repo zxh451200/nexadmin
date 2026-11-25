@@ -1110,7 +1110,6 @@ export default function ProductPage() {
             >
               {r.title}
             </button>
-            <span className="num block text-xs text-muted-foreground">{r.id}</span>
           </span>
         </span>
       ),

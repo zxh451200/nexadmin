@@ -291,6 +291,7 @@ export default function MessagePage() {
             if (!v) setDetail(null)
           }}
           title={t('plugin_website.message.detailTitle')}
+          size="lg"
           footer={
             <Button variant="outline" onClick={() => setDetail(null)}>
               {t('common.close')}

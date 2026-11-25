@@ -72,8 +72,14 @@ export default function WorkflowPage() {
     <PageContainer>
       <PageHeader title={t('plugin_workflow.title')} description={t('plugin_workflow.description')} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {cards.map((c) => (
-          <StatCard key={c.label} title={c.label} value={c.value} tone={c.tone} />
+        {cards.map((c, index) => (
+          <StatCard
+            key={c.label}
+            title={c.label}
+            value={c.value}
+            tone={c.tone}
+            className={cn(index === cards.length - 1 && 'col-span-2 md:col-span-1')}
+          />
         ))}
       </div>
       <Tabs value={tab} onValueChange={(v) => setTab(v as Filter | 'defs')} className="flex flex-col gap-4">

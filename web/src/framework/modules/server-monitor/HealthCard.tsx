@@ -68,12 +68,12 @@ export function HealthCard() {
             {t('serverMonitor.health.loadFailed')}
           </p>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-live="polite">
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-3" aria-live="polite">
             {HEALTH_ITEMS.map((k) => {
               const c = data.checks[k]
               if (!c) return null
               return (
-                <li key={k} className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border p-3">
+                <li key={k} className="flex min-w-0 flex-col gap-1.5 border-s-2 border-border/60 ps-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium">{t(`serverMonitor.health.item.${k}`)}</span>
                     <StatusBadge status={c.status} />
