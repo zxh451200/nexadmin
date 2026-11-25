@@ -595,6 +595,8 @@
       "messageRecipientEmail": "留言邮件抄送到这里；留空则发到「联系邮箱」。适合销售组共用收件箱，站内信不受影响"
     },
     "placeholder": {
+      "brandColor": "#5e6ad2",
+      "brandColorDark": "留空 = 跟随浅色",
       "siteName": "NexAdmin",
       "siteDesc": "一句话介绍，会用于标题与搜索摘要",
       "homeTitle": "为生产级后台系统\n而生的全栈框架",

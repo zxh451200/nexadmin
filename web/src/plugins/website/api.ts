@@ -67,6 +67,9 @@ export interface SiteSettings {
   /** 首页主视觉覆盖：浅色用 heroImageUrl，深色优先 heroImageDarkUrl；空 = 主题内置图 */
   heroImageUrl: string
   heroImageDarkUrl: string
+  /** 内置主题的强调色覆盖：#RGB / #RRGGBB，深色皮肤留空 = 跟随浅色；两者皆空 = 主题内置色 */
+  brandColor: string
+  brandColorDark: string
   /** 整段替换 robots.txt；支持 {sitemap} 占位，空 = 服务端生成默认规则 */
   robotsTxt: string
   /** 被设为首页的单页 slug；空 = 内置首页。页面被删或未发布时官网自动回退内置首页 */

@@ -57,7 +57,9 @@
       "officesEmpty": "No offices yet — use \"Add location\" to create the first one.",
       "capUnsupported": "The current theme “{{theme}}” does not render “{{what}}”, so saving it will not show up on the site.",
       "capCurrency": "Currency conversion",
-      "messageRecipientInvalid": "Invalid message notification email"
+      "messageRecipientInvalid": "Invalid message notification email",
+      "brandColorInvalid": "Brand color must be #RGB or #RRGGBB, e.g. #5e6ad2",
+      "capBrandColor": "Brand accent color"
     },
     "social": {
       "github": "GitHub",
@@ -593,6 +595,8 @@
       "messageRecipientEmail": "Notification copies go here; falls back to the contact email when empty. Useful for a shared sales inbox; in-app notifications are unaffected"
     },
     "placeholder": {
+      "brandColor": "#5e6ad2",
+      "brandColorDark": "Empty = follow light accent",
       "siteName": "NexAdmin",
       "siteDesc": "One-line intro used in title and search snippets",
       "homeTitle": "A full-stack framework\nbuilt for production admin systems",

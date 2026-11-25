@@ -18,6 +18,8 @@ const settings: SiteSettings = {
   titleSuffix: '',
   heroImageUrl: '',
   heroImageDarkUrl: '',
+  brandColor: '',
+  brandColorDark: '',
   robotsTxt: '',
   homeSlug: '',
   homeTitle: '为生产级后台系统\n而生的全栈框架',
