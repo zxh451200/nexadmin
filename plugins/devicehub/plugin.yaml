@@ -1,7 +1,7 @@
 id: devicehub
 name: 设备接入与监控
 version: 0.1.0
-description: 工业设备接入与监控：Modbus TCP / MQTT 驱动接入变频器、PLC 与上位机网关，测点配置与秒级采集（死区压缩、断线重连）、实时监控页（WS 推送）、指令下发（独立权限 + 回执 + 操作日志）、阈值告警（站内信通知）、历史数据与 xlsx 报表导出；devicehub.* 事件可由宿主订阅。协议驱动为插件内可注册接口，二期扩展 S7 / OPC UA。
+description: 工业设备接入与监控：Modbus TCP / MQTT 驱动接入变频器、PLC 与上位机网关，测点配置与秒级采集（死区压缩、断线重连）、实时监控页（WS 推送）、监控总览（在线率/告警趋势/异常设备 Top）、指令下发（独立权限 + 回执 + 操作日志）、阈值告警（认领/恢复/静默 + 站内信通知）、历史数据与 xlsx 报表导出；devicehub.* 事件可由宿主订阅。协议驱动为插件内可注册接口，二期扩展 S7 / OPC UA。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"

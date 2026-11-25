@@ -398,7 +398,7 @@ func (s *Service) Overview(ctx context.Context, days int) (*Overview, error) {
 			out.Devices.Offline++
 		}
 	}
-	if active := out.Devices.Total - out.Devices.Disabled; active > 0 {
+	if active := out.Devices.Online + out.Devices.Offline; active > 0 {
 		out.Devices.OnlineRate = math.Round(float64(out.Devices.Online)/float64(active)*1000) / 10
 	}
 
@@ -593,7 +593,7 @@ func (s *Service) Overview(ctx context.Context, days int) (*Overview, error) {
 					TS: b, Total: sm.Total, Online: sm.Online,
 					Offline: sm.Offline, Disabled: sm.Disabled,
 				}
-				if active := sm.Total - sm.Disabled; active > 0 {
+				if active := sm.Online + sm.Offline; active > 0 {
 					p.OnlineRate = math.Round(float64(sm.Online)/float64(active)*1000) / 10
 				}
 				out.OnlineTrend = append(out.OnlineTrend, p)
@@ -635,7 +635,7 @@ func (s *Service) Overview(ctx context.Context, days int) (*Overview, error) {
 				TS: b, Total: agg.Total / agg.Samples, Online: agg.Online / agg.Samples,
 				Offline: agg.Offline / agg.Samples, Disabled: agg.Disabled / agg.Samples,
 			}
-			if active := p.Total - p.Disabled; active > 0 {
+			if active := p.Online + p.Offline; active > 0 {
 				p.OnlineRate = math.Round(float64(p.Online)/float64(active)*1000) / 10
 			}
 			out.OnlineTrend = append(out.OnlineTrend, p)

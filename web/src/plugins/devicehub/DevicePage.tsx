@@ -366,12 +366,18 @@ function DeviceDetail({
   const d = useDevice(deviceNo).data
   const points = usePoints(deviceNo)
   // 告警/指令用 Tab 切换，实时值常驻上方；?tab=alarms 供总览/站内信深链直达。
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const urlTab = params.get('tab') ?? ''
   const [tab, setTab] = useState(['points', 'history', 'commands', 'alarms', 'logs'].includes(urlTab) ? urlTab : 'points')
   useEffect(() => {
     if (['points', 'history', 'commands', 'alarms', 'logs'].includes(urlTab)) setTab(urlTab)
   }, [urlTab])
+  const changeTab = (v: string) => {
+    setTab(v)
+    const next = new URLSearchParams(params)
+    next.set('tab', v)
+    setParams(next, { replace: true })
+  }
 
   return (
     // 宽屏下是第二栏：自带分栏竖线，整栏自己滚（列表滚它的、详情滚它的）；
@@ -479,7 +485,7 @@ function DeviceDetail({
         )
       })()}
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={changeTab}>
         <TabsList className="w-fit">
           <TabsTrigger value="points">{t('plugin_devicehub.tab.points')}</TabsTrigger>
           <TabsTrigger value="history">{t('plugin_devicehub.tab.history')}</TabsTrigger>

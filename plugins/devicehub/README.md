@@ -39,8 +39,16 @@
 
 - 采集落库带**死区压缩**（point.deadband，偏差内只刷最近值不落行）
 - 原始读数保留 48h，内置 sweeper 每小时聚合进小时桶 `plg_devhub_reading_agg`，原始行滚动删除
+- 设备在线率按小时采样到 `plg_devhub_status_sample`（桶唯一、重启幂等覆盖），总览页的在线率趋势
+  与告警趋势都从这两张历史表聚合，不扫秒级原始读数
 - 设备删除级联清测点/读数/聚合桶/指令/告警规则与事件；测点删除保留原始读数（趋势不丢），
   但清掉它的告警规则与小时桶——这两类只认 `point_id`，留着就是删不干净的孤儿行
+
+## 监控总览
+
+- `/devicehub/overview`：在线率、告警趋势、异常设备 Top、最近告警；时间窗支持近 24 小时 / 7 天 / 30 天
+- 聚合接口 `GET /plugins/devicehub/overview?days=1|7|30`，窗口事件超过 20000 条时 `sampled=true`，趋势与计数只覆盖前 20000 条
+- 总览入口使用独立菜单权限 `devicehub:overview`；告警趋势只把 `warn/critical` 计入告警量，`info` 作为恢复/提示单独保留
 
 ## 告警生命周期
 
@@ -52,6 +60,7 @@
 ## 权限码
 
 - `devicehub:list` 查看（实时/历史/导出/配置读取 + 告警通知收件人）
+- `devicehub:overview` 进入监控总览页（只控制菜单/页面入口，聚合接口仍按 `devicehub:list` 鉴权）
 - `devicehub:edit` 管理设备/测点/告警规则，以及告警认领、恢复与静默
 - `devicehub:control` 指令下发（高危独立，操作日志必记）
 

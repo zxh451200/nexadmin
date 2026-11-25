@@ -89,7 +89,7 @@ export default function OverviewPage() {
               tone="success"
               title={t('plugin_devicehub.overviewPage.onlineRate')}
               value={`${data.devices.onlineRate.toFixed(1)}%`}
-              hint={`${data.devices.online} / ${data.devices.total - data.devices.disabled}`}
+              hint={`${data.devices.online} / ${data.devices.online + data.devices.offline}`}
               progress={data.devices.onlineRate}
               spark={data.onlineTrend.map((p) => p.onlineRate)}
               icon={<Wifi aria-hidden="true" />}
@@ -98,7 +98,9 @@ export default function OverviewPage() {
               tone="destructive"
               title={t('plugin_devicehub.overviewPage.offline')}
               value={data.devices.offline}
-              hint={t('plugin_devicehub.overviewPage.disabledHint', { count: data.devices.disabled })}
+              hint={data.devices.disabled > 0
+                ? t('plugin_devicehub.overviewPage.disabledHint', { count: data.devices.disabled })
+                : undefined}
               icon={<WifiOff aria-hidden="true" />}
             />
             <StatCard
