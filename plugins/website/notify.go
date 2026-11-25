@@ -169,11 +169,19 @@ func (n *notifier) notifyEmail(data EventData) {
 		n.warn("读取站点设置失败，跳过留言邮件抄送", zap.Error(err))
 		return
 	}
-	if !set.MessageNotifyEmail || strings.TrimSpace(set.ContactEmail) == "" {
+	if !set.MessageNotifyEmail {
+		return
+	}
+	// 收件人优先取「询盘抄送邮箱」，没配才回退联系邮箱（升级后老站点行为不变）。
+	to := strings.TrimSpace(set.MessageRecipientEmail)
+	if to == "" {
+		to = strings.TrimSpace(set.ContactEmail)
+	}
+	if to == "" {
 		return
 	}
 	title, content := n.compose(n.langCtx(n.ctx), data)
-	err = n.mailer.SendMail(n.ctx, set.ContactEmail, mail.TplNotice, n.lang, mail.Data{
+	err = n.mailer.SendMail(n.ctx, to, mail.TplNotice, n.lang, mail.Data{
 		Title: title,
 		// 邮件里没有站内信那样的相对路由可点，把入口写成菜单位置。
 		Content: content + "\n\n后台「官网 → 在线留言」查看全部询盘。",

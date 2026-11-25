@@ -29,7 +29,9 @@ Module `openapi`, menu "System → Open Platform", permissions `openapi:list` (r
 ## Roles & data scopes
 ### RBAC
 
-User → role → menu/button permissions; codes are named `module:action`; the super admin (`*`) short-circuits; permissions are read fresh from the login provider on every request — token snapshots are never trusted. New menus / permission points are visible only to the super admin by default; other roles are granted via "Role Management". Factory roles: `admin` (super admin, built-in, cannot be deleted / disabled / re-coded, cannot be assigned), `operator`, `auditor`, `editor` (disabled by default), `guest`, `secadmin` (demonstrates "cannot be assigned"). The latter five are demo roles with empty menu grants by default.
+User → role → menu/button permissions; codes are named `module:action`; the super admin (`*`) short-circuits; permissions are read fresh from the login provider on every request — token snapshots are never trusted. Matching supports exact permissions, `*` and module prefixes such as `module:*` (for example, owning `crm:*` covers `crm:list`, `crm:edit`, etc.). New menus / permission points are visible only to the super admin by default; other roles are granted via "Role Management". Factory roles: `admin` (super admin, built-in, cannot be deleted / disabled / re-coded, cannot be assigned), `operator`, `auditor`, `editor` (disabled by default), `guest`, `secadmin` (demonstrates "cannot be assigned"). The latter five are demo roles with empty menu grants by default.
+
+Both frontend and backend support wildcard matching, but frontend `checkPerm` is only a UI aid for menus and buttons, not a security boundary. Endpoints must be declared with `core.Perm` and enforced authoritatively by backend `auth.HasPerm`; hiding controls in the frontend is never access control.
 
 ### Data scopes
 

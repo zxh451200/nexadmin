@@ -28,10 +28,16 @@ export function filterRoutes(perms: string[], routes: ModuleRoute[] = allRoutes)
   return routes.filter((r) => checkPerm(perms, r.perm))
 }
 
+/** 对调用方显式传入的已合并路由保留一道插件可用性检查；默认路由已在合并前过滤。 */
+function routeIsActive(route: ModuleRoute, active: ActivePluginIds): boolean {
+  const plugin = route.requiresPlugin ?? route.plugin
+  return !plugin || active === null || (active ?? []).includes(plugin)
+}
+
 /** 生成菜单树：分组（按 groups 顺序）→ 菜单项（按 order）；空分组不出现 */
 export function buildMenuTree(perms: string[], routes?: ModuleRoute[], active: ActivePluginIds = null): MenuNode[] {
   const available = routes ?? discoverRoutes(active)
-  const visible = filterRoutes(perms, available).filter((r) => !r.hidden && r.menu)
+  const visible = filterRoutes(perms, available).filter((r) => !r.hidden && r.menu && routeIsActive(r, active))
   const tree: MenuNode[] = []
   for (const group of [...menuGroups].sort((a, b) => a.order - b.order)) {
     const items = visible
@@ -63,6 +69,7 @@ export interface ServerMenu {
   perm?: string
   hidden?: boolean
   external?: boolean
+  plugin?: string
   status?: '1' | '0'
   children?: ServerMenu[]
 }
@@ -76,16 +83,18 @@ export function buildMenuFromServer(
   active: ActivePluginIds = null,
 ): MenuNode[] {
   const byPath = new Map((routes ?? discoverRoutes(active)).map((r) => [r.path, r]))
-  // 外链菜单（如官网插件的「打开官网」）不经过前端路由：放行渲染，由 Sidebar 负责新标签页打开
+  const externalMenuIsActive = (m: ServerMenu) =>
+    !m.plugin || active === null || (active ?? []).includes(m.plugin)
   const visible = (m: ServerMenu) => m.type !== 'button' && !m.hidden && m.status !== '0' && checkPerm(perms, m.perm)
   const leaf = (m: ServerMenu): MenuNode | null => {
     const p = (m.path ?? '').replace(/^\/+/, '')
     if (m.type !== 'menu' || !visible(m)) return null
     if (m.external) {
+      if (!externalMenuIsActive(m)) return null
       return { key: m.id, title: m.title, icon: m.icon, path: m.path ?? '/', external: true }
     }
     const route = byPath.get(p)
-    if (!route) return null
+    if (!route || !routeIsActive(route, active)) return null
     return { key: m.id, title: m.title, icon: m.icon, path: `/${p}` }
   }
   const tree: MenuNode[] = []

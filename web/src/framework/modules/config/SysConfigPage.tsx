@@ -157,7 +157,7 @@ export function ParamsSection() {
       title: t('sysConfig.value'),
       // 值可能很长（JSON / 白名单），列表里截两行，悬停看全文
       render: (r) => (
-        <span className="num line-clamp-2 max-w-64 break-all" title={r.value}>
+        <span className="num line-clamp-2 max-w-full break-normal [overflow-wrap:anywhere] md:max-w-64" title={r.value}>
           {r.value}
         </span>
       ),

@@ -62,6 +62,7 @@ func (a *App) runMigrations(db *gorm.DB) error {
 	}
 	res, err := rn.Up()
 	if err != nil {
+		a.logFailedMigrations(res)
 		return err
 	}
 	a.logApplied(res)
@@ -105,14 +106,17 @@ func (a *App) migrateTenants(db *gorm.DB, auto bool) error {
 		return err
 	}
 	for i, rn := range runners {
+		var res *migrate.Result
 		err := rn.Exclusive(func() error {
-			res, e := rn.Startup(auto)
+			var e error
+			res, e = rn.Startup(auto)
 			if e == nil {
 				a.logApplied(res)
 			}
 			return e
 		})
 		if err != nil {
+			a.logFailedMigrations(res, ids[i])
 			return fmt.Errorf("tenant %s migration: %w", ids[i], err)
 		}
 	}
@@ -125,10 +129,35 @@ func (a *App) logApplied(res *migrate.Result) {
 	}
 	for _, f := range res.Applied {
 		if f.Baseline {
-			a.log.Info("迁移已记录（表已存在，基线）", zap.String("scope", f.Scope), zap.String("file", f.File))
+			a.log.Info("旧插件台账精确匹配，作为基线导入（未运行 SQL）", zap.String("scope", f.Scope), zap.String("file", f.File))
 		} else {
 			a.log.Info("迁移已执行", zap.String("scope", f.Scope), zap.String("file", f.File))
 		}
+	}
+}
+
+func (a *App) logFailedMigrations(res *migrate.Result, tenantIDs ...string) {
+	if res == nil {
+		return
+	}
+	for _, f := range res.Failed {
+		message := "迁移文件未完成，未写入版本表；数据库不自动回滚，请先核对实际结构"
+		if f.Done == f.Total {
+			message = "SQL 已全部执行，但版本记录失败；数据库不自动回滚，请先核对并手工修复版本表"
+			if f.Atomic {
+				message = "SQL 已全部执行，但版本记录失败，该文件所在事务已整体回滚"
+			}
+		} else if f.Atomic {
+			message = "迁移文件未完成，该文件所在事务已整体回滚"
+		}
+		fields := []zap.Field{
+			zap.String("scope", f.Scope), zap.String("file", f.File),
+			zap.Int("done", f.Done), zap.Int("total", f.Total), zap.Bool("atomic", f.Atomic),
+		}
+		if len(tenantIDs) > 0 {
+			fields = append(fields, zap.String("tenant", tenantIDs[0]))
+		}
+		a.log.Error(message, fields...)
 	}
 }
 
@@ -144,6 +173,7 @@ func (a *App) prepareData(db *gorm.DB) error {
 	err = rn.Exclusive(func() error {
 		var e error
 		if res, e = rn.Startup(a.cfg.App.AutoMigrate); e != nil {
+			a.logFailedMigrations(res)
 			return e
 		}
 		return a.seedStartup(db, rep)
@@ -389,6 +419,11 @@ func runMigrationCommand(rn *migrate.Runner, o MigrateOptions, out io.Writer) er
 	}
 	res, err := rn.Up()
 	if err != nil {
+		if res != nil {
+			for _, f := range res.Failed {
+				fmt.Fprintf(out, "迁移未完成 %s/%s：已执行 %d/%d 条，atomic=%t；未写入版本表，请先检查数据库再修复\n", f.Scope, f.File, f.Done, f.Total, f.Atomic)
+			}
+		}
 		return err
 	}
 	if len(res.Applied) == 0 {

@@ -566,6 +566,7 @@ user:
 plugin:
   not_found: "插件不存在"
   disabled: "插件未启用"
+  starting: "插件正在启动，请稍后重试"
   market_not_found: "市场目录里没有该插件"
   environment_unavailable: "当前节点不能执行插件构建与自动重启（%s）；请在具备源码和工具链的构建环境安装验证后部署，或使用 start 托管服务后重试"
   market_ids_invalid: "请选择 1 至 64 个不重复的合法插件 ID"
@@ -784,6 +785,7 @@ website:
   established_year_invalid: "成立年份不合法"
   contact_name_required: "请填写称呼"
   contact_email_invalid: "请填写有效的邮箱地址"
+  message_recipient_invalid: "询盘抄送收件人邮箱格式不正确"
   contact_content_short: "留言内容至少 5 个字"
   contact_consent_url_invalid: "开启隐私同意勾选后必须填政策地址：站内 /p/xxx 或完整 https:// 地址"
   message_not_found: "留言不存在或已删除"

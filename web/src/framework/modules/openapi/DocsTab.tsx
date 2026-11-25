@@ -121,17 +121,21 @@ export function DocsTab() {
                   <button
                     type="button"
                     onClick={() => setDetail(r)}
-                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-start hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-hidden"
+                    className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 px-4 py-3 text-start hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-hidden md:flex md:flex-wrap md:gap-x-3 md:gap-y-1"
                   >
-                    <MethodBadge method={r.method} />
-                    <code className="min-w-0 flex-1 font-mono text-xs break-all text-foreground">{r.path}</code>
-                    {r.perm ? <code className="font-mono text-xs text-muted-foreground">{r.perm}</code> : null}
-                    {r.auth ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t(`openapi.docs.auth.${authKey(r)}`)}
-                      </span>
-                    ) : null}
+                    <div className="row-start-1 md:contents">
+                      <MethodBadge method={r.method} />
+                    </div>
+                    <code className="row-start-1 col-start-2 min-w-0 break-normal font-mono text-xs text-foreground [overflow-wrap:anywhere] md:flex-1">{r.path}</code>
+                    <div className="row-start-2 col-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 md:contents">
+                      {r.perm ? <code className="min-w-0 break-normal font-mono text-xs text-muted-foreground [overflow-wrap:anywhere] md:flex-1">{r.perm}</code> : null}
+                      {r.auth ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                          {t(`openapi.docs.auth.${authKey(r)}`)}
+                        </span>
+                      ) : null}
+                    </div>
                   </button>
                 </li>
               ))}

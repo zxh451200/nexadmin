@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  ArrowLeft,
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
@@ -38,10 +39,12 @@ import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { BatchBar } from '@/framework/components/table/BatchBar'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { usePageActive } from '@/framework/hooks/use-page-active'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useWs } from '@/framework/hooks/useWs'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { ListErrorBanner } from '@/framework/components/ListErrorBanner'
 import { useInvalidateMenuBadges } from '@/framework/layout/menuBadge'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { QueueRow, QueueStatus } from '@/framework/components/QueueRow'
@@ -308,6 +311,7 @@ export default function TicketPage() {
   const confirm = useConfirm()
   const { start: startExportJob } = useAsyncJob()
   const [params, setParams] = useSearchParams()
+  const isMobile = useIsMobile()
   // 视图页签用本地 state 做真源、URL 仅挂载时读一次作深链、之后尽力同步：
   // 之前完全从 URL 派生，但这页的 setParams 在某些环境下静默失效（详情开着而地址栏
   // 没有 ?ticket= 是同一症状），点「统计」就永远切不过去。深链 ?view=stats 仍生效。
@@ -403,8 +407,8 @@ export default function TicketPage() {
 
   // 非首页删空后回退，避免停在空页
   useEffect(() => {
-    if (page > pages) setPage(pages)
-  }, [page, pages])
+    if (!tickets.isLoading && !tickets.isError && page > pages) setPage(pages)
+  }, [tickets.isLoading, tickets.isError, page, pages])
 
   // 导出复用列表当前的筛选对象：看到的和导出的必须同源。统一走异步任务：
   // 提交后由 useAsyncJob 提示「已提交到导出中心」，进度与下载都在导出中心看。
@@ -421,9 +425,19 @@ export default function TicketPage() {
 
   // 站内信 / 分享链接直达某张工单
   const ticketParam = params.get('ticket') ?? ''
-  useEffect(() => {
-    if (ticketParam && ticketParam !== selectedNo) setSelectedNo(ticketParam)
-  }, [ticketParam, selectedNo])
+  const ticketParamRef = useRef<string | null>(null)
+  const pageActive = usePageActive()
+  const pageActiveRef = useRef(pageActive)
+  useLayoutEffect(() => {
+    const resumed = pageActive && !pageActiveRef.current
+    pageActiveRef.current = pageActive
+    if (!pageActive) return
+    if (ticketParamRef.current === ticketParam) return
+    ticketParamRef.current = ticketParam
+    // 与 IM 一致：桌面标签切换会改写全局 URL，回到本标签时不把本地详情当成过期参数清掉。
+    if (resumed && !ticketParam) return
+    setSelectedNo(ticketParam || undefined)
+  }, [ticketParam, pageActive])
 
   const replies = useReplies(selectedNo)
   const reply = useReplyTicket()
@@ -492,6 +506,13 @@ export default function TicketPage() {
     setSelectedNo(no)
     const next = new URLSearchParams(params)
     next.set('ticket', no)
+    setParams(next, { replace: true })
+  }
+
+  const closeTicketDetail = () => {
+    setSelectedNo(undefined)
+    const next = new URLSearchParams(params)
+    next.delete('ticket')
     setParams(next, { replace: true })
   }
 
@@ -840,12 +861,7 @@ export default function TicketPage() {
     if (!ok) return
     try {
       await deleteTicketMut.mutateAsync(tk.ticketNo)
-      if (selectedNo === tk.ticketNo) {
-        setSelectedNo(undefined)
-        const next = new URLSearchParams(params)
-        next.delete('ticket')
-        setParams(next, { replace: true })
-      }
+      if (selectedNo === tk.ticketNo) closeTicketDetail()
       toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
@@ -1236,7 +1252,7 @@ export default function TicketPage() {
               深色下两张圆角卡漂浮的仪表盘感会稀释对话流的沉浸感。 */}
           <Card className="grid h-auto min-h-96 grid-cols-1 overflow-hidden md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
             {/* relative：批量条 anchored 锚定在左栏底边，不盖住右侧会话区 */}
-            <div className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+            <div className={cn('relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none', isMobile && selectedNo && 'hidden')}>
               {/* 状态是最高频的切换：学 IM 会话队列把段选页签常驻，筛选弹层不再重复状态维度。
                   6 个档位在 24rem 栏内排得下（触发器收紧内边距） */}
               <Tabs value={statusFilter ?? ALL} onValueChange={(v) => setStatusFilter(v === ALL ? undefined : v)}>
@@ -1433,8 +1449,28 @@ export default function TicketPage() {
                     onOpenTarget={(no) => selectTicket(no)}
                   />
                 ))}
-                {!tickets.isLoading && list.length === 0 ? (
-                  <EmptyState title={filtered ? t('plugin_ticket.emptyFiltered') : t('plugin_ticket.empty')} className="py-8" />
+                {tickets.isError && list.length === 0 ? (
+                  <EmptyState
+                    title={t('common.loadFailed')}
+                    className="py-8"
+                    action={
+                      <Button variant="outline" size="sm" disabled={tickets.isFetching} onClick={() => void tickets.refetch()}>
+                        {t('common.retry')}
+                      </Button>
+                    }
+                  />
+                ) : null}
+                {tickets.isError && list.length > 0 ? (
+                  <div className="px-2 pt-2">
+                    <ListErrorBanner onRetry={() => void tickets.refetch()} retrying={tickets.isFetching} />
+                  </div>
+                ) : null}
+                {!tickets.isLoading && !tickets.isError && list.length === 0 ? (
+                  <EmptyState
+                    title={filtered ? t('common.emptyFiltered') : t('plugin_ticket.empty')}
+                    description={filtered ? t('common.emptyFilteredHint') : undefined}
+                    className="py-8"
+                  />
                 ) : null}
                 {tickets.isLoading && list.length === 0 ? (
                   /* 加载骨架与 DataTable 同一语言：几行灰条代替一句「加载中」文本 */
@@ -1458,7 +1494,7 @@ export default function TicketPage() {
                     />
                     <span className="whitespace-nowrap">{t('common.selectAll')}</span>
                   </label>
-                  <span className="whitespace-nowrap">{t('dataTable.totalCount', { count: total })}</span>
+                  {!tickets.isError || list.length > 0 ? <span className="whitespace-nowrap">{t('dataTable.totalCount', { count: total })}</span> : null}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
@@ -1488,6 +1524,9 @@ export default function TicketPage() {
               ticket={replies.data?.ticket}
               replies={replies.data?.replies ?? []}
               loading={replies.isLoading}
+              error={replies.isError}
+              onRetry={() => void replies.refetch()}
+              selectionActive={!!selectedNo}
               sending={reply.isPending}
               onSend={onSend}
               onSetStatus={onChangeStatus}
@@ -1511,6 +1550,7 @@ export default function TicketPage() {
               onUnlink={(otherNo) => void removeLink(otherNo)}
               onOpenTicket={(no) => selectTicket(no)}
               onDelete={(tk) => removeTicket(tk)}
+              onBack={closeTicketDetail}
             />
           </Card>
         </TabsContent>
@@ -2717,6 +2757,9 @@ function TicketThread({
   ticket,
   replies,
   loading,
+  error,
+  onRetry,
+  selectionActive,
   sending,
   onSend,
   onSetStatus,
@@ -2740,10 +2783,14 @@ function TicketThread({
   onUnlink,
   onOpenTicket,
   onDelete,
+  onBack,
 }: {
   ticket?: Ticket
   replies: TicketReply[]
   loading: boolean
+  error: boolean
+  onRetry: () => void
+  selectionActive: boolean
   sending: boolean
   onSend: (content: string, internal: boolean) => Promise<void>
   onSetStatus: (ticketNo: string, to: string, confirmMsg?: string) => Promise<void>
@@ -2767,6 +2814,7 @@ function TicketThread({
   onUnlink: (otherNo: string) => void
   onOpenTicket: (ticketNo: string) => void
   onDelete: (ticket: Ticket) => Promise<void>
+  onBack: () => void
 }) {
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
@@ -2800,11 +2848,26 @@ function TicketThread({
   if (!ticket) {
     return (
       // 合并卡后的会话栏自带分栏线：移动端纵向 border-t，桌面横向 border-s
-      <div className="flex min-h-0 items-center justify-center border-t text-sm text-muted-foreground md:border-t-0 md:border-s">
-        {/* 移动端队列在上方，「左侧」不成立；用 hook 切文案而不是 CSS（文本没法响应式） */}
-        {loading
-          ? t('plugin_ticket.loading')
-          : t(isMobile ? 'plugin_ticket.pickTicketMobile' : 'plugin_ticket.pickTicket')}
+      <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
+        {isMobile && selectionActive ? (
+          <div className="flex items-center border-b px-2 py-1.5 md:hidden">
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              <ArrowLeft aria-hidden="true" />
+              {t('common.back')}
+            </Button>
+          </div>
+        ) : null}
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <EmptyState
+            title={loading ? t('plugin_ticket.loading') : error ? t('common.loadFailed') : t(isMobile ? 'plugin_ticket.pickTicketMobile' : 'plugin_ticket.pickTicket')}
+            action={error ? (
+              <Button variant="outline" size="sm" disabled={loading} onClick={onRetry}>
+                {t('common.retry')}
+              </Button>
+            ) : undefined}
+            className="py-16"
+          />
+        </div>
       </div>
     )
   }
@@ -2957,7 +3020,15 @@ function TicketThread({
 
   return (
     // 合并卡后的会话栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
-    <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
+    <div className={cn('flex min-h-0 flex-col border-t md:border-t-0 md:border-s', isMobile && 'min-h-[32rem]')}>
+      {isMobile ? (
+        <div className="flex items-center border-b px-2 py-1.5 md:hidden">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" />
+            {t('common.back')}
+          </Button>
+        </div>
+      ) : null}
       {/* 标题区在左、动作区在右：动作跟着这张单走，不该在标题下面再铺一行工具条。
           窄屏给标题整行，否则三个按钮能把标题挤成「工单…」 */}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b px-4 py-3">
@@ -3155,6 +3226,12 @@ function TicketThread({
               </Can>
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="px-4 pt-2">
+          <ListErrorBanner onRetry={onRetry} />
         </div>
       ) : null}
 

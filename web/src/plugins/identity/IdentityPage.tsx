@@ -95,7 +95,7 @@ export default function IdentityPage() {
   const columns: Column<IdentitySource>[] = [
     { key: 'name', title: t('plugin_identity.fields.name'), mobile: 'title', render: (s) => <span className="font-medium text-foreground">{s.name}</span> },
     { key: 'type', title: t('plugin_identity.fields.type'), mobile: 'sub', render: (s) => <Badge variant="outline">{t(`plugin_identity.type.${s.type}`)}</Badge> },
-    { key: 'address', title: t('plugin_identity.fields.address'), render: (s) => <code className="break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{address(s)}</code> },
+    { key: 'address', title: t('plugin_identity.fields.address'), render: (s) => <code className="[overflow-wrap:anywhere] rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{address(s)}</code> },
     {
       key: 'directorySync',
       title: t('plugin_identity.sync.title'),
@@ -120,7 +120,7 @@ export default function IdentityPage() {
       render: (s) =>
         s.type === 'cas' && s.entryUrl ? (
           <div className="flex min-w-0 items-center gap-1">
-            <code className="min-w-0 break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{s.entryUrl}</code>
+            <code className="min-w-0 [overflow-wrap:anywhere] rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{s.entryUrl}</code>
             <Button variant="ghost" size="icon" aria-label={t('plugin_identity.copyEntry')} title={t('plugin_identity.copyEntry')} onClick={() => void copy(s.entryUrl ?? '')}>
               <Copy aria-hidden="true" />
             </Button>

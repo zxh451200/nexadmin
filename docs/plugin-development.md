@@ -29,7 +29,7 @@ cron/                         # 目录名 = 插件 id
 └── web/                      # 安装到 web/src/plugins/cron/
     ├── route.tsx             # 前端路由
     ├── api.ts
-    ├── cron.mock.ts          # 前端 mock（必须）
+    ├── cron.mock.ts          # 前端 mock（可选，仅用于无后端演示）
     ├── CronPage.tsx
     └── locales/{zh-CN,en-US}.json
 ```
@@ -128,7 +128,7 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 }
 ```
 
-`Start` 是同步调用的，必须尽快返回。返回的错误只会记日志，不影响路由挂载。
+框架同步等待 `Start` 返回，插件必须尽快完成初始化。`Start` 完成前，路由已经注册但由就绪闸门拦截，返回 HTTP 503 与 `Retry-After: 1`；此时 `/plugins/active` 与插件菜单不可用。`Start` 返回错误或发生 panic 时，本轮 readiness 关闭、插件置 `needRestart=true`，路由仍保留但被闸门拒绝，修复后必须重启。不要启动会阻塞 `Start` 的永久循环；需要常驻任务时启动 goroutine，并正确处理传入的 ctx。
 
 插件管理器在每轮 `Starter.Start` 前注入 `d.PluginRuntime`，类型为 `*core/lifecycle.Runtime`。插件必须在 `Start` 内通过它注册运行期扩展：
 
@@ -155,11 +155,13 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 
 注意三种数据库的差异：自增/主键类型、`TEXT` 默认值、布尔类型、`ON UPDATE` 语法。cron 的三份 SQL 是现成的对照。
 
+SQL 由迁移器按数据库引擎分词，识别单/双引号、MySQL/MariaDB 反引号、转义引号、PostgreSQL dollar quote 与可执行注释；引号、默认表达式、`DO` 块内的分号不会被误拆。`DELIMITER`、`CREATE PROCEDURE`/`FUNCTION`/`TRIGGER`/`EVENT` 等存储程序语法会被拒绝，需改写为普通 SQL 或移到应用代码执行。
+
 **迁移只做结构变更，不写 `INSERT`/`UPDATE`/`DELETE`**：runner 会在 `migrate --dry-run` 里逐条警告。出厂数据（菜单、字典、模板）一律由 Seeder 负责；存量库的菜单结构收敛也在 Seeder 里做（见 `modules/system/menu/reconcile.go`），不靠迁移改数据。
 
 ### 4.5 测试
 
-仓库自 2026-11-08 起不再保留 Go/前端自动化用例（commit 22ff72c；`scripts/ci` 的 Python 助手用例仍在 CI 里）。插件至少跑 `go build ./...` 与 `go vet ./...`；需要真实数据库的部分，在提交说明里写清手工验证方式与结果。
+仓库自 2026-11-08 起不再保留 Go/前端自动化用例（commit 22ff72c；`scripts/ci` 的 Python 助手用例仍在 CI 里）。插件至少跑 `go build ./...` 与 `go vet ./...`；迁移、启停与菜单写入须说明真实数据库上的验证范围与结果。自动化用例可以保留为补充，但不能代替真实接口联调。
 
 ### 4.6 给导入中心提供数据源（可选）
 
@@ -226,7 +228,13 @@ export const routes: ModuleRoute[] = [
 
 真正显示在侧边栏的菜单来自服务端的 `sys_menu`（即 `plugin.yaml` 的 `menus`），所以 `path` 和 `plugin.yaml` 里的 `path` 要一致。
 
-如果页面只是某个配置项，可以把它做成「系统设置」的一个分区，而不是独立侧栏入口：路由声明 `settings`（`component` 指向不带 `PageContainer` / `PageHeader` 的分区组件），`plugin.yaml` 的菜单行保持原父节点并设 `hidden: true`，旧地址 `<Navigate>` 到 `/system/settings?tab=<key>`。不要为了「归到设置下」把菜单挂到 `settings:list` 父节点：角色分配会自下而上补齐祖先，等于顺手授予 `settings:list`。权限点仍由该菜单行提供，角色授权不受影响。参考 `plugins/ldap/route.tsx` 与 `plugins/maps/route.tsx`：
+贡献按 owner 合并：`framework` < `plugin` < `pages`。路由只有 `pages` 可以覆盖其他 owner；插件覆盖框架路由或同 owner 路由重复会使构建失败。插件路由通过 `plugin` 声明归属；改写既有路由时，若仍依赖插件启用状态，应显式写 `requiresPlugin: '<id>'`，覆盖不会自动继承原插件依赖。
+
+插件启用状态有三态：`undefined` 表示尚未加载，暂时过滤插件贡献；`null` 表示后端不可用，保留插件贡献；数组按其中启用的插件 ID 过滤。后端返回 `null` 时的保留是降级显示策略，不是访问授权。`/plugins/active` 在 Starter 就绪前不会列出该插件。
+
+普通路由还必须能从前端贡献中找到同路径页面。外链菜单没有前端路由，归属按 `perm` 的 `插件id:动作` 命名空间识别，并使用与插件路由相同的 active 三态过滤；插件 id 须符合框架 ID 规则，未带合法插件命名空间的外链不参与这一步过滤。后端菜单查询对已注册插件也按运行时可用性收口，避免停用后留下指向 403 的入口。
+
+如果页面只是某个配置项，可以把它做成「系统设置」的一个分区，而不是独立侧栏入口：路由声明 `settings`（`component` 指向不带 `PageContainer` / `PageHeader` 的分区组件），`plugin.yaml` 的菜单行保持原父节点并设 `hidden: true`，旧地址 `<Navigate>` 到 `/system/settings?tab=<key>`。不要为了「归到设置下」把菜单挂到 `settings:list` 父节点：角色分配会自下而上补齐祖先，等于顺手授予 `settings:list`。权限点仍由该菜单行提供，角色授权不受影响。同 owner 的设置分区按 `key` 重复时保留发现顺序中的首项并告警。参考 `plugins/ldap/route.tsx` 与 `plugins/maps/route.tsx`：
 
 ```tsx
 {
@@ -246,17 +254,17 @@ export const routes: ModuleRoute[] = [
 - **布局**：移动优先，用逻辑类（`ms-`、`me-`、`ps-`、`pe-`、`start-`、`end-`）而不是 `ml-`、`pl-`，保证 RTL 语言也正常。手机上触控目标不小于 40px。
 - **表单控件**：能用 Select 的地方不要用 Input（枚举、字典、外键、布尔、时间都有现成控件）。
 - **按钮**：图标按钮必须带 `aria-label` 或 `title`，会自动生成悬浮提示。
-- **权限**：按钮是否显示用权限码判断，和内置页面写法一致。
-- **工作台卡片（可选）**：在 `web/cards.tsx` 导出 `cards: DashboardCard[]`（类型从 `@/framework/modules/dashboard/types` 引入），安装后自动出现在工作台，可被用户隐藏和排序。`id` 用 `<插件id>-<含义>`（只允许 `[a-z0-9-_.]`，最长 64），`title` 是 `plugin_<id>` 命名空间下的 i18n key，`perm` 填插件自己的权限码，组件用 `React.lazy` 并自己拉数据；对应的后端接口和 mock 也要有。示例见 `cron` 插件的 `cron-overview`。
+- **权限**：按钮是否显示用权限码判断，和内置页面写法一致；支持 `module:*` 等通配匹配。前端只做 UI 辅助，接口必须以 `core.Perm` 登记并由后端权威鉴权。
+- **工作台卡片（可选）**：在 `web/cards.tsx` 导出 `cards: DashboardCard[]`（类型从 `@/framework/modules/dashboard/types` 引入），安装后自动出现在工作台，可被用户隐藏和排序。`id` 用 `<插件id>-<含义>`（只允许 `[a-z0-9-_.]`，最长 64），`title` 是 `plugin_<id>` 命名空间下的 i18n key，`perm` 填插件自己的权限码，组件用 `React.lazy` 并自己拉数据；后端接口必须存在，mock 可选。同 owner 的同名卡片保留首项并告警。示例见 `cron` 插件的 `cron-overview`。
 
-### 5.3 mock（必须）
+### 5.3 mock（可选）
 
-`web/<id>.mock.ts` 用 `defineMock` / `createCrudMock` 提供全部接口，让页面在没有后端时就能完整演示。框架的开发流程是前端先行，没有 mock 的插件不会通过审核。
+`web/<id>.mock.ts` 可用 `defineMock` / `createCrudMock` 提供接口，便于无后端演示。提供 mock 时，开发前端用 `npm run dev` 启用 mock，真实联调关闭 mock 并启动后端（`VITE_MOCK=false npm run dev`），在提交说明中写明验证的接口、数据库与场景。mock 可省略，但真实接口联调不能省略。
 
 ## 6. 本地开发流程
 
-1. 先按[快速开始](quickstart.md)派生开发项目，在项目外准备上面的插件安装包结构，或以取得的免费 cron 包为参考；也可以用 `go run ./cmd/nexadmin plugin create <id> --out <目录> [--name <名称>] [--edition free|pro]` 直接生成全栈骨架（清单、后端入口与权限单测、前端路由/页面/api/mock、双语词条），目标已存在时拒绝覆盖。自己的插件须更换 ID、权限码与表前缀，不在框架母版里写业务代码。示例里的 `nexadmin/...` 导入路径应使用派生项目的实际 Go module 路径。
-2. 前端：把 `web/` 放到 `web/src/plugins/<id>/`，`npm run dev`，打开页面用 mock 数据调试。
+1. 先按[快速开始](quickstart.md)派生开发项目，在项目外准备上面的插件安装包结构，或以取得的免费 cron 包为参考；也可以用 `go run ./cmd/nexadmin plugin create <id> --out <目录> [--name <名称>] [--edition free|pro]` 直接生成全栈骨架（清单、后端入口、前端路由/页面/api/mock、双语词条），目标已存在时拒绝覆盖。自己的插件须更换 ID、权限码与表前缀，不在框架母版里写业务代码。示例里的 `nexadmin/...` 导入路径应使用派生项目的实际 Go module 路径。
+2. 前端：把 `web/` 放到 `web/src/plugins/<id>/`。提供 mock 时运行 `npm run dev` 调试；真实联调启动后端并运行 `VITE_MOCK=false npm run dev`。
 3. 后端：把 `backend/` 放到 `plugins/<id>/`，并把包根的 `plugin.yaml` 复制到 `plugins/<id>/plugin.yaml`。目录名必须与清单 `id` 完全一致（如 `i18n-editor` 不能写成 `i18neditor`，Go 的 package 名可以不同）；管理器按 ID 查找清单和 `migrations/`。在 `plugins/plugins.go` 的标记行之间加一行 `_ "nexadmin/plugins/<id>"`（用安装命令会自动加）。
 4. 用开发密钥签一份授权（pro 插件必需），放进 `data/licenses/<id>.lic`：
 
@@ -284,11 +292,13 @@ go run ./cmd/nexadmin plugin lint cron-1.0.0.zip  # 安装包布局：plugin.yam
 go run ./cmd/nexadmin plugin install cron-1.0.0.zip
 # 在母版或派生项目源码内，也可按插件 id 检查源码布局：
 go run ./cmd/nexadmin plugin lint --layout source cron
-go build ./... && go vet ./... && go test ./plugins/<id>/...
+go build ./... && go vet ./...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 
-`plugin lint` 不执行插件代码，安装、打包与后台重建会自动调用同一检查。它静态核对：合法 SemVer 版本；Go `plugin.Register` 的 ID/Name/Version/Edition 与清单一致（支持字符串常量与 `plugin.Free/Pro`，动态注册拒绝）；入口 `init` 只允许静态注册；禁止全局事件订阅与任务注册，运行期扩展须经 `d.PluginRuntime` 注册；路由 `export const routes` 的 path/perm 与清单菜单对应，隐藏辅助路由须声明 `hidden: true`、不写菜单且权限属于本插件；mock 文件可选，存在时必须非空；中英文词条键集合一致并覆盖静态 `t(...)`/`i18nKey` 与菜单标题，动态 key 只接受固定字面命名空间；有迁移时 mysql/mariadb/postgres 三方言同名文件集合一致。`common.*`、`dataTable.*`、`localeForm.*` 由宿主语言包提供。它不做 TS 类型检查，发布前仍须构建与测试。
+`plugin lint` 不执行插件代码，安装、打包与后台重建会自动调用同一检查。它静态核对：合法 SemVer 版本；Go `plugin.Register` 的 ID/Name/Version/Edition 与清单一致（支持字符串常量与 `plugin.Free/Pro`，动态注册拒绝）；入口 `init` 只允许静态注册；禁止全局事件订阅与任务注册，运行期扩展须经 `d.PluginRuntime` 注册；路由 `export const routes` 的 path/perm 与清单菜单对应，隐藏辅助路由须声明 `hidden: true`、不写菜单且权限属于本插件；mock 文件可选，存在时必须非空；中英文词条键集合一致并覆盖静态 `t(...)`/`i18nKey` 与菜单标题，动态 key 只接受固定字面命名空间；有迁移时 mysql/mariadb/postgres 三方言同名文件集合一致。`common.*`、`dataTable.*`、`localeForm.*` 由宿主语言包提供。它不做 TS 类型检查，发布前仍须构建并完成真实接口联调。
+
+CLI 的 `plugin install` 与 `plugin remove` 同样写入持久恢复记录；安装只修改源码、不替换二进制时，事后重新编译不受旧 exe 哈希门禁影响。恢复命令见下文「后台市场安装」。
 
 覆盖安装使用 `go run ./cmd/nexadmin plugin install --force <目录或zip>`。三个放宽开关彼此独立，都必须在路径之前（安装子命令使用标准 `flag.Parse`，不解析路径之后的选项）：
 
@@ -301,7 +311,7 @@ cd web && npx tsc --noEmit && npx eslint src
 安装命令会拒绝路径穿越的压缩包，并限制解压后的文件数量和总大小。安装、卸载与重建通过项目根目录的 `.nexadmin-plugin.lock` 跨进程串行；并发操作最多等待两分钟。只有安装台账记录的市场插件才能覆盖或由市场删除，随项目交付的内置源码禁止这两类操作。旧版手工安装且不在台账中的插件，仅 CLI 的 `plugin remove --allow-unmanaged <id>` 可显式移除，后台不提供绕过。卸载与停用：
 
 - `plugin remove <id>`：删除 `plugins/<id>/`、`web/src/plugins/<id>/` 并从 `plugins.go` 摘掉导入；**数据表与授权文件保留**，重装后数据原样回来。重新编译并重启生效。
-- `plugin remove --purge <id>`：在 remove 之外先连数据库清理——DROP `plg_<id>_%` 前缀的表（平台插件清平台库，`migration_target: tenant` 插件清各租户业务库），并按清单的菜单码删除 `sys_menu` 记录；清单缺失时表仍按前缀清、菜单需手动处理。授权文件保留。数据库清不掉会中止且不删文件，可重试。
+- `plugin remove --purge <id>`：**必须先停止服务并备份数据库**；在 remove 之外先连数据库清理——DROP `plg_<id>_%` 前缀的表（平台插件清平台库，`migration_target: tenant` 插件清各租户业务库），并按清单的菜单码删除 `sys_menu` 记录；清单缺失时表仍按前缀清、菜单需手动处理。授权文件保留。服务运行中会拒绝执行；数据库清不掉会中止且不删文件，可停服修复后重试。
 - 临时停用（不删代码不动数据）：两条路。
   - 配置：`config/config.yaml` 里 `disabled_plugins: [<id>]`，重启后该插件完全不挂载，插件管理页显示“已停用”，`plugin list` 显示 `disabled`。从配置移除并重启即恢复。
   - 运行期：插件管理页卡片上的启用开关（`POST /api/v1/plugins/<id>/enabled`，权限点 `plugin:edit`），停用清单落盘在**节点本地**的 `data/licenses/disabled.json`，重启后保持。两条来源取并集，**配置优先**：配置里停用的插件，页面上的开关打不开（回 400 并说明要改配置）。free 插件没有授权闸门，停用全走这两条；pro 插件也可用（不必撤授权，但停用期间没有授权导入入口，要导先启用）。多节点不会自动同步，见下一节的边界清单。
@@ -311,7 +321,10 @@ cd web && npx tsc --noEmit && npx eslint src
 后台「插件管理 → 插件市场」的安装/更新/上传/卸载/重建共用一套保护：
 
 - **环境预检**：页面加载时请求 `GET /api/v1/plugins/market/environment`，核对项目源码树、`go`/`npm` 可用性、web 依赖（`node_modules` 里的 vite/typescript）与受管重启能力；不就绪时按项给出修复指引，相关操作按钮置灰。生产单二进制部署没有源码与工具链，应在构建机派生项目里操作后再发布。
-- **批量更新**：「全部更新」先把所有包下载并逐个通过安装前检查（此阶段不写项目），再在一个回滚边界内落盘全部源码，最后只构建、重启一次；中途失败恢复本次改动的源码、依赖与产物（数据库与授权不在回滚范围）。
+- **批量更新**：「全部更新」先下载并逐个通过安装前检查（此阶段不写项目），再在一个回滚边界内落盘全部源码，最后只构建、重启一次。
+- **失败恢复与持久日志**：安装、更新、批量更新或重建在源码变更与构建阶段检测到失败时，恢复本次操作开始前的插件源码、依赖清单、前端产物、安装台账与可执行文件。每次事务在 `data/plugins/recovery/job-*/` 写入独立目录，包含 `manifest.json`、`events.jsonl`、源码快照与 `executable.backup`；二进制候选和旧副本分别使用本事务独有的 `exe.<job-id>.new`、`exe.<job-id>.old`，避免并发任务互相覆盖。未解决的 `prepared`、`activating`、`recovery_required` 会阻止服务启动和新的源码变更。**事务提交后的自动重启失败不属于回滚范围**：源码、构建产物、台账与二进制可能已经替换，任务会明确报错，须手动重启并核验版本与插件状态。
+- **恢复命令**：停服后执行 `nexadmin-server recover-plugin-change --status` 查看记录；`--rollback --yes` 仅在恰好有一笔 `prepared` / `activating` / `recovery_required` 未解决事务时自动选择它，多笔会拒绝自动选择；没有未解决事务时选择最新一笔 `ready`。`--accept-current --yes` 必须先回退全部未解决事务，再接受最新一笔 `ready` / `restored` 之外的当前源码与二进制。`nexadmin-server recover-plugin-change --rollback --yes` 与 `nexadmin-server recover-plugin-change --accept-current --yes` 会和安装、卸载、重建共用 `.nexadmin-plugin.lock`，避免恢复写入与并发源码变更交错。成功替换过二进制的记录会在启动时先核对当前运行程序路径与事务记录的 canonical exe 路径一致，再核对 SHA-256；从副本或旧 `.old` 副本启动会被拒绝。仅修改源码、尚未替换二进制的记录不做该项门禁。事务目录创建后先写 `.initializing` 标记，清单写入前异常退出只会留下可忽略的初始化残留；旧恢复点裁剪时同步删除对应旧 exe。
+- **回滚边界**：自动与手动恢复不承诺数据库、授权、上传文件或用户数据自动回滚；已经执行的数据变更须另行备份或人工处理。`plugin remove --purge` 会删除数据库对象，不属于可自动回滚操作。单个旧 exe 副本不包含旧源码、依赖、前端产物、台账或上述运行数据，不能单独构成完整恢复点。
 - **本地改动保护**：安装台账（`data/plugins/installed.json`）记录每个插件源码的 SHA-256 指纹；更新前后台比对，有本地改动或基线未知时弹出确认，显式同意才覆盖。覆盖前的旧源码持久备份在 `data/plugins/backups/`。
 - **包身份核对**：市场目录条目的 id/edition/version 与包内清单不一致即拒绝安装。
 - 上传安装的临时 zip 在任务接手后无论成败都会删除，不再残留。
@@ -370,8 +383,8 @@ cd web && npx tsc --noEmit && npx eslint src
 - 没有修改 `core/`、`web/src/framework/` 或任何内置模块，没有 import 内置模块或其他插件。
 - 每个接口都有权限校验；按租户隔离的数据查询带租户条件。
 - 没有硬编码密钥、没有向外部服务上传用户数据；对外请求有 SSRF 防护和超时。
-- 前端：有 mock、中英文文案齐全、没有硬编码颜色、手机上可用、`tsc` 和 `eslint` 无 error。
-- 后端：`go build`、`go vet`、`go test` 通过。
+- 前端：mock 可选、中英文文案齐全、没有硬编码颜色、手机上可用、`tsc` 和 `eslint` 无 error；真实接口联调范围与结果已说明。
+- 后端：`go build`、`go vet` 通过。
 - 依赖：只用开源且许可证允许商用的依赖，使用精确版本；不引入商业授权的组件。
 - 不含任何自带的授权校验、联网回传或后门代码。
 
@@ -388,16 +401,15 @@ cd web && npx tsc --noEmit && npx eslint src
 1. 作者提交插件包 → 平台审核通过后上架到插件市场。
 2. 买家购买 → 平台用官方私钥签发授权文件（绑定插件、客户名、到期时间，可选绑定域名）。
 3. 客户安装源码并构建后，由平台超管在「插件管理」导入授权文件。管理器尝试激活已编译的插件：返回 `needRestart=true` 时按提示重启；`needRestart=false` 表示已生效。
-4. 授权到期后插件自动下线（路由返回 403，状态 `expired`），续费后导入新授权即可恢复；被发行方吊销时状态为 `revoked`（见第 10 节）。
+4. 授权到期后插件自动下线（路由返回 403，状态 `expired`），续费后导入新授权即可恢复；被发行方吊销时状态为 `revoked`（见第 11 节）。
 
-**`needRestart` 是什么？** 它表示该插件需要重启才能完整启用，常见于两类情况：插件在站点根路径注册页面（如官网），或参与启动期认证/身份扩展。框架不会为了“立即生效”去改动运行中的主路由，因此如实返回需要重启，而不是假装已激活。
+**`needRestart` 是什么？** 它表示该插件需要重启才能完整启用，常见于三类情况：插件在站点根路径注册页面（如官网），参与启动期认证/身份扩展，或 `Starter.Start` 返回错误/发生 panic 后 readiness 关闭。框架不会为了“立即生效”去改动运行中的主路由，因此如实返回需要重启，而不是假装已激活。
 
 作者不需要、也不应该自己实现授权。授权校验在框架统一进行，插件代码里不要出现任何授权相关逻辑。
 
 > 授权校验防的是误用盗版和随手分享，不是对抗性破解——源码交付下，有能力的买家可以改掉校验代码。真正的保护来自合同、升级服务和技术支持。作者应当把价值放在持续更新和服务上。
 
 ## 10. 常见问题
-
 
 **能不能只做前端或只做后端？** 纯后端插件可以没有 `web/`，清单里的 `menus` 按需填写。纯前端包目前不被安装器支持：缺少 `backend/` 目录会直接拒绝安装（`plugin lint` 同样拦截）；只改前端页面的需求应走框架的页面覆盖机制。
 
@@ -442,6 +454,8 @@ cd web && npx tsc --noEmit && npx eslint src
 
 ### 运行期启停：什么立刻生效
 
+**Starter readiness**：`Start` 完成前，插件路由保留但被闸门拦截，返回 503 与 `Retry-After: 1`，`/plugins/active` 与菜单不可用。`Start` 报错或 panic 会关闭本轮 readiness 并置 `needRestart=true`，不能视为已启用；这里的 readiness 是插件启动状态，不等同于进程级 `/readyz`。
+
 **立刻生效**（不需要重启）：
 
 - 插件自己的路由——`gate` / `admit` 按运行期状态判定，停用后请求直接 403 并带原因
@@ -453,6 +467,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 **需要重启**：
 
+- Starter 的 `Start` 返回错误或 panic，本轮 readiness 已关闭
 - 已建立的 WebSocket / SSE 长连接——守卫只追加、不摘除
 - 插件里用 `sync.Once` 造出来的 service 单例
 - 停用后需重新拉起、但 Module 未实现 `plugin.RestartableStarter` 的后台 worker
@@ -467,7 +482,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 插件路由只有在声明「仅 API」热挂载契约之后，才可能在导入授权时即时挂载。当前官方插件未逐个声明，导入授权后请以返回的 `needRestart` 为准，必要时重启。
 
-声明方式：实现 `plugin.RuntimeRoutes` 的 `RequiresRootRoutes() bool` 并返回 `false`，且所有路由位于 `/api/v1/plugins/<id>/` 下。
+声明方式：实现 `plugin.RuntimeRoutes` 的 `RequiresRootRoutes() bool` 并返回 `false`，且所有路由位于 `/api/v1/plugins/<id>/` 下。热挂载的 `Dispatch` 与静态路由使用同一运行期闸门：启用状态、授权和 Starter readiness 均须通过；未就绪时同样返回 503 与 `Retry-After: 1`。
 
 ### 真库验证范围
 

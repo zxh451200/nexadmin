@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/framework/auth/useAuth'
 import { usePermission } from '@/framework/auth/usePermission'
@@ -59,7 +60,17 @@ function Conversations() {
     finally { busy.current = false; if (alive.current) setPending(false) }
   }
   return <PageContainer>
-    <PageHeader title={t('plugin_assistant.title')} description={t('plugin_assistant.description')} />
+    <PageHeader
+      title={t('plugin_assistant.title')}
+      description={
+        <details className="group">
+          <summary className="flex min-h-11 cursor-pointer list-none items-start gap-1.5 rounded-sm md:min-h-6 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1 line-clamp-2 group-open:line-clamp-none">{t('plugin_assistant.description')}</span>
+            <ChevronDown aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 transition-transform group-open:rotate-180" />
+          </summary>
+        </details>
+      }
+    />
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
       <div className="w-full min-w-0 sm:max-w-sm">
         <Select value={selected || 'legacy'} disabled={pending || !!editing} onValueChange={value => setSelected(value === 'legacy' ? '' : value)}>

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"nexadmin/core/database"
+	"nexadmin/core/plugin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -48,6 +49,7 @@ type menuDTO struct {
 	Path      string     `json:"path,omitempty"`
 	Component string     `json:"component,omitempty"`
 	Perm      string     `json:"perm,omitempty"`
+	Plugin    string     `json:"plugin,omitempty"`
 	Sort      int        `json:"sort"`
 	KeepAlive bool       `json:"keepAlive"`
 	Hidden    bool       `json:"hidden"`
@@ -67,6 +69,11 @@ func toDTO(m *Menu) *menuDTO {
 	if m.ParentID != 0 {
 		p := m.ParentID
 		d.ParentID = &p
+	}
+	if id, ok := pluginOfMenu(m); ok {
+		if plugin.Default().Registered(id) {
+			d.Plugin = id
+		}
 	}
 	return d
 }

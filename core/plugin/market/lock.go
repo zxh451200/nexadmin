@@ -14,6 +14,15 @@ const (
 )
 
 func WithProjectLock(root string, change func() error) error {
+	return withProjectLock(root, true, change)
+}
+
+// WithRecoveryLock serializes recovery mutations without rejecting the unresolved records they resolve.
+func WithRecoveryLock(root string, change func() error) error {
+	return withProjectLock(root, false, change)
+}
+
+func withProjectLock(root string, checkRecovery bool, change func() error) error {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return err
@@ -31,6 +40,11 @@ func WithProjectLock(root string, change func() error) error {
 		return err
 	}
 	defer unlock()
+	if checkRecovery {
+		if err := CheckRecovery(root); err != nil {
+			return err
+		}
+	}
 	return change()
 }
 

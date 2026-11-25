@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -73,12 +73,24 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   )
 }
 
+function breakable(value: string) {
+  const parts = value.split(/([/?&=_.-])/)
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {part}
+      {index < parts.length - 1 ? <wbr /> : null}
+    </Fragment>
+  ))
+}
+
 function ValueRow({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {
   return (
-    <div className="flex min-w-0 items-start gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:gap-1.5">
       <span className="shrink-0 text-muted-foreground">{label}:</span>
-      <code className="min-w-0 break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{value || '—'}</code>
-      {children}
+      <div className="flex w-full min-w-0 items-start gap-1 sm:w-auto sm:flex-1">
+        <code className="min-w-0 flex-1 [overflow-wrap:anywhere] rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{value ? breakable(value) : '—'}</code>
+        <div className="flex shrink-0 items-center gap-1">{children}</div>
+      </div>
     </div>
   )
 }
@@ -554,10 +566,10 @@ export default function SamlPage() {
               </div>
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>
+                <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">
                   {t('plugin_saml.summary.attrs')}: {[s.attrUsername, s.attrEmail, s.attrNickname, s.attrPhone, s.attrGroups].filter(Boolean).join(' / ')}
                 </span>
-                <span>
+                <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">
                   {t('plugin_saml.summary.policy')}:{' '}
                   {[
                     s.autoCreate ? t('plugin_saml.summary.autoCreate') : null,
@@ -570,12 +582,12 @@ export default function SamlPage() {
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
-                {s.allowIdpInitiated ? <span>{t('plugin_saml.summary.idpInitiated')}</span> : null}
+                {s.allowIdpInitiated ? <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">{t('plugin_saml.summary.idpInitiated')}</span> : null}
                 {s.requireAuthnContext && s.authnContextClassRef ? (
-                  <span>{t('plugin_saml.summary.authnContext', { value: s.authnContextClassRef })}</span>
+                  <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">{t('plugin_saml.summary.authnContext', { value: s.authnContextClassRef })}</span>
                 ) : null}
                 {s.requireSignedResponseForCBC || s.rejectUnknownConditions ? (
-                  <span>
+                  <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">
                     {t('plugin_saml.summary.hardening')}:{' '}
                     {[
                       s.requireSignedResponseForCBC ? t('plugin_saml.summary.signedCBC') : null,

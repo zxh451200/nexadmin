@@ -63,8 +63,18 @@ type Applied struct {
 	Baseline    bool
 }
 
+// Failed 记录非原子迁移已执行但未写入版本表的语句进度，供人工修复，不表示可自动回滚。
+type Failed struct {
+	Scope, File string
+	Done, Total int
+	Atomic      bool
+}
+
 // Result 是一次 Up 的结果。
-type Result struct{ Applied []Applied }
+type Result struct {
+	Applied []Applied
+	Failed  []Failed
+}
 
 // ChecksumError 表示已执行的迁移文件被改过。
 type ChecksumError struct{ Files []string } // 形如 framework/system_user.sql
@@ -266,8 +276,15 @@ func (r *Runner) RunPending() (*Result, error) {
 		} else {
 			done, err := r.Store.Apply(rec, it.Stmts)
 			if err != nil {
+				atomic := r.Store.Atomic()
+				res.Failed = append(res.Failed, Failed{Scope: it.Scope, File: it.Name, Done: done, Total: len(it.Stmts), Atomic: atomic})
 				where := fmt.Sprintf("已执行 %d/%d 条，第 %d 条失败，该文件未记录，需先手工修复", done, len(it.Stmts), done+1)
-				if r.Store.Atomic() {
+				if done == len(it.Stmts) {
+					where = "SQL 已全部执行，但版本记录失败；数据库不会自动回滚，请先核对并手工修复版本表"
+					if atomic {
+						where = "SQL 已全部执行，但版本记录失败，该文件所在事务已整体回滚"
+					}
+				} else if atomic {
 					where = fmt.Sprintf("第 %d/%d 条失败，该文件已整体回滚", done+1, len(it.Stmts))
 				}
 				return res, fmt.Errorf("migrate: %s/%s: %s: %w", it.Scope, it.Name, where, err)

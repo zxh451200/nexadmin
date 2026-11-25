@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Download, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -84,7 +84,14 @@ export function ReconciliationTab() {
         <div className="min-w-0 text-xs">
           <span className="num text-muted-foreground">{t('plugin_pay.reconcile.billRows')}: {r.billRows ?? '-'}</span>
           {r.billDigest ? <div className="num break-all text-muted-foreground">{r.billDigest.slice(0, 12)}…</div> : null}
-          {r.failReason ? <div className="max-w-[16rem] truncate text-destructive" title={r.failReason}>{r.failReason}</div> : null}
+          {r.failReason ? (
+            <details className="group mt-0.5 max-w-full md:max-w-64">
+              <summary className="flex cursor-pointer list-none items-start gap-1 text-destructive [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 flex-1 truncate [overflow-wrap:anywhere] group-open:whitespace-normal group-open:break-words" title={r.failReason}>{r.failReason}</span>
+                <ChevronDown aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+            </details>
+          ) : null}
           {r.source === 'channel' && (r.billRows ?? 0) > 0 ? (
             <a
               className="mt-0.5 inline-flex items-center gap-1 text-primary hover:underline"

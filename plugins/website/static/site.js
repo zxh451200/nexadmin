@@ -818,6 +818,7 @@
     initProductDetail();
     initOrderStatus();
     initProductSort();
+    initProductDemo();
     initFaqSearch();
     decorateZoomables();
     clearWinHandlers();
@@ -2342,6 +2343,289 @@
       }
       var target = shareTarget(kind, url, title);
       if (target) window.open(target, '_blank', 'noopener,noreferrer,width=720,height=560');
+    });
+  }
+
+  // ---- 首页真实产品演示：页面切换、检索、操作策略与轻量演示反馈 ----
+  function initProductDemo() {
+    var root = document.querySelector('[data-product-demo]');
+    if (!root || root.dataset.bound) return;
+    root.dataset.bound = '1';
+
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-demo-tab]'));
+    var panels = Array.prototype.slice.call(root.querySelectorAll('[data-demo-panel]'));
+    var quickButtons = Array.prototype.slice.call(root.querySelectorAll('[data-demo-quick-actions]'));
+    var actionButtons = Array.prototype.slice.call(root.querySelectorAll('[data-demo-action]'));
+    var modeMenu = root.querySelector('[data-demo-mode]');
+    var modeOptions = Array.prototype.slice.call(root.querySelectorAll('[data-demo-mode-value]'));
+    var modeCurrent = root.querySelector('[data-demo-mode-current]');
+    var searchToggle = root.querySelector('[data-demo-search-toggle]');
+    var search = root.querySelector('#demo-search');
+    var searchInput = root.querySelector('[data-demo-search-input]');
+    var searchItems = Array.prototype.slice.call(root.querySelectorAll('[data-demo-search-results] li'));
+    var searchButtons = Array.prototype.slice.call(root.querySelectorAll('[data-demo-search-result]'));
+    var searchEmpty = root.querySelector('[data-demo-search-empty]');
+    var confirmBar = root.querySelector('[data-demo-confirm]');
+    var confirmYes = root.querySelector('[data-demo-confirm-yes]');
+    var confirmNo = root.querySelector('[data-demo-confirm-no]');
+    var resetButton = root.querySelector('[data-demo-reset]');
+    var status = root.querySelector('[data-demo-status]');
+    var dialog = root.parentNode.querySelector('#demo-user-dialog');
+    var userForm = dialog && dialog.querySelector('[data-demo-user-form]');
+    var dialogCloseButtons = dialog ? Array.prototype.slice.call(dialog.querySelectorAll('[data-demo-dialog-close]')) : [];
+    var activeScreen = 'dashboard';
+    var modeValue = 'interactive';
+    var pendingAction = null;
+    var lastActionButton = null;
+    var toggled = false;
+    var licensed = false;
+
+    function showStatus(text) {
+      if (status) status.textContent = text;
+    }
+
+    function hideConfirm() {
+      pendingAction = null;
+      if (confirmBar) confirmBar.hidden = true;
+    }
+
+    function closeSearch(restoreFocus) {
+      if (!search) return;
+      search.hidden = true;
+      if (searchToggle) searchToggle.setAttribute('aria-expanded', 'false');
+      if (restoreFocus && searchToggle) searchToggle.focus();
+    }
+
+    function openSearch() {
+      if (!search) return;
+      search.hidden = false;
+      if (searchToggle) searchToggle.setAttribute('aria-expanded', 'true');
+      if (searchInput) {
+        searchInput.value = '';
+        filterSearch('');
+        searchInput.focus();
+      }
+    }
+
+    function selectScreen(name, focusTab) {
+      var selected = tabs.find(function (tab) { return tab.dataset.demoTab === name; });
+      if (!selected) return;
+      activeScreen = name;
+      hideConfirm();
+      closeSearch(false);
+      tabs.forEach(function (tab) {
+        var active = tab === selected;
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        tab.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach(function (panel) { panel.hidden = panel.dataset.demoPanel !== name; });
+      quickButtons.forEach(function (button) { button.hidden = button.dataset.demoQuickActions !== name; });
+      showStatus(selected.dataset.demoTabStatus || '');
+      if (focusTab) selected.focus();
+    }
+
+    function setActionState(action, pressed) {
+      actionButtons.filter(function (button) { return button.dataset.demoAction === action; }).forEach(function (button) {
+        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        var label = pressed ? button.dataset.labelOn : button.dataset.labelOff;
+        if (label) {
+          button.setAttribute('aria-label', label);
+          var labelEl = button.querySelector('.hp-hotspot-label');
+          if (labelEl) labelEl.textContent = label;
+          if (button.classList.contains('hp-demo-quick-btn')) button.textContent = label;
+        }
+      });
+    }
+
+    function closeDialog() {
+      if (dialog && dialog.open) dialog.close();
+    }
+
+    function executeAction(action) {
+      if (action === 'users' || action === 'plugins') {
+        selectScreen(action, false);
+        return;
+      }
+      if (action === 'create') {
+        if (dialog) {
+          if (typeof dialog.showModal === 'function') dialog.showModal();
+          else dialog.setAttribute('open', '');
+          var firstInput = dialog.querySelector('input');
+          if (firstInput) firstInput.focus();
+        }
+        return;
+      }
+      if (action === 'toggle') {
+        toggled = !toggled;
+        setActionState('toggle', toggled);
+        var text = toggled
+          ? root.querySelector('[data-demo-action="toggle"]').dataset.statusOn
+          : root.querySelector('[data-demo-action="toggle"]').dataset.statusOff;
+        showStatus(text || '');
+        return;
+      }
+      if (action === 'license') {
+        licensed = true;
+        setActionState('license', licensed);
+        showStatus(root.querySelector('[data-demo-action="license"]').dataset.statusOn || '');
+        return;
+      }
+      if (action === 'layout') {
+        showStatus(root.querySelector('[data-demo-action="layout"]').dataset.status || '');
+      }
+    }
+
+    function requestAction(action) {
+      if (modeValue === 'readonly') {
+        showStatus(root.dataset.readonlyStatus || '');
+        return;
+      }
+      var mutation = action === 'toggle' || action === 'license' || action === 'layout' || action === 'create';
+      if (modeValue === 'confirm' && mutation) {
+        pendingAction = action;
+        if (confirmBar) confirmBar.hidden = false;
+        if (confirmNo) confirmNo.focus();
+        return;
+      }
+      executeAction(action);
+    }
+
+    function filterSearch(query) {
+      var needle = query.trim().toLocaleLowerCase();
+      var visible = 0;
+      searchItems.forEach(function (item) {
+        var match = item.textContent.toLocaleLowerCase().indexOf(needle) !== -1;
+        item.hidden = !match;
+        if (match) visible += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visible !== 0;
+    }
+
+    tabs.forEach(function (tab, index) {
+      tab.addEventListener('click', function () { selectScreen(tab.dataset.demoTab, false); });
+      tab.addEventListener('keydown', function (event) {
+        var targetIndex = index;
+        if (event.key === 'ArrowRight') targetIndex = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') targetIndex = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') targetIndex = 0;
+        else if (event.key === 'End') targetIndex = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        selectScreen(tabs[targetIndex].dataset.demoTab, true);
+      });
+    });
+
+    root.addEventListener('click', function (event) {
+      var actionButton = event.target.closest('[data-demo-action]');
+      if (actionButton) {
+        lastActionButton = actionButton;
+        requestAction(actionButton.dataset.demoAction);
+        return;
+      }
+      var searchResult = event.target.closest('[data-demo-search-result]');
+      if (searchResult) {
+        selectScreen(searchResult.dataset.demoSearchResult, true);
+        return;
+      }
+    });
+
+    modeOptions.forEach(function (option) {
+      option.addEventListener('click', function () {
+        modeValue = option.dataset.demoModeValue;
+        modeOptions.forEach(function (item) { item.setAttribute('aria-selected', item === option ? 'true' : 'false'); });
+        if (modeCurrent) modeCurrent.textContent = option.querySelector('span').textContent;
+        if (modeMenu) modeMenu.open = false;
+        hideConfirm();
+        showStatus(option.dataset.demoModeStatus || '');
+      });
+      option.addEventListener('keydown', function (event) {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault();
+        var index = modeOptions.indexOf(option);
+        var next = event.key === 'ArrowDown'
+          ? (index + 1) % modeOptions.length
+          : (index - 1 + modeOptions.length) % modeOptions.length;
+        modeOptions[next].focus();
+      });
+    });
+
+    if (searchToggle) searchToggle.addEventListener('click', function () {
+      if (search && !search.hidden) closeSearch(true);
+      else openSearch();
+    });
+    if (searchInput) {
+      searchInput.addEventListener('input', function () { filterSearch(searchInput.value); });
+      searchInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          var first = searchItems.find(function (item) { return !item.hidden; });
+          if (first) {
+            event.preventDefault();
+            var button = first.querySelector('[data-demo-search-result]');
+            if (button) selectScreen(button.dataset.demoSearchResult, true);
+          }
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSearch(true);
+        }
+      });
+    }
+
+    if (confirmNo) confirmNo.addEventListener('click', hideConfirm);
+    if (confirmYes) confirmYes.addEventListener('click', function () {
+      var action = pendingAction;
+      hideConfirm();
+      if (action) executeAction(action);
+    });
+
+    if (resetButton) resetButton.addEventListener('click', function () {
+      toggled = false;
+      licensed = false;
+      setActionState('toggle', false);
+      setActionState('license', false);
+      modeValue = 'interactive';
+      modeOptions.forEach(function (option) {
+        var active = option.dataset.demoModeValue === 'interactive';
+        option.setAttribute('aria-selected', active ? 'true' : 'false');
+        if (active && modeCurrent) modeCurrent.textContent = option.querySelector('span').textContent;
+      });
+      if (modeMenu) modeMenu.open = false;
+      closeDialog();
+      if (userForm) userForm.reset();
+      selectScreen('dashboard', false);
+      showStatus(resetButton.dataset.status || '');
+    });
+
+    if (dialog) {
+      dialogCloseButtons.forEach(function (button) { button.addEventListener('click', closeDialog); });
+      dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) {
+          var rect = dialog.getBoundingClientRect();
+          if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog();
+        }
+      });
+    }
+    if (userForm) userForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      closeDialog();
+      userForm.reset();
+      showStatus(userForm.dataset.status || '');
+      if (lastActionButton && lastActionButton.isConnected) lastActionButton.focus();
+    });
+
+    onWin(document, 'click', function (event) {
+      if (modeMenu && modeMenu.open && !modeMenu.contains(event.target)) modeMenu.open = false;
+    });
+    onWin(document, 'keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      if (modeMenu && modeMenu.open) {
+        modeMenu.open = false;
+        var summary = modeMenu.querySelector('summary');
+        if (summary) summary.focus();
+      } else if (!confirmBar.hidden) {
+        hideConfirm();
+      } else if (search && !search.hidden) {
+        closeSearch(true);
+      }
     });
   }
 

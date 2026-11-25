@@ -2,8 +2,8 @@
 <section class="sl-hero">
   <div class="sl-hero-media">
     <picture>
-      <source media="(max-width: 980px)" srcset="/website-assets/theme/solaris/assets/sl-hero.webp">
-      <img src="/website-assets/theme/solaris/assets/sl-hero-wide.webp" alt="{{.TF "theme.solaris.heroShotAlt" .SiteName}}" decoding="async" fetchpriority="high">
+      <source media="(max-width: 980px)" srcset="{{if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/theme/solaris/assets/sl-hero.webp{{end}}">
+      <img src="{{if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/theme/solaris/assets/sl-hero-wide.webp{{end}}" alt="{{.TF "theme.solaris.heroShotAlt" .SiteName}}" decoding="async" fetchpriority="high">
     </picture>
   </div>
   <div class="sl-wrap sl-hero-inner">

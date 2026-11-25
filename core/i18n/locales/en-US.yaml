@@ -567,6 +567,7 @@ user:
 plugin:
   not_found: "Plugin not found."
   disabled: "Plugin is not enabled."
+  starting: "The plugin is starting. Please try again shortly."
   market_not_found: "This plugin is not in the marketplace catalog."
   environment_unavailable: "This node cannot build plugins and restart automatically (%s). Install and verify in a source build environment before deployment, or manage this service with start and retry."
   market_ids_invalid: "Select 1 to 64 distinct, valid plugin IDs."
@@ -785,6 +786,7 @@ website:
   established_year_invalid: "Invalid established year"
   contact_name_required: "Please enter your name."
   contact_email_invalid: "Please enter a valid email address."
+  message_recipient_invalid: "Invalid message notification recipient email"
   contact_content_short: "The message must be at least 5 characters."
   contact_consent_url_invalid: "With the consent checkbox enabled, a policy URL is required: an on-site /p/xxx path or a full https:// address."
   message_not_found: "The message does not exist or has been deleted."

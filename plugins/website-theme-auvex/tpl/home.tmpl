@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="au-hero">
   <div class="au-hero-media">
-    <img src="/website-assets/theme/auvex/assets/au-hero.webp" alt="{{.TF "theme.auvex.heroShotAlt" .SiteName}}" width="1536" height="936" decoding="async" fetchpriority="high">
+    <img src="{{if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/theme/auvex/assets/au-hero.webp{{end}}" alt="{{.TF "theme.auvex.heroShotAlt" .SiteName}}" width="1536" height="936" decoding="async" fetchpriority="high">
   </div>
   <div class="au-wrap au-hero-inner">
     <div class="au-hero-copy" data-reveal>

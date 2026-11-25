@@ -150,6 +150,7 @@
     {{if .FooterNote}}<span>{{.FooterNote}}</span>{{end}}
   </div>
 </footer>
+{{if .ChatEnabled}}
 <div class="chat" data-chat data-online="1" hidden>
   <button class="chat-launcher" type="button" data-chat-open aria-haspopup="dialog" aria-expanded="false" aria-controls="chat-panel" aria-label="{{.T "chat.open"}}">
     {{uiIcon "message"}}
@@ -227,10 +228,11 @@
     </div>
   </section>
 </div>
+{{end}}
 <script type="application/json" id="site-i18n">{{.JSStrings}}</script>
 <script type="application/json" id="site-langs">{{.LangsJSON}}</script>
-<script src="/website-assets/chat-widget.js?v={{assetV "chat-widget.js"}}" defer></script>
+{{if .ChatEnabled}}<script src="/website-assets/chat-widget.js?v={{assetV "chat-widget.js"}}" defer></script>{{end}}
 <script src="/website-assets/site.js?v={{assetV "site.js"}}" defer></script>
-<script src="/website-assets/chat-enhance.js?v={{assetV "chat-enhance.js"}}" defer></script>
+{{if .ChatEnabled}}<script src="/website-assets/chat-enhance.js?v={{assetV "chat-enhance.js"}}" defer></script>{{end}}
 </body>
 </html>{{end}}

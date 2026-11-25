@@ -19,7 +19,7 @@ type installOperations struct {
 }
 
 func productionInstallOperations() installOperations {
-	return installOperations{market.Download, market.Rebuild, triggerRestart, market.CheckEnvironment}
+	return installOperations{market.Download, market.RebuildInTransaction, triggerRestart, market.CheckEnvironment}
 }
 
 func validateMarketIDs(ids []string) error {
@@ -95,7 +95,7 @@ func runInstallUnlocked(root string, entries []market.Entry, opts market.Install
 	x.Log("%d 个插件预检通过；覆盖前的源码备份保留在 data/plugins/backups/", len(entries))
 	if err := market.ChangeSourcesBatch(root, ids, func() error {
 		for i, e := range entries {
-			if _, err := market.InstallSub(root, packages[i], e.Subdir, catalogOptions(e, opts)); err != nil {
+			if _, err := market.InstallSubInTransaction(root, packages[i], e.Subdir, catalogOptions(e, opts)); err != nil {
 				return err
 			}
 			x.Log("插件 %s 已装入源码树", e.ID)
@@ -129,7 +129,7 @@ func runUploadUnlocked(root, zipPath string, x *market.Ctx, ops installOperation
 	opts := market.InstallOptions{ExpectedID: man.ID, ExpectedVersion: man.Version, ExpectedEdition: man.Edition}
 	if err := market.ChangeSources(root, man.ID, func() error {
 		x.Log("安装上传的插件包 %s", man.ID)
-		if _, err := market.InstallSub(root, zipPath, "", opts); err != nil {
+		if _, err := market.InstallSubInTransaction(root, zipPath, "", opts); err != nil {
 			return err
 		}
 		return ops.rebuild(context.Background(), root, true, x.LogPlain)

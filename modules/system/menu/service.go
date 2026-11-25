@@ -97,14 +97,26 @@ func pluginOfComponent(component string) (string, bool) {
 	return id, true
 }
 
+func pluginOfMenu(m *Menu) (string, bool) {
+	if id, ok := pluginOfComponent(m.Component); ok {
+		return id, true
+	}
+	if m.External {
+		id, _, ok := strings.Cut(m.Perm, ":")
+		return id, ok && plugin.ValidID(id)
+	}
+	return "", false
+}
+
 // mineKeep 是侧边栏的保留条件：启用的目录/菜单、持有权限码、且所属插件当前可挂载。
-// 插件菜单按 component 归属判断，目录节点没有 component，由 pruneDir 剔除空目录。
+// 站内插件菜单按 component 归属判断；外链没有 component，按权限码的插件命名空间判断。
+// 目录节点没有归属信息，由 pruneDir 剔除空目录。
 func mineKeep(perms []string) func(*Menu) bool {
 	return func(m *Menu) bool {
 		if m.Status != statusOn || m.Type == typeButton {
 			return false
 		}
-		if id, ok := pluginOfComponent(m.Component); ok && !pluginMenuVisible(id) {
+		if id, ok := pluginOfMenu(m); ok && !pluginMenuVisible(id) {
 			return false
 		}
 		return m.Type == typeDir || m.Perm == "" || auth.HasPerm(perms, m.Perm)

@@ -1,16 +1,18 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, ExternalLink, FileText, Globe, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, ExternalLink, FileText, Globe, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useAuth } from '@/framework/auth/useAuth'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { usePageActive } from '@/framework/hooks/use-page-active'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { BatchBar } from '@/framework/components/table/BatchBar'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { ListErrorBanner } from '@/framework/components/ListErrorBanner'
 import { ChartCard } from '@/framework/components/ChartCard'
 import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
@@ -136,6 +138,7 @@ export default function ImPage() {
   const confirm = useConfirm()
   const { isSuper, has } = usePermission()
   const [params, setParams] = useSearchParams()
+  const isMobile = useIsMobile()
   // 站内信深链：/im/conversations?conv=IMxxx 直接打开对应会话。
   const linkedConv = params.get('conv') || undefined
   // 列表与统计分屏：与工单中心同款——处理会话的人先看到队列，做复盘的人不被双栏挤走。
@@ -169,6 +172,22 @@ export default function ImPage() {
     setAssignee('all')
   }
   const [selected, setSelected] = useState<string | undefined>(linkedConv)
+  const selectConversation = useCallback((no: string) => {
+    setSelected(no)
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('conv', no)
+      return next
+    }, { replace: true })
+  }, [setParams])
+  const closeConversation = useCallback(() => {
+    setSelected(undefined)
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('conv')
+      return next
+    }, { replace: true })
+  }, [setParams])
   const [live, setLive] = useState(false)
   const [typing, setTyping] = useState(false)
   const [page, setPage] = useState(1)
@@ -201,9 +220,20 @@ export default function ImPage() {
   const { start: startExportJob } = useAsyncJob()
   const refresh = chat.refresh
 
-  useEffect(() => {
-    if (linkedConv) setSelected(linkedConv)
-  }, [linkedConv])
+  const linkedConvRef = useRef<string | null>(null)
+  const pageActive = usePageActive()
+  const pageActiveRef = useRef(pageActive)
+  useLayoutEffect(() => {
+    const resumed = pageActive && !pageActiveRef.current
+    pageActiveRef.current = pageActive
+    if (!pageActive) return
+    const next = linkedConv ?? ''
+    if (linkedConvRef.current === next) return
+    linkedConvRef.current = next
+    // 桌面标签切换会改写全局 URL；回到本标签时保留本地详情，只有本页活跃期间的 URL 变化才同步选择。
+    if (resumed && !next) return
+    setSelected(linkedConv)
+  }, [linkedConv, pageActive])
 
   // 坐席在线心跳：60 秒一次；开启自动分配时后端会顺手把最早的排队会话分给我。
   // refetch 放进 ref：心跳定时器不需要随列表对象每次渲染重建。
@@ -389,7 +419,7 @@ export default function ImPage() {
     if (!(await confirm({ destructive: true, title: t('plugin_im.delete.title'), description: t('plugin_im.delete.confirm', { no: c.convNo }) }))) return
     try {
       await deleteConv.mutateAsync(c.convNo)
-      if (selected === c.convNo) setSelected(undefined)
+      if (selected === c.convNo) closeConversation()
       toast.success(t('common.operateSuccess'))
     } catch {
       // 失败原因由 http 拦截器统一弹出
@@ -430,7 +460,7 @@ export default function ImPage() {
     try {
       const res = await merge.mutateAsync({ convNo: c.convNo, target })
       await convs.refetch()
-      setSelected(res.target)
+      selectConversation(res.target)
       toast.success(t('common.operateSuccess'))
       return true
     } catch {
@@ -445,6 +475,10 @@ export default function ImPage() {
   // 与工单队列同一套页码分页（50/页）：会话队列也是要「知道自己一共管多少」的工作台，
   // 追加式加载更多让总数与位置永远不可见。
   const pages = Math.max(1, Math.ceil(total / CONV_PAGE_SIZE))
+  const hasFilters = !!status || assignee !== 'all' || !!keyword.trim()
+  useEffect(() => {
+    if (!convs.isLoading && !convs.isError && page > pages) setPage(pages)
+  }, [convs.isLoading, convs.isError, page, pages])
 
   // 勾选 = 批量操作的选择器，不是「删除」的附属品：
   // - 进行中的会话可批量关闭（im:edit）——进行中占绝大多数，勾选框不能对这些行是死的；
@@ -493,12 +527,12 @@ export default function ImPage() {
             name: first.visitorName || first.convNo,
             preview: first.lastPreview || t('plugin_im.newVisitorMessage'),
           })
-    toast(body, { action: { label: t('plugin_im.notify.view'), onClick: () => setSelected(first.convNo) } })
+    toast(body, { action: { label: t('plugin_im.notify.view'), onClick: () => selectConversation(first.convNo) } })
     if (notifyOn && (document.hidden || !document.hasFocus())) {
       playBeep()
       notifyDesktop(t('plugin_im.title'), body)
     }
-  }, [list, selected, notifyOn, t, invalidateBadges])
+  }, [list, selected, notifyOn, t, invalidateBadges, selectConversation])
 
   const togglePicked = (convNo: string, on: boolean) =>
     setPicked((p) => (on ? [...new Set([...p, convNo])] : p.filter((x) => x !== convNo)))
@@ -546,7 +580,7 @@ export default function ImPage() {
       return
     try {
       const res = await deleteConvs.mutateAsync(nos)
-      if (selected && nos.includes(selected)) setSelected(undefined)
+      if (selected && nos.includes(selected)) closeConversation()
       setPicked([])
       toast.success(t('plugin_im.batch.deleted', { count: res.deleted }))
       if (res.skipped.length > 0) toast.warning(t('plugin_im.batch.skipped', { count: res.skipped.length }))
@@ -594,7 +628,7 @@ export default function ImPage() {
           深色下两张圆角卡漂浮的仪表盘感会稀释对话流的沉浸感 */}
       <Card className="grid h-auto min-h-96 grid-cols-1 overflow-hidden md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
         {/* relative 是浮动 BatchBar（absolute）的定位锚：批量条贴左栏底边，不挤压内部滚动列表（与工单队列同款） */}
-        <div className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+        <div className={cn('relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none', isMobile && selected && 'hidden')}>
           {/* 状态是最高频的切换：学 Studio Chat 收件箱把 All/Open/Closed 做成段选页签常驻，
               筛选弹层只留低频的归属维度。状态 chips 仍生效——点 chip 撤销与点页签等价 */}
           <Tabs value={status ?? ALL} onValueChange={(v) => setStatus(v === ALL ? undefined : v)}>
@@ -733,13 +767,35 @@ export default function ImPage() {
                       canBatch={canBatch}
                       picked={picked.includes(c.convNo)}
                       onTogglePick={(on) => togglePicked(c.convNo, on)}
-                      onSelect={() => setSelected(c.convNo)}
+                      onSelect={() => selectConversation(c.convNo)}
                     />
                   ))}
                 </div>
               )
             })}
-            {!convs.isLoading && list.length === 0 ? <EmptyState title={t('plugin_im.empty')} className="py-8" /> : null}
+            {convs.isError && list.length === 0 ? (
+              <EmptyState
+                title={t('common.loadFailed')}
+                className="py-8"
+                action={
+                  <Button variant="outline" size="sm" disabled={convs.isFetching} onClick={() => void convs.refetch()}>
+                    {t('common.retry')}
+                  </Button>
+                }
+              />
+            ) : null}
+            {convs.isError && list.length > 0 ? (
+              <div className="px-2 pt-2">
+                <ListErrorBanner onRetry={() => void convs.refetch()} retrying={convs.isFetching} />
+              </div>
+            ) : null}
+            {!convs.isLoading && !convs.isError && list.length === 0 ? (
+              <EmptyState
+                title={hasFilters ? t('common.emptyFiltered') : t('plugin_im.empty')}
+                description={hasFilters ? t('common.emptyFilteredHint') : undefined}
+                className="py-8"
+              />
+            ) : null}
           </div>
           {/* 批量模式下分页让位给悬浮 BatchBar：勾选时翻页无意义，两者又共享卡片底边会互相压住。
               全选收在这里而不是列表上方：与工单中心同一套页脚（全选 + 总数 + 翻页），
@@ -760,7 +816,7 @@ export default function ImPage() {
                     <span className="truncate">{t('plugin_im.batch.selectAll', { count: selectableNos.length })}</span>
                   </label>
                 ) : null}
-                <span className="shrink-0">{t('dataTable.totalCount', { count: total })}</span>
+                {!convs.isError || list.length > 0 ? <span className="shrink-0">{t('dataTable.totalCount', { count: total })}</span> : null}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Button
@@ -791,6 +847,9 @@ export default function ImPage() {
           conv={chat.conv}
           messages={chat.messages}
           loading={chat.loading}
+          error={chat.error}
+          onRetry={chat.retry}
+          selectionActive={!!selected}
           hasMore={chat.hasMore}
           typing={typing}
           onLoadOlder={() => void chat.loadOlder()}
@@ -808,6 +867,7 @@ export default function ImPage() {
           onRecall={onRecall}
           onMerge={onMerge}
           canDelete={isSuper}
+          onBack={closeConversation}
         />
       </Card>
         </TabsContent>
@@ -1102,6 +1162,9 @@ function ChatPane({
   conv,
   messages,
   loading,
+  error,
+  onRetry,
+  selectionActive,
   hasMore,
   typing,
   onLoadOlder,
@@ -1119,10 +1182,14 @@ function ChatPane({
   onRecall,
   onMerge,
   canDelete,
+  onBack,
 }: {
   conv?: ImConversation
   messages: ImMessage[]
   loading: boolean
+  error: boolean
+  onRetry: () => void
+  selectionActive: boolean
   hasMore: boolean
   typing: boolean
   onLoadOlder: () => void
@@ -1141,6 +1208,7 @@ function ChatPane({
   onMerge: (conv: ImConversation, target: string) => Promise<boolean>
   /** 只有超管能删除会话（已结束的） */
   canDelete: boolean
+  onBack: () => void
 }) {
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
@@ -1192,13 +1260,28 @@ function ChatPane({
     // 移动端会话列表在上方，空态文案不提「左侧」。
     // 合并卡后聊天栏自带分栏线：移动端纵向 border-t，桌面横向 border-s
     return (
-      <div className="flex min-h-0 flex-col items-center justify-center border-t md:border-t-0 md:border-s">
-        <EmptyState
-          icon={<MessagesSquare aria-hidden="true" className="size-6" />}
-          title={t('plugin_im.pickConversationTitle')}
-          description={t(isMobile ? 'plugin_im.pickConversationMobile' : 'plugin_im.pickConversation')}
-          className="py-16"
-        />
+      <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
+        {isMobile && selectionActive ? (
+          <div className="flex items-center border-b px-2 py-1.5 md:hidden">
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              <ArrowLeft aria-hidden="true" />
+              {t('common.back')}
+            </Button>
+          </div>
+        ) : null}
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          <EmptyState
+            icon={<MessagesSquare aria-hidden="true" className="size-6" />}
+            title={loading ? t('plugin_im.loading') : error ? t('common.loadFailed') : t('plugin_im.pickConversationTitle')}
+            description={!loading && !error ? t(isMobile ? 'plugin_im.pickConversationMobile' : 'plugin_im.pickConversation') : undefined}
+            action={error ? (
+              <Button variant="outline" size="sm" disabled={loading} onClick={onRetry}>
+                {t('common.retry')}
+              </Button>
+            ) : undefined}
+            className="py-16"
+          />
+        </div>
       </div>
     )
   }
@@ -1223,7 +1306,15 @@ function ChatPane({
 
   return (
     // 合并卡后的聊天栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
-    <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
+    <div className={cn('flex min-h-0 flex-col border-t md:border-t-0 md:border-s', isMobile && 'min-h-[32rem]')}>
+      {isMobile ? (
+        <div className="flex items-center border-b px-2 py-1.5 md:hidden">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" />
+            {t('common.back')}
+          </Button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         {/* 与左侧列表同一颗渐变头像（同 seed 同色）：点进会话时头像颜色不变，两栏是同一个访客 */}
         <QueueAvatar seed={conv.convNo} className="size-9 rounded-lg">
@@ -1387,6 +1478,7 @@ function ChatPane({
       ) : null}
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        {error && messages.length > 0 ? <ListErrorBanner onRetry={onRetry} /> : null}
         {hasMore ? (
           <div className="text-center">
             <Button variant="ghost" size="sm" onClick={onLoadOlder}>

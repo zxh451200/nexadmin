@@ -13,7 +13,7 @@ export function PageHeader({ title, description, actions, className }: PageHeade
     <div className={cn('flex flex-wrap items-start justify-between gap-3 md:flex-nowrap md:items-center', className)}>
       <div className="min-w-0 flex-1 basis-48">
         <h1 className="truncate text-lg font-semibold tracking-tight text-foreground md:text-2xl">{title}</h1>
-        {description ? <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground md:mt-1 md:text-sm">{description}</p> : null}
+        {description ? <div className={cn('mt-0.5 text-xs text-muted-foreground md:mt-1 md:text-sm', typeof description === 'string' && 'line-clamp-2')}>{description}</div> : null}
       </div>
       {actions ? (
         // 手机上操作按钮靠右、紧凑，但触控高度保持 >=40px；放不下时整组换行

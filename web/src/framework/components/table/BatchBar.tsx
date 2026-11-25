@@ -35,7 +35,7 @@ export function BatchBar({
         'z-30',
         mode === 'sticky' && 'sticky bottom-3 pointer-events-none',
         mode === 'absolute' && 'pointer-events-none absolute inset-x-0 bottom-3',
-        mode === 'viewport' && 'pointer-events-none fixed inset-x-0 bottom-4',
+        mode === 'viewport' && 'pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))]',
       )}
       role="region"
       aria-label={t('dataTable.batchActions')}

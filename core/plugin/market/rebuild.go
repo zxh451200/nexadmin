@@ -19,9 +19,21 @@ import (
 
 const buildTimeout = 20 * time.Minute
 
-// Rebuild 重建产物并替换当前二进制：npm build（可选）→ go mod tidy → go build → 原子换文件。
-// 换完不重启，由调用方决定（重启用 Restart）。
+// Rebuild 在项目锁与独立的源码、二进制恢复事务中重建产物。
 func Rebuild(ctx context.Context, root string, withWeb bool, log func(string)) error {
+	return WithProjectLock(root, func() error {
+		return ChangeProject(root, func() error {
+			return rebuildInTransaction(ctx, root, withWeb, log)
+		})
+	})
+}
+
+// RebuildInTransaction 在调用方已建立的 ChangeSources/ChangeProject 事务内重建产物。
+func RebuildInTransaction(ctx context.Context, root string, withWeb bool, log func(string)) error {
+	return rebuildInTransaction(ctx, root, withWeb, log)
+}
+
+func rebuildInTransaction(ctx context.Context, root string, withWeb bool, log func(string)) error {
 	log("检查插件静态契约…")
 	manifests, err := pluginlint.LintSources(root)
 	if err != nil {
@@ -37,15 +49,10 @@ func Rebuild(ctx context.Context, root string, withWeb bool, log func(string)) e
 		return fmt.Errorf("go mod tidy 失败: %w", err)
 	}
 
-	exe, err := os.Executable()
+	newExe, exe, oldExe, err := recoveryExecutablePaths(root)
 	if err != nil {
 		return err
 	}
-	exe, err = filepath.Abs(exe)
-	if err != nil {
-		return err
-	}
-	newExe := exe + ".new"
 	_ = os.Remove(newExe)
 	log(fmt.Sprintf("编译后端 %s -> %s", "./cmd/server", filepath.Base(exe)))
 	build := []string{"build", "-trimpath", "-tags", "embedweb", "-ldflags", "-s -w", "-o", newExe, "./cmd/server"}
@@ -54,20 +61,11 @@ func Rebuild(ctx context.Context, root string, withWeb bool, log func(string)) e
 		return fmt.Errorf("后端构建失败: %w", err)
 	}
 
-	// Windows 允许 rename 运行中的 exe：当前进程换名让位，新二进制顶上；旧文件保留一份便于回退。
-	old := exe + ".old"
-	_ = os.Remove(old)
-	if err := os.Rename(exe, old); err != nil {
-		return fmt.Errorf("备份当前二进制失败: %w", err)
+	if err := ActivateRecovery(root, exe, newExe, oldExe, log); err != nil {
+		_ = os.Remove(newExe)
+		return fmt.Errorf("二进制替换失败: %w", err)
 	}
-	if err := os.Rename(newExe, exe); err != nil {
-		// 换回，保证服务还能继续用旧二进制跑
-		if rb := os.Rename(old, exe); rb != nil {
-			return fmt.Errorf("二进制替换失败且回滚失败（%v），请手动把 %s 恢复为 %s", err, filepath.Base(old), filepath.Base(exe))
-		}
-		return fmt.Errorf("二进制替换失败（已回滚）: %w", err)
-	}
-	log("二进制已替换（旧版本保留为 " + filepath.Base(old) + "）")
+	log("二进制已替换（旧版本保留为 " + filepath.Base(oldExe) + "；完整恢复点为本次恢复记录）")
 	return nil
 }
 
@@ -78,6 +76,18 @@ func Restart(root string, log func(string)) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
+	}
+	items, err := RecoveryList(root)
+	if err != nil {
+		return err
+	}
+	if len(items) > 0 {
+		t, err := loadRecoveryJournal(root, items[len(items)-1].ID)
+		if err != nil {
+			return err
+		}
+		// Linux 允许运行中的已改名进程继续执行，os.Executable 可能指向 .old；重启必须使用台账里的 canonical 路径。
+		exe = t.journal.Exe
 	}
 	cfg, err := core.LoadConfig(filepath.Join(root, "config", "default.yaml"), filepath.Join(root, "config", "config.yaml"))
 	if err != nil {

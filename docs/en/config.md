@@ -15,6 +15,7 @@ This document lists every configuration key of `config/default.yaml`. Content co
 - Environment variable shape: prefix `NEXADMIN_`, key upper-cased, `.` → `_`. Examples: `server.port` → `NEXADMIN_SERVER_PORT`, `database.password` → `NEXADMIN_DATABASE_PASSWORD`, `ratelimit.login.limit` → `NEXADMIN_RATELIMIT_LOGIN_LIMIT`, `ratelimit.pat_create.window` → `NEXADMIN_RATELIMIT_PAT_CREATE_WINDOW`.
 - Environment variable types: integers, booleans, durations (`45m`, `2h`), comma-separated lists (`NEXADMIN_DISABLED_MODULES=post,notice`, `NEXADMIN_SERVER_CORS_ORIGINS=https://a.com,https://b.com`, `NEXADMIN_AUTH_METHODS=password,phone`). `languages` (an object list) and `auth.providers` (a map) via env: unverified — prefer `config.yaml`.
 - `${ENV}` references: string fields of `auth.providers.*` expand `${NAME}` from environment variables, yielding an empty string when unset (that provider counts as unconfigured); `storage.s3.*` string fields expand too, but unset variables fail with `config: environment variable NAME is not set`. Other keys do not expand `${}`.
+- **Runtime plugin-disable overlay**: the plugin manager reads `data/licenses/disabled.json` (`{"ids":["plugin-id"]}`) at startup and writes it from the Plugin Management enable switch. Effective disabled IDs are the union of this overlay and configured `disabled_plugins` (after the same trim/lowercase normalization). **Configuration takes precedence**: a configuration-disabled plugin cannot be enabled from the runtime switch; remove it from configuration and restart. Overlay-only changes apply at runtime and persist across restarts. A missing file means an empty overlay; an unreadable or malformed file logs a warning and is treated as empty so optional-file failure does not block startup. The file is node-local, is not synchronized across nodes, and must be backed up separately.
 
 **Startup validation** (`core/config`'s `validate`):
 
@@ -50,7 +51,7 @@ A failed check reports e.g. `config: server.port 99999 out of range`.
 | `database.host` / `database.port` | string / int | `127.0.0.1` / `3306` | Database address | PostgreSQL usually 5432 |
 | `database.user` / `database.password` | string | `root` / empty | Database credentials; the password never enters logs, and the wizard writes `config.yaml` with file mode 0600 | Pass passwords via env in production |
 | `database.name` | string | `nexadmin` | Database name; the wizard can optionally auto-create it | Match your database |
-| `database.node_id` | int | `0` | Snowflake ID node number 0–1023. Multi-instance instances must differ; with redis cache, startup uses a TTL lease to detect duplicates and refuses startup when another live instance holds it (no detection with `memory`), see Deployment Guide §10 | Multi-instance deployments |
+| `database.node_id` | int | `0` | Snowflake ID node number 0–1023, which must be set explicitly; **`-1` automatic selection is not supported**. Multi-instance nodes must differ; with redis cache, startup uses a TTL lease to detect duplicates and refuses startup when another live instance holds it (no detection with `memory`), see Deployment Guide §10 | Assign different node numbers manually for multi-instance deployments; keep `0` for a single instance |
 | `cache.driver` | string | `memory` | `memory` (in-process, dev only) or `redis` (Valkey-compatible, required in production). <br>Token revocation, user / tenant security versions, captchas, rate-limit counters and online sessions all live in cache; security versions have no TTL. Login lockout is additionally persisted in `sys_login_lock` | `app.env=production` requires `redis` (memory refuses to start); <br>multi-instance deployments also require `redis`; atomic storage-quota reservation requires the cache to implement `cache.Lease` (both built-in drivers do; a custom implementation without it makes quota-gated uploads return 503) |
 | `cache.addr` / `cache.password` | string | empty / empty | Redis address (e.g. `valkey:6379`) and password; `driver=redis` requires addr, and unreachable fails startup with `cache: redis/valkey at <addr> is unavailable` | When using redis |
 
@@ -143,6 +144,14 @@ Tencent Cloud SMS: `sms.tencent.secret_id`, `secret_key`, `sdk_app_id`, `sign_na
 | `issuer` / `name` / `scopes` | `oidc` only (`google` may override `issuer`): issuer must serve `/.well-known/openid-configuration`; `name` is the login-page display name |
 | `auth_url` / `token_url` / `userinfo_url` / `jwks_url` | Usually unneeded; manual endpoints for `oidc` without discovery |
 
+Settings → Sign-in methods stores runtime overrides in `GET/PUT /settings/auth`, read on every request and effective immediately:
+
+- Enabled providers override `enabled`; non-empty fields override the corresponding configuration keys. Empty fields and empty secrets continue to use this file's values.
+- A disabled provider stays inactive even when configured here.
+- Section-level account matching, automatic account creation and allowed email domains only fill provider keys absent from YAML.
+- A non-empty outbound proxy overrides `auth.proxy`.
+- Saving validates the merged result: if enabled providers still lack `client_id`, `client_secret` or `redirect_uris` (plus `agent_id` for WeCom, or `issuer` for OIDC), the save is rejected so a successful save never leaves the provider invisible on the login page.
+
 ## 4. upload / storage / message / job / export / setup / ai / disabled_modules
 
 | Key | Type | Default | Purpose | When to change |
@@ -163,10 +172,13 @@ Tencent Cloud SMS: `sms.tencent.secret_id`, `secret_key`, `sdk_app_id`, `sign_na
 | `job.keep_days` | int | `7` | Task record and result file retention; files cleaned together at expiry | Adjusting retention |
 | `job.max_per_user` | int | `3` | Per-user in-flight (queued + running) task cap | Anti-abuse tuning |
 | `log.export_max_rows` | int | `50000` | Row cap for operation / login log export jobs (in-task cap; exceeding fails the whole task and suggests narrower filters); `<=0` uses 50000 | Large log volumes or tightening exports |
+| `ticket.attachment_max_count` | int | `0` (= 20 files) | Ticket plugin (`plugins/ticket`): maximum attachments per ticket; `<=0` uses the factory default of 20 | Raise when attachment quota blocks valid tickets, or lower to deter abuse |
+| `ticket.attachment_max_mb` | int | `0` (= 100MB) | Ticket plugin: total attachment bytes allowed per ticket, in MB; `<=0` uses the factory default of 100MB. This is separate from each file's `upload.*` cap under System Parameters → Upload Limits | Allow more/larger attachments on one ticket |
+| `ticket.export_limit` | int | `0` (= 5000 rows) | Ticket plugin: `ticket.export` job row cap (in-task cap; exceeding fails the whole task and suggests narrower filters); `<=0` uses the factory default of 5000 | Raise for large exports, or lower to protect the database |
 | `setup.allow_remote` | bool | `false` | Whether non-local machines may access the setup wizard. Local requires a TCP loopback peer without forwarding headers. <br>When allowed, the console-printed `X-Setup-Token` is required; the wizard page can input the token and attach it to all setup requests — the token lives only in component memory | Usually `false`; only for remote or proxied initialization |
 | `ai.base_url` / `ai.api_key` / `ai.model` | string | empty | OpenAI-compatible endpoint, key and model name. These are fallbacks: once the settings page "AI" section is saved it wins; if neither is configured the AI entries hide | Enabling AI capabilities |
 | `disabled_modules` | list | `[]` | Disable modules by `Name()` (routes not assembled, absent from API docs) without deleting code; menus are data — already-written menu rows remain, hide them in "Menu Management". Names in the Features & Permissions document | When a built-in module is unneeded |
-| `disabled_plugins` | list | `[]` | Disable plugins by id (e.g. `[website]`): nothing mounts at all (routes, migrations, menu seeds all skipped), the admin page shows "disabled" and `plugin list` shows `disabled`. <br>Free plugins without license gates use this; pro plugins may too (no need to revoke licenses). To remove data as well use `nexadmin plugin remove --purge <id>` | Temporarily taking a plugin offline |
+| `disabled_plugins` | list | `[]` | Disable plugins by id (e.g. `[website]`): nothing mounts at all (routes, migrations, menu seeds all skipped), the admin page shows "disabled" and `plugin list` shows `disabled`. Effective disablement is unioned with the node-local `data/licenses/disabled.json` operator overlay; configuration wins and such a plugin cannot be enabled from the runtime switch. Free plugins have no license gate; pro plugins may also be disabled without revoking a license, but license import is unavailable while disabled — enable the plugin first. To remove data as well, stop the service, back up the database and run `nexadmin plugin remove --purge <id>` | Temporarily taking a plugin offline |
 
 ## 5. backup
 
@@ -195,6 +207,7 @@ Fixed-window rate limiting: the same key allows at most `limit` requests per `wi
 | `ratelimit.openapi_sign` | 30 / `1m` | IP; open-platform token / app-signature validation failures |
 | `ratelimit.client_error` | 30 / `1m` | IP; `POST /api/v1/client-errors` frontend error reports |
 | `ratelimit.dashboard_layout` | 30 / `1m` | Logged-in users; `/api/v1/dashboard/layout` reads & writes |
+| `ratelimit.tenant_api` | 0 (off) / `1m` | Per-tenant aggregate cap for all admin `/api/v1` endpoints, isolating abnormal traffic from one tenant; `0` disables the rule |
 
 ## 7. metrics
 
@@ -265,5 +278,5 @@ All of them are platform-global and managed by the platform super admin. For per
 
 - `ai`: the settings section wins; never saved, falls back to `ai.*`.
 - Login security (consecutive failures, lock minutes): settings `security` section → system params `login.max_retry` / `login.lock_minutes` → default 5 failures / 15 minutes.
-- `storage`: file storage follows `config/config.yaml`. Saving the settings page's `storage` section is rejected with 400 (unit test `TestSaveStorageSectionRejected` comments: "rather than saving successfully but having no effect").
+- `storage`: file storage follows `config/config.yaml`. Saving the settings page's `storage` section is rejected with 400 rather than reporting success without effect.
 - The remaining sections (`cache`, `sms`, `auth`, `notify`, `site`) versus their YAML counterparts at runtime: not verified item by item. For deployment decisions, trust the YAML.

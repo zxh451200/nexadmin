@@ -12,6 +12,7 @@ import (
 	"nexadmin/core/config"
 	"nexadmin/core/ctl"
 	"nexadmin/core/plugin"
+	"nexadmin/core/plugin/market"
 	"nexadmin/internal/boot"      // 二开定制入口（用户区）：boot.Options() 返回要追加的 core.Option
 	_ "nexadmin/internal/modules" // 业务模块（含示例模块）在各自包的 init() 里注册，这里只需引入；本文件不引用任何具体业务模块
 	_ "nexadmin/modules"          // 框架内置模块在各自包的 init() 里 core.RegisterBuiltin，这里只需引入
@@ -43,6 +44,12 @@ const usage = `用法: nexadmin-server [命令]
                       --tenant 只恢复指定租户；失败可能部分恢复，不自动回滚
   reinit [--dry-run] [--platform-only]
                       恢复出厂（先列清单再确认）；隔离模式必须明确 --platform-only
+  recover-plugin-change --status
+                      列出源码与二进制恢复事务
+  recover-plugin-change --rollback --yes
+                      服务停止后，回退最近一笔未解决或成功的插件变更
+  recover-plugin-change --accept-current --yes
+                      服务停止后，接受事务外的当前源码与二进制并放弃旧回退点
   restore <备份文件> [--yes] [--dry-run] [--sha256 <值>] [--platform-only]
                       从备份恢复数据库（必须先 stop；先校验 sha256、列出将覆盖的库、交互确认，
                       恢复前自动再做一份“恢复前备份”；--dry-run 只列清单；
@@ -59,6 +66,13 @@ func main() {
 		return
 	}
 	if cmd == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := market.CheckRecoveryForExecutable(".", exe); err != nil {
+			log.Fatal(err)
+		}
 		cfg := mustConfig()
 		if err := newApp(cfg).Run(); err != nil {
 			log.Fatal(err)
@@ -148,6 +162,58 @@ func runCommand(cmd string, args []string) error {
 			return errors.New("restore-bundle requires --dir <directory> and exactly one of --dry-run / --yes")
 		}
 		return ctl.RestoreBundle(context.Background(), cfg, c, ctl.RestoreBundleOptions{Dir: *dir, Tenant: *tenant, DryRun: *dry, Yes: *yes}, os.Stdout)
+	case "recover-plugin-change":
+		fs := flag.NewFlagSet("recover-plugin-change", flag.ContinueOnError)
+		status := fs.Bool("status", false, "列出源码与二进制恢复事务")
+		rollback := fs.Bool("rollback", false, "回退最近一笔未解决或成功的插件变更")
+		accept := fs.Bool("accept-current", false, "接受事务外的当前源码与二进制并放弃旧回退点")
+		yes := fs.Bool("yes", false, "明确确认覆盖当前源码与二进制")
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		modes := 0
+		for _, enabled := range []bool{*status, *rollback, *accept} {
+			if enabled {
+				modes++
+			}
+		}
+		if fs.NArg() != 0 || modes != 1 || ((*rollback || *accept) && !*yes) {
+			return errors.New("recover-plugin-change 需要且只能使用 --status、--rollback --yes 或 --accept-current --yes")
+		}
+		if (*rollback || *accept) && c.State().Running {
+			return errors.New("服务仍在运行，请先 stop，再处理插件变更恢复记录")
+		}
+		if *status {
+			items, err := market.RecoveryList(".")
+			if err != nil {
+				return err
+			}
+			if len(items) == 0 {
+				fmt.Fprintln(os.Stdout, "没有插件恢复记录")
+				return nil
+			}
+			for _, item := range items {
+				fmt.Fprintf(os.Stdout, "%s  %s  %s  %s\n", item.ID, item.Phase, item.CreatedAt.Format("2006-01-02 15:04:05"), item.Manifest)
+				if item.Error != "" {
+					fmt.Fprintf(os.Stdout, "  error: %s\n", item.Error)
+				}
+			}
+			return nil
+		}
+		return market.WithRecoveryLock(".", func() error {
+			if *accept {
+				if err := market.SupersedeRecovery(".", true); err != nil {
+					return err
+				}
+				fmt.Fprintln(os.Stdout, "已接受当前源码与二进制，旧恢复点不再用于启动门禁或回退")
+				return nil
+			}
+			if err := market.RollbackRecovery(".", true); err != nil {
+				return err
+			}
+			fmt.Fprintln(os.Stdout, "插件变更已回退；数据库、授权与用户数据不在自动回退范围内")
+			return nil
+		})
 	case "restore":
 		fs := flag.NewFlagSet("restore", flag.ContinueOnError)
 		yes := fs.Bool("yes", false, "跳过交互确认（自动化）")

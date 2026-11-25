@@ -535,6 +535,11 @@ type siteView struct {
 	HeadCode template.HTML
 	// TitleSuffix 拼在 <title> 的「{标题}」之后；空 = 「 - {站点名}」。由 composeTitle 消费。
 	TitleSuffix string
+	// HeroImageURL / HeroImageDarkURL 是首页主视觉覆盖；空 = 用主题内置图。
+	HeroImageURL     string
+	HeroImageDarkURL string
+	// ChatEnabled=false 时模板不下发客服挂件 DOM 与脚本（省请求，也不占右下角）。
+	ChatEnabled bool
 	// HomeSlug 是被设为首页的单页 slug（站点设置）；空 = 内置首页。
 	// 不进模板，由 home 处理器读取决定渲染哪张页面。
 	HomeSlug     string
@@ -568,8 +573,8 @@ type siteView struct {
 	// 为空时模板回退内置页脚列（老站点不改数据就不会变样）。
 	FooterNavs []Nav
 	Features   []Feature
-	Title           string
-	Desc            string
+	Title      string
+	Desc       string
 	// SeoTitle 是内容级的完整 meta 标题覆盖：空 = 用 Title（「标题 - 站点名」的组合交给装配方）。
 	SeoTitle string
 	OGImage  string // 绝对地址；空 = 用站点默认分享图
@@ -667,10 +672,10 @@ type siteView struct {
 	// 币种（对标阿里右上角「语言-币种」选择器）：汇率表配好且访客解析出展示币种
 	// 时 CurrencyOn = true，头部才渲染「语言-币种」弹层；价格换算走 fx。
 	// fx 在 baseView 装配、render 阶段按 cookie 升级展示币种。
-	CurrencyOn       bool
-	DisplayCurrency  string
-	CurrencyOptions  []currencyOption
-	fx               *fx
+	CurrencyOn      bool
+	DisplayCurrency string
+	CurrencyOptions []currencyOption
+	fx              *fx
 
 	// 插件市场（目录来自 config/plugin-market.yaml，与后台插件市场同源）
 	MarketEnabled    bool
@@ -797,6 +802,19 @@ func (v *siteView) URL(href string) string {
 		return p
 	}
 	return v.Home()
+}
+
+func (v *siteView) ShowBuiltinDocs() bool {
+	return v.DocsEnabled && !navTreeHasHref(v.Navs, "/docs")
+}
+
+func navTreeHasHref(navs []Nav, href string) bool {
+	for _, n := range navs {
+		if navHrefPath(n.Href) == href || navTreeHasHref(n.Children, href) {
+			return true
+		}
+	}
+	return false
 }
 
 // Alternate 返回同一页面在另一语言下的规范地址（不含 query，供 hreflang / og:locale:alternate）。

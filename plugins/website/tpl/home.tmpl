@@ -9,7 +9,6 @@
 <div class="hp">
 
   <section class="hp-hero">
-    <div class="hp-hero-bg" aria-hidden="true"></div>
     <div class="container hp-hero-in">
       <div class="hp-hero-copy" data-reveal>
         <h1 class="hp-hero-title">
@@ -41,15 +40,101 @@
       </div>
 
       <div class="hp-hero-stage" data-reveal>
-        <figure class="hp-window">
-          <div class="hp-window-bar" aria-hidden="true">
-            <span class="hp-window-dots"><i></i><i></i><i></i></span>
-            <span class="hp-window-url">{{icon "lock"}}<span>app.nexadmin.dev/admin/workbench</span></span>
+        <figure class="hp-window hp-demo" data-product-demo data-readonly-status="{{.T "home.demo.status.readonly"}}">
+          <div class="hp-demo-toolbar">
+            <div class="hp-demo-tabs" role="tablist" aria-label="{{.T "home.demo.tabsAria"}}">
+              <button id="demo-tab-dashboard" type="button" role="tab" aria-selected="true" aria-controls="demo-panel-dashboard" data-demo-tab="dashboard" data-demo-tab-status="{{.T "home.demo.status.dashboard"}}">{{.T "home.demo.tab.dashboard"}}</button>
+              <button id="demo-tab-users" type="button" role="tab" aria-selected="false" aria-controls="demo-panel-users" data-demo-tab="users" data-demo-tab-status="{{.T "home.demo.status.users"}}" tabindex="-1">{{.T "home.demo.tab.users"}}</button>
+              <button id="demo-tab-plugins" type="button" role="tab" aria-selected="false" aria-controls="demo-panel-plugins" data-demo-tab="plugins" data-demo-tab-status="{{.T "home.demo.status.plugins"}}" tabindex="-1">{{.T "home.demo.tab.plugins"}}</button>
+            </div>
+            <div class="hp-demo-controls">
+              <span class="hp-demo-hint">{{.T "home.demo.hint"}}</span>
+              <details class="hp-demo-mode" data-demo-mode>
+                <summary aria-label="{{.T "home.demo.modeAria"}}" aria-haspopup="listbox">{{uiIcon "shield"}}<span data-demo-mode-current>{{.T "home.demo.mode.interactive"}}</span>{{uiIcon "chevron-down"}}</summary>
+                <div class="hp-demo-mode-menu" role="listbox" aria-label="{{.T "home.demo.modeAria"}}">
+                  <button type="button" role="option" aria-selected="true" data-demo-mode-value="interactive" data-demo-mode-status="{{.T "home.demo.modeStatus.interactive"}}"><span>{{.T "home.demo.mode.interactive"}}</span><small>{{.T "home.demo.mode.interactiveHint"}}</small></button>
+                  <button type="button" role="option" aria-selected="false" data-demo-mode-value="confirm" data-demo-mode-status="{{.T "home.demo.modeStatus.confirm"}}"><span>{{.T "home.demo.mode.confirm"}}</span><small>{{.T "home.demo.mode.confirmHint"}}</small></button>
+                  <button type="button" role="option" aria-selected="false" data-demo-mode-value="readonly" data-demo-mode-status="{{.T "home.demo.modeStatus.readonly"}}"><span>{{.T "home.demo.mode.readonly"}}</span><small>{{.T "home.demo.mode.readonlyHint"}}</small></button>
+                </div>
+              </details>
+              <button class="hp-demo-icon-btn" type="button" data-demo-search-toggle aria-expanded="false" aria-controls="demo-search" aria-label="{{.T "home.demo.searchAria"}}" title="{{.T "home.demo.searchAria"}}">{{uiIcon "search"}}</button>
+              <button class="hp-demo-reset" type="button" data-demo-reset data-status="{{.T "home.demo.status.reset"}}">{{.T "home.demo.reset"}}</button>
+            </div>
           </div>
-          <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
-          <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
+          <div class="hp-demo-stage">
+            <div class="hp-demo-screen" id="demo-panel-dashboard" role="tabpanel" aria-labelledby="demo-tab-dashboard" data-demo-panel="dashboard">
+              <img class="shot-dark" src="{{if .HeroImageDarkURL}}{{.HeroImageDarkURL}}{{else if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}{{end}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
+              <img class="shot-light" src="{{if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}{{end}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
+              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:10.8%;--y:36.5%" data-demo-action="users" aria-label="{{.T "home.demo.action.users"}}"><span class="hp-hotspot-dot" aria-hidden="true">+</span><span class="hp-hotspot-label">{{.T "home.demo.action.users"}}</span></button>
+              <button class="hp-hotspot hp-hotspot--left" type="button" style="--x:91.5%;--y:13.7%" data-demo-action="layout" data-status="{{.T "home.demo.status.layout"}}" aria-label="{{.T "home.demo.action.layout"}}"><span class="hp-hotspot-dot" aria-hidden="true">+</span><span class="hp-hotspot-label">{{.T "home.demo.action.layout"}}</span></button>
+            </div>
+            <div class="hp-demo-screen" id="demo-panel-users" role="tabpanel" aria-labelledby="demo-tab-users" data-demo-panel="users" hidden>
+              <img class="shot-dark" src="/website-assets/market/user-dark.jpg?v={{assetV "market/user-dark.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+              <img class="shot-light" src="/website-assets/market/user-light.jpg?v={{assetV "market/user-light.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:22%;--y:26.2%" data-demo-action="create" aria-label="{{.T "home.demo.action.create"}}"><span class="hp-hotspot-dot" aria-hidden="true">+</span><span class="hp-hotspot-label">{{.T "home.demo.action.create"}}</span></button>
+              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:74.4%;--y:51.2%" data-demo-action="toggle" aria-pressed="false" data-label-on="{{.T "home.demo.action.enable"}}" data-label-off="{{.T "home.demo.action.disable"}}" data-status-on="{{.T "home.demo.status.disabled"}}" data-status-off="{{.T "home.demo.status.enabled"}}" aria-label="{{.T "home.demo.action.disable"}}"><span class="hp-hotspot-dot" aria-hidden="true">+</span><span class="hp-hotspot-label">{{.T "home.demo.action.disable"}}</span></button>
+            </div>
+            <div class="hp-demo-screen" id="demo-panel-plugins" role="tabpanel" aria-labelledby="demo-tab-plugins" data-demo-panel="plugins" hidden>
+              <img class="shot-dark" src="/website-assets/market/pluginmarket-dark.jpg?v={{assetV "market/pluginmarket-dark.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+              <img class="shot-light" src="/website-assets/market/pluginmarket-light.jpg?v={{assetV "market/pluginmarket-light.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:16%;--y:40.2%" data-demo-action="license" aria-pressed="false" data-label-on="{{.T "home.demo.action.licensed"}}" data-label-off="{{.T "home.demo.action.license"}}" data-status-on="{{.T "home.demo.status.licensed"}}" aria-label="{{.T "home.demo.action.license"}}"><span class="hp-hotspot-dot" aria-hidden="true">+</span><span class="hp-hotspot-label">{{.T "home.demo.action.license"}}</span></button>
+            </div>
+            <div class="hp-demo-search" id="demo-search" role="search" hidden>
+              <label class="hp-demo-search-field">
+                <span class="sr-only">{{.T "home.demo.searchAria"}}</span>
+                {{uiIcon "search"}}
+                <input type="search" data-demo-search-input placeholder="{{.T "home.demo.searchPlaceholder"}}" autocomplete="off" aria-controls="demo-search-results">
+              </label>
+              <ul id="demo-search-results" data-demo-search-results>
+                <li><button type="button" data-demo-search-result="dashboard"><span>{{.T "home.demo.tab.dashboard"}}</span><small>{{.T "home.demo.search.dashboardDesc"}}</small></button></li>
+                <li><button type="button" data-demo-search-result="users"><span>{{.T "home.demo.tab.users"}}</span><small>{{.T "home.demo.search.usersDesc"}}</small></button></li>
+                <li><button type="button" data-demo-search-result="plugins"><span>{{.T "home.demo.tab.plugins"}}</span><small>{{.T "home.demo.search.pluginsDesc"}}</small></button></li>
+              </ul>
+              <p class="hp-demo-search-empty" data-demo-search-empty hidden>{{.T "home.demo.searchEmpty"}}</p>
+            </div>
+          </div>
+          <div class="hp-demo-confirm" data-demo-confirm role="alert" hidden>
+            <span>{{.T "home.demo.confirm"}}</span>
+            <div>
+              <button type="button" data-demo-confirm-no>{{.T "home.demo.confirmNo"}}</button>
+              <button type="button" data-demo-confirm-yes>{{.T "home.demo.confirmYes"}}</button>
+            </div>
+          </div>
+          <figcaption class="hp-hero-caption hp-demo-caption">
+            <div class="hp-demo-caption-status"><span class="hp-dot" aria-hidden="true"></span><span data-demo-status role="status" aria-live="polite">{{.T "home.demo.status.dashboard"}}</span></div>
+            <div class="hp-demo-quick" role="group" aria-label="{{.T "home.demo.actionsAria"}}">
+              <button class="hp-demo-quick-btn" type="button" data-demo-quick-actions="dashboard" data-demo-action="users">{{.T "home.demo.action.users"}}</button>
+              <button class="hp-demo-quick-btn" type="button" data-demo-quick-actions="dashboard" data-demo-action="plugins">{{.T "home.demo.action.plugins"}}</button>
+              <button class="hp-demo-quick-btn" type="button" data-demo-quick-actions="dashboard" data-demo-action="layout" data-status="{{.T "home.demo.status.layout"}}">{{.T "home.demo.action.layout"}}</button>
+              <button class="hp-demo-quick-btn" type="button" data-demo-quick-actions="users" data-demo-action="create" hidden>{{.T "home.demo.action.create"}}</button>
+              <button class="hp-demo-quick-btn" type="button" data-demo-quick-actions="users" data-demo-action="toggle" data-label-on="{{.T "home.demo.action.enable"}}" data-label-off="{{.T "home.demo.action.disable"}}" data-status-on="{{.T "home.demo.status.disabled"}}" data-status-off="{{.T "home.demo.status.enabled"}}" aria-pressed="false" hidden>{{.T "home.demo.action.disable"}}</button>
+              <button class="hp-demo-quick-btn" type="button" data-demo-quick-actions="plugins" data-demo-action="license" data-label-on="{{.T "home.demo.action.licensed"}}" data-label-off="{{.T "home.demo.action.license"}}" data-status-on="{{.T "home.demo.status.licensed"}}" aria-pressed="false" hidden>{{.T "home.demo.action.license"}}</button>
+            </div>
+          </figcaption>
         </figure>
-        <p class="hp-hero-caption"><span class="hp-dot" aria-hidden="true"></span>{{.T "home.heroShotNote"}}</p>
+        <dialog class="hp-demo-dialog" id="demo-user-dialog" aria-labelledby="demo-user-title">
+          <form data-demo-user-form data-status="{{.T "home.demo.status.created"}}">
+            <header>
+              <div>
+                <p class="hp-kicker">{{.T "home.demo.userKicker"}}</p>
+                <h3 id="demo-user-title">{{.T "home.demo.userTitle"}}</h3>
+              </div>
+              <button class="hp-demo-icon-btn" type="button" data-demo-dialog-close aria-label="{{.T "home.demo.userCancel"}}">{{uiIcon "close"}}</button>
+            </header>
+            <label>{{.T "home.demo.userName"}}<input name="name" required maxlength="40" autocomplete="off"></label>
+            <label>{{.T "home.demo.userAccount"}}<input name="account" required maxlength="40" autocomplete="off"></label>
+            <label>{{.T "home.demo.userRole"}}
+              <select name="role">
+                <option value="editor">{{.T "home.demo.userRoleEditor"}}</option>
+                <option value="auditor">{{.T "home.demo.userRoleAuditor"}}</option>
+              </select>
+            </label>
+            <footer>
+              <button type="button" data-demo-dialog-close>{{.T "home.demo.userCancel"}}</button>
+              <button type="submit" class="btn btn-primary btn-sm">{{.T "home.demo.userSubmit"}}</button>
+            </footer>
+          </form>
+        </dialog>
       </div>
 
     </div>
@@ -156,14 +241,15 @@
       <div class="hp-tree" data-reveal role="img" aria-label="{{.T "home.source.aria"}}">
         <div class="hp-tree-bar"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="hp-tree-title">~/myapp</span></div>
         <pre class="hp-tree-body"><code><span class="tr-root">myapp/</span>
-├── <span class="tr-fw">core/</span>          <span class="tr-cmt">← {{.T "home.source.framework"}}</span>
-├── <span class="tr-fw">modules/</span>       <span class="tr-cmt">内置模块</span>
-├── <span class="tr-fw">plugins/</span>       <span class="tr-cmt">源码插件</span>
-├── <span class="tr-fw">web/</span>           <span class="tr-cmt">前端</span>
-├── <span class="tr-fw">migrations/</span>    <span class="tr-cmt">迁移</span>
-├── <span class="tr-you">internal/</span>     <span class="tr-cmt tr-hl">← {{.T "home.source.yours"}}</span>
-├── <span class="tr-you">my/</span>           <span class="tr-cmt tr-hl">← {{.T "home.source.yours"}}</span>
-└── <span class="tr-cmt">go.mod · config/ · docs/</span></code></pre>
+├── <span class="tr-fw">core/ modules/ pkg/ cmd/</span>
+├── <span class="tr-fw">web/src/framework/</span>       <span class="tr-cmt">{{.T "home.source.tree.web"}}</span>
+├── <span class="tr-fw">migrations/framework/</span>
+├── <span class="tr-fw">docs/ deploy/ scripts/</span>
+├── <span class="tr-fw">config/default.yaml</span>
+├── <span class="tr-you">internal/ plugins/</span>     <span class="tr-cmt tr-hl">{{.T "home.source.tree.business"}}</span>
+├── <span class="tr-you">web/src/pages/ web/src/plugins/</span> <span class="tr-cmt tr-hl">{{.T "home.source.tree.pages"}}</span>
+├── <span class="tr-you">migrations/business/</span>   <span class="tr-cmt tr-hl">{{.T "home.source.tree.migrations"}}</span>
+└── <span class="tr-you">config/config.yaml data/</span> <span class="tr-cmt tr-hl">{{.T "home.source.tree.config"}}</span></code></pre>
       </div>
     </div>
   </section>
@@ -285,7 +371,7 @@
         <ol class="hp-steps">
           <li><b>{{.T "home.qs.build"}}</b>{{.T "home.qs.buildText"}}</li>
           <li><b>{{.T "home.qs.start"}}</b>{{.T "home.qs.startText"}}</li>
-          <li><b>{{.T "home.qs.open"}} <code>/setup</code></b>{{.T "home.qs.setupText"}}</li>
+          <li><b>{{.T "home.qs.open"}} <code>/admin/setup</code></b>{{.T "home.qs.setupText"}}</li>
         </ol>
       </div>
       <div class="terminal" data-reveal role="img" aria-label="{{.T "home.qs.aria"}}">
@@ -295,7 +381,7 @@
 <span class="tl"><span class="c">build go build -tags embedweb</span></span>
 <span class="tl"><span class="o">✓ bin/nexadmin-server</span></span>
 <span class="tl"><span class="p">$</span> ./bin/nexadmin-server start</span>
-<span class="tl"><span class="o">{{.T "home.term.setup"}}  http://localhost:8080/setup</span></span>
+<span class="tl"><span class="o">{{.T "home.term.setup"}}  http://localhost:8080/admin/setup</span></span>
 <span class="tl"><span class="o">{{.T "home.term.token"}}  8f3a-…{{.T "home.term.tokenNote"}}</span></span>
 <span class="tl"><span class="p">$</span> <span class="c">{{.T "home.term.hint"}}</span><span class="caret" aria-hidden="true"></span></span></code></pre>
       </div>

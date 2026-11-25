@@ -313,6 +313,15 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	// head 注入限长：统计脚本几十行足够，超长多半是误把整页代码粘进来
 	row.HeadCode = trimLen(f.HeadCode, 5000)
 	row.TitleSuffix = trimLen(f.TitleSuffix, 100)
+	row.HeroImageURL = trimLen(f.HeroImageURL, 500)
+	row.HeroImageDarkURL = trimLen(f.HeroImageDarkURL, 500)
+	for _, u := range []string{row.HeroImageURL, row.HeroImageDarkURL} {
+		if u != "" && !footerURLValid(u, false) {
+			return nil, response.BadRequest("website.url_invalid")
+		}
+	}
+	// robots 允许运营整段覆盖（如禁爬某目录、加多条 User-agent）；限长防误粘整页文本。
+	row.RobotsTxt = trimLen(f.RobotsTxt, 5000)
 	// 设为首页只存 slug 不存 ID：页面被删时首页自动回退内置首页，不留悬空引用。
 	// 校验只要求页面存在（草稿也行——发布后首页即生效）；下线后在首页自动回退，不用改设置。
 	row.HomeSlug = trimLen(f.HomeSlug, 64)
@@ -363,8 +372,17 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	if f.MarketEnabled != nil {
 		row.MarketEnabled = *f.MarketEnabled
 	}
+	if f.ChatEnabled != nil {
+		row.ChatEnabled = *f.ChatEnabled
+	}
 	if f.MessageNotifyEmail != nil {
 		row.MessageNotifyEmail = *f.MessageNotifyEmail
+	}
+	row.MessageRecipientEmail = trimLen(f.MessageRecipientEmail, 128)
+	if row.MessageRecipientEmail != "" {
+		if _, err := mail.ParseAddress(row.MessageRecipientEmail); err != nil || !emailReg.MatchString(row.MessageRecipientEmail) {
+			return nil, response.BadRequest("website.message_recipient_invalid")
+		}
 	}
 	if f.ContactConsent != nil {
 		row.ContactConsent = *f.ContactConsent
@@ -448,13 +466,17 @@ func navHrefValid(href string) bool {
 	return strings.HasPrefix(p, "/p/") && len(p) > len("/p/")
 }
 
+func navHrefPath(href string) string {
+	href = strings.TrimSpace(href)
+	if i := strings.IndexAny(href, "?#"); i >= 0 {
+		href = href[:i]
+	}
+	return stripLangPrefix(href)
+}
+
 // navPageSlug 取出站内页面链接里的 slug（/p/about、/en/p/about?x=1 都可）。
 func navPageSlug(href string) (string, bool) {
-	p := strings.TrimSpace(href)
-	if i := strings.IndexAny(p, "?#"); i >= 0 {
-		p = p[:i]
-	}
-	slug, ok := strings.CutPrefix(stripLangPrefix(p), "/p/")
+	slug, ok := strings.CutPrefix(navHrefPath(href), "/p/")
 	if !ok || slug == "" {
 		return "", false
 	}
@@ -1536,11 +1558,11 @@ func (s *Service) RollbackPostVersion(ctx context.Context, postID idgen.ID, vers
 
 // SiteData 汇总渲染官网所需的全部启用内容。
 type SiteData struct {
-	Setting  *Setting
-	Navs     []Nav // 已组好的导航树：父级不可见的节点连同子树已丢弃
+	Setting    *Setting
+	Navs       []Nav // 已组好的导航树：父级不可见的节点连同子树已丢弃
 	FooterNavs []Nav // 页脚导航树：顶级项 = 一列（标题），子项 = 该列链接
-	Features []Feature
-	Posts    []Post // 最新已发布新闻（首页取 3 条，列表页取 20 条）
+	Features   []Feature
+	Posts      []Post // 最新已发布新闻（首页取 3 条，列表页取 20 条）
 }
 
 func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*SiteData, error) {

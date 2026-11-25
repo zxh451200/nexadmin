@@ -62,8 +62,13 @@ export interface SiteSettings {
   headCode: string
   /** 站点规范域名（如 https://www.example.com）：sitemap/robots/JSON-LD/canonical 的绝对地址优先用它；空 = 按请求推导 */
   siteOrigin: string
-  /** <title> 后缀，替换默认的「 - 站点名」；空 = 沿用内置组合 */
+  /** <title> 后缀，替换内页的「 - 站点名」；首页标题用「站点名 — 主标题」的另一套口径，不受它影响 */
   titleSuffix: string
+  /** 首页主视觉覆盖：浅色用 heroImageUrl，深色优先 heroImageDarkUrl；空 = 主题内置图 */
+  heroImageUrl: string
+  heroImageDarkUrl: string
+  /** 整段替换 robots.txt；支持 {sitemap} 占位，空 = 服务端生成默认规则 */
+  robotsTxt: string
   /** 被设为首页的单页 slug；空 = 内置首页。页面被删或未发布时官网自动回退内置首页 */
   homeSlug: string
   /** 公开站主题 id（主题插件注册）；空 = 内置 default 主题。主题被卸载时官网自动回退 default */
@@ -94,8 +99,11 @@ export interface SiteSettings {
   purchaseEnabled: boolean
   /** 办公地点列表（联系页地点卡 + 地图打点）；坐标经后台地图选点或手填 */
   offices: WebsiteOffice[]
-  /** 新留言是否抄送一封到 contactEmail（SMTP 未配置时自动跳过） */
+  /** 新留言是否抄送邮件（SMTP 未配置时自动跳过）；收件人优先 messageRecipientEmail，空则回退 contactEmail */
   messageNotifyEmail: boolean
+  messageRecipientEmail: string
+  /** 在线客服挂件是否注入页面；关掉后 DOM 与专用脚本都不下发 */
+  chatEnabled: boolean
   /** 留言是否必须先勾选「已阅读并同意隐私政策」 */
   contactConsent: boolean
   /** 被同意的政策地址：站内 /p/xxx 或完整 https:// 地址（开启时必填） */

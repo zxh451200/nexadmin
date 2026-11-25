@@ -33,9 +33,8 @@ import { downloadFilesZip, useDeleteFiles, useFileList, useMoveFiles, useUpdateF
 
 const PAGE_SIZE_GRID = 24
 const CATEGORIES = ['image', 'video', 'doc', 'other'] as const
-/** 卡片最小 190px 左右；再往上加列会让文件名和三行元信息全被截断 */
-// 铺满后列数随宽度自适应（每列 ≥190px），卡片尺寸恒定、窗口越宽列越多；窄屏维持 2 列
-const GRID_CLASS = 'grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]'
+// 窄屏横向单列，避免两列卡片把文件名与元信息压到不可读宽度
+const GRID_CLASS = 'grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:gap-4 md:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]'
 
 interface Filters {
   keyword: string
@@ -492,8 +491,8 @@ export default function FilePage() {
                       const checked = selected.includes(f.id)
                       return (
                         <li key={f.id} data-file-id={f.id}>
-                          <Card className={cn('group h-full overflow-hidden transition-shadow hover:shadow-md motion-reduce:transition-none', checked && 'ring-2 ring-primary')}>
-                            <div className="relative aspect-4/3 overflow-hidden border-b border-border">
+                          <Card className={cn('group flex h-full min-h-28 overflow-hidden transition-shadow hover:shadow-md motion-reduce:transition-none sm:block', checked && 'ring-2 ring-primary')}>
+                            <div className="relative h-full w-28 shrink-0 overflow-hidden border-e border-border sm:aspect-4/3 sm:h-auto sm:w-auto sm:border-b sm:border-e-0">
                               <button
                                 type="button"
                                 aria-label={t('fileMgr.selectFile', { name: f.name })}

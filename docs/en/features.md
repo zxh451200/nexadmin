@@ -5,7 +5,7 @@ summary: Look up a capability by topic — modules, login, open platform and quo
 
 This is a **reference for verification**, not a tutorial. Use it to answer "does this exist, who can use it, which endpoint serves it".
 
-The delivery baseline: **30 built-in modules**, **4 setup steps**, **3 database dialects** (MySQL / MariaDB / PostgreSQL), and **1 binary to deploy** (with the frontend embedded).
+The delivery baseline: **30 built-in modules**, a **6-step setup wizard**, **3 database dialects** (MySQL / MariaDB / PostgreSQL), and **1 binary to deploy** (with the frontend embedded).
 
 | To look up | Read |
 | --- | --- |

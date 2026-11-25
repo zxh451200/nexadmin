@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="tk-hero" id="top-products">
   <div class="tk-hero-media">
-    <img src="/website-assets/theme/torkon/assets/tk-hero-clean.webp" alt="{{.TF "theme.torkon.heroShotAlt" .SiteName}}" width="1536" height="936" decoding="async" fetchpriority="high">
+    <img src="{{if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/theme/torkon/assets/tk-hero-clean.webp{{end}}" alt="{{.TF "theme.torkon.heroShotAlt" .SiteName}}" width="1536" height="936" decoding="async" fetchpriority="high">
   </div>
   <div class="tk-wrap tk-hero-inner">
     <!-- 左侧竖栏：参考稿的标志性布局，站点导航竖排 + 红色询价按钮 -->

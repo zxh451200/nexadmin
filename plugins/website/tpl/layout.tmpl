@@ -119,7 +119,7 @@
       </div>
       {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
-      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
+      {{if .ShowBuiltinDocs}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
     </nav>
     <div class="topbar-actions">
       <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{.T "layout.theme"}}" title="{{.T "layout.theme"}}">
@@ -196,8 +196,11 @@
       {{end}}
       {{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
-      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
-      {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+      {{if .ShowBuiltinDocs}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
+      <div class="mobile-lang">
+        <span class="mobile-lang-label">{{.T "layout.lang"}}</span>
+        {{range .Languages}}{{if eq .Code $.Lang.Code}}<span class="mobile-lang-current" aria-current="true">{{.Label}}</span>{{else}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}{{end}}
+      </div>
       <a href="/admin/login">{{.T "layout.login"}}</a>
     </nav>
   </div>
@@ -280,6 +283,7 @@
     <a class="footer-sitemap" href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
   </div>
 </footer>
+{{if .ChatEnabled}}
 <!-- 在线客服挂件：默认隐藏，由 site.js 探测 /api/v1/plugins/im/visitor/status 后再显示（没装 im 插件时整组 404）。 -->
 <div class="chat" data-chat data-online="1" hidden>
   <button class="chat-launcher" type="button" data-chat-open aria-haspopup="dialog" aria-expanded="false" aria-controls="chat-panel" aria-label="{{.T "chat.open"}}">
@@ -365,10 +369,11 @@
     </div>
   </section>
 </div>
+{{end}}
 <script type="application/json" id="site-i18n">{{.JSStrings}}</script>
 <script type="application/json" id="site-langs">{{.LangsJSON}}</script>
-<script src="/website-assets/chat-widget.js?v={{assetV "chat-widget.js"}}" defer></script>
+{{if .ChatEnabled}}<script src="/website-assets/chat-widget.js?v={{assetV "chat-widget.js"}}" defer></script>{{end}}
 <script src="/website-assets/site.js?v={{assetV "site.js"}}" defer></script>
-<script src="/website-assets/chat-enhance.js?v={{assetV "chat-enhance.js"}}" defer></script>
+{{if .ChatEnabled}}<script src="/website-assets/chat-enhance.js?v={{assetV "chat-enhance.js"}}" defer></script>{{end}}
 </body>
 </html>{{end}}

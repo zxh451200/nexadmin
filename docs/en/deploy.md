@@ -194,12 +194,17 @@ Server subcommands (defined by `cmd/server/main.go`):
 | `status` | Prints state / pid / listen address / initialized; when stopped prints `state: stopped` |
 | `init --config <file>` | Non-interactive initialization (§3.2) |
 | `migrate [--tenant platform-or-tenantID] [--status] [--dry-run] [--mark-applied <scope>/<file>] [--unmark <scope>/<file>] [--yes]` | Migrations (§5); omitting tenant defaults to platform plus all configured tenants |
+| `recover-plugin-change --status` | List source-and-binary recovery transactions under `data/plugins/recovery/` |
+| `recover-plugin-change --rollback --yes` | With the service stopped, roll back the sole unresolved `prepared` / `activating` / `recovery_required` transaction; multiple unresolved records are rejected. With none unresolved, select the newest `ready` record. Databases, licenses and user data are not rolled back automatically |
+| `recover-plugin-change --accept-current --yes` | With the service stopped, first roll back every unresolved transaction, then accept the current sources and binary outside the newest `ready` / `restored` recovery point, retire the rollback point and clear its hash gate |
 | `backup --output <new dir>` | Full SQL bundle of the platform and all configured tenants (§7.3) |
 | `restore-bundle --dir <dir> [--tenant <ID>] (--dry-run or --yes)` | Validated sequential restore; service must be stopped; exactly one of the two execution flags (§7.3) |
 | `restore <backup file> [--yes] [--dry-run] [--sha256 <value>] [--platform-only]` | Single platform-database restore; isolation mode requires explicit platform-only (§7) |
 | `reinit [--dry-run] [--platform-only]` | Factory reset; isolation mode requires explicit platform-only, shared resources still cleaned (§8) |
 
 During deployment acceptance, check foreground and background lifecycle separately, including PID files, logs, listening ports and initialization state. Do not use `stop` for processes launched by another supervisor.
+
+`recover-plugin-change --rollback --yes` and `--accept-current --yes` acquire `.nexadmin-plugin.lock` and serialize with install, remove and rebuild. The startup recovery gate also refuses to start a copied binary or old `.old` copy from a non-canonical path.
 
 ## 5. Database migrations
 
@@ -215,7 +220,8 @@ The migration runner (`core/migrate`) executes three classes under one rule set;
 
 - `<engine>` is `mysql`, `mariadb` or `postgres`; MariaDB falls back to the `mysql` directory when it has no dedicated one. Use the release's actual migration files rather than a fixed file count; the business directory gets `mysql`, `mariadb`, `postgres` from `nexadmin add module`.
 - Within a scope, files run in name order, skipping files already recorded; scope order is framework → business → plugins.
-- SQL is split on semicolons; `--` comment lines are ignored — do not put semicolons inside string literals in migration files.
+- SQL is tokenized with the current database engine's lexical rules and ordinary comments are removed: single quotes, double quotes, backticks and escapes are recognized, and PostgreSQL dollar quotes are recognized too. Semicolons inside quotes / dollar quotes are preserved; MySQL / MariaDB executable comments are preserved for the database to interpret. Strings, default expressions and PostgreSQL `DO` blocks may therefore contain semicolons.
+- `DELIMITER` is a client directive, and stored-procedure / function / trigger / event bodies cannot be split reliably, so the runner rejects these constructs explicitly. Rewrite them as ordinary DDL, or disable automatic migration and execute them with the database's native client.
 - PostgreSQL wraps each file in a transaction with full rollback on failure; MySQL / MariaDB DDL cannot roll back — statements run one by one, and failure reports `executed N/M statements, statement N+1 failed, file not recorded, repair manually first`.
 - Multiple instances starting simultaneously rely on database-level locks (MySQL / MariaDB `GET_LOCK`, PostgreSQL `pg_try_advisory_lock`); after acquiring the lock the version table is re-read and work completed by other instances is skipped; the lock wait caps at 2 minutes with `migrate: migration lock wait timed out (2m0s), another instance may still be migrating`.
 - `INSERT` / `UPDATE` / `DELETE` inside migrations only WARN and do not block (factory data belongs to module seeds at startup, not migrations).
@@ -227,7 +233,7 @@ The migration runner (`core/migrate`) executes three classes under one rule set;
 
 The above describes platform migrations. With `database.isolation.enabled`, tenant-database auto-migration for an initialized service requires `app.auto_migrate && database.isolation.auto_migrate` (the latter default `false`); with either off, tenant pending migrations are still checked and pending items refuse startup. The wizard / `init` explicitly runs platform migrations; tenant parts only run or are checked per isolation.auto_migrate; manual `migrate` is not restricted by the automatic switches. The platform runs framework and platform-target migrations; tenants run business and tenant-target migrations — additional migration sources without an explicit target are refused; each database records and locks separately — not an atomic cross-database migration — and existing data is never moved.
 
-`migrate --tenant platform` processes only the platform; `migrate --tenant <canonical tenant ID>` only that configured tenant; combinable with `--status` and `--dry-run`; omitted, it processes the platform then all configured tenants. With separate databases, `--mark-applied` / `--unmark` must specify `--tenant` to avoid mis-marking several databases. `migrate --dry-run` still needs a database connection and migration state reads — it is not an offline check, unlike `restore-bundle --dry-run` below which runs no database commands.
+`migrate --tenant platform` processes only the platform; `migrate --tenant <canonical tenant ID>` only that configured tenant; combinable with `--status` and `--dry-run`; omitted, it processes the platform then all configured tenants. With separate databases, `--mark-applied` must specify `--tenant` to avoid mis-marking several databases. `migrate --dry-run` still needs a database connection and migration state reads — it is not an offline check, unlike `restore-bundle --dry-run` below which runs no database commands.
 
 | Command | Purpose |
 | --- | --- |
@@ -235,9 +241,9 @@ The above describes platform migrations. With `database.isolation.enabled`, tena
 | `nexadmin-server migrate --status` | Lists per scope `applied` / `manually marked` / `pending` / `CHECKSUM mismatch` (each line with the first 12 checksum chars), summarizing `applied N, pending N, checksum mismatches N`; non-zero exit on mismatches |
 | `nexadmin-server migrate --dry-run` | Lists files and statement counts only, touching nothing: `N pending migrations in total (dry-run, database untouched)` |
 | `nexadmin-server migrate --mark-applied <scope>/<file> [--yes]` | After a mid-migration failure (MySQL DDL cannot roll back) that you repaired manually, mark the file applied without running any of its SQL; interactive confirm, default N, `--yes` skips. `<scope>` is `framework`, `business` or `plugin:<id>` |
-| `nexadmin-server migrate --unmark <scope>/<file> [--yes]` | Revoke a manual mark; the file becomes pending again; only manual marks can be revoked — real executions refuse |
+| `nexadmin-server migrate --unmark <scope>/<file> [--yes]` | Remove a `source=manual` mark so the file becomes pending again; real executions, `legacy` and `adopt` records cannot be removed |
 
-`--mark-applied` refuses: files missing on disk, records already in the version table (`already recorded, refusing duplicate mark`), and records with checksum mismatches. Marking logs the operator (system user@host) and time. `--mark-applied` and `--unmark` cannot be combined. When uninitialized, all `migrate` variants print "nothing to migrate".
+`--mark-applied` refuses: files missing on disk, records already in the version table (`already recorded, refusing duplicate mark`), and records with checksum mismatches. It stores `source=manual` in `sys_migration` to distinguish the record from real execution and logs the operator (system user@host) and time. `--unmark` removes only manual marks; the next migration will execute the file's SQL for real, so confirm the database does not need it first. When uninitialized, all `migrate` variants print "nothing to migrate".
 
 Migration commands (`migrate`, `--status`, etc.) need a real database. Validate execution, failure recovery and repeat runs on the target engine; uninitialized "nothing to migrate" output is not acceptance.
 
@@ -245,11 +251,22 @@ Migration commands (`migrate`, `--status`, etc.) need a real database. Validate 
 
 - Each migration file's fingerprint is the sha256 of its content (with `\r\n` normalized to `\n` to avoid git autocrlf false positives), written to the version table on first execution.
 - If an executed file's content changes later (violating "append-only"), both startup and `migrate` refuse: `migration file modified after execution (violates append-only), refusing to start: framework/xxx.sql, .... Restore these files and put the needed changes into a new migration file`. Fix: restore the file; add the change as a new numbered SQL.
-- Never "fix" a checksum by editing the version table; when you truly need to skip a file, use `--mark-applied`.
+- Never "fix" a checksum by editing the version table. `--mark-applied` applies only to an on-disk migration with no existing version record whose entire contents you completed manually; an existing record with a checksum mismatch requires restoring the file and cannot be cleared by re-marking.
 
-### 5.4 Baseline for legacy databases
+### 5.4 Baselines for existing databases
 
-When a scope has no records at all in the version table (e.g. a database whose tables predate the framework), unrecorded files are treated as a "baseline": for `CREATE TABLE` statements whose target table already exists, that table and following index statements are skipped; if every statement in a file is skipped it is recorded without executing, logged as `migration recorded (table exists, baseline)`, shown by `--dry-run` as `will record <scope>/<file> (table exists, not executed)`. Statements before the first `CREATE TABLE` cannot be judged and run normally. After baselining, the scope returns to strict mode. Plugin records from the old `sys_plugin_migration` table are imported directly.
+The runner **no longer infers a baseline from existing tables or indexes**. A file absent from `sys_migration` is pending and keeps all of its SQL; an existing `CREATE TABLE` target is not skipped and may produce a duplicate-object error. Only these sources mean "the file's SQL was not run, but the file may count as complete":
+
+| Source | Trusted evidence | Behavior |
+| --- | --- | --- |
+| Real execution | A matching full checksum in `sys_migration` with an empty `source` | Normally skipped; a checksum mismatch is refused |
+| `legacy` | An **exact plugin-ID + migration-filename match** in the old `sys_plugin_migration` ledger | Imports only matching plugin files as `source=legacy`; runs no SQL and never trims statements based on table existence |
+| `manual` | CLI `migrate --mark-applied`, after the operator confirms the whole file was completed manually | Stored as `source=manual`; runs no SQL |
+| `adopt` | The program API `(*migrate.Runner).AdoptBaseline`, after an operator explicitly adopts the whole file | Stored as `source=adopt`; runs no SQL |
+
+`AdoptBaseline(ref, actor, reason, confirm)` requires non-empty `actor` and `reason` values plus caller-supplied interactive confirmation. Before confirming, verify that **every structure described by the file, including later `ALTER` statements and indexes**, matches the database. `sys_migration` stores only the normal record and `adopt` source; actor, reason, UTC time and full checksum go to the audit log. This is not an independent tamper-proof audit table. The API has **no CLI entry point**, and `--unmark` cannot remove an `adopt` record.
+
+Back up an existing database before upgrading and review each file with `migrate --status` / `--dry-run`. Adopt only when the whole file already matches; for a partial match, repair the differences or append a new migration instead. A manual mark can be removed with `--unmark`; `adopt` and real-execution records cannot be removed this way. If either was marked by mistake, stop migration and repair it through a controlled change process with a retained disposition record.
 
 ## 6. Data that needs separate backups
 
@@ -261,7 +278,7 @@ Database backup (§7) covers only the database. The following are not included a
 | `data/jwt.secret` (or `auth.jwt_secret`) | JWT signing key | Lost, it regenerates and all users must log in again |
 | `data/sso-keys/` | SSO (OIDC Provider) signing key directory | The published JWKS comes from here; behavior when lost: unverified |
 | `data/uploads/` | Locally stored uploads | With `storage.driver=s3`, files live in object storage, not here |
-| `data/licenses/` | Plugin license files | |
+| `data/licenses/` | Plugin license files and the node-local disable list `disabled.json` | The list is unioned with `disabled_plugins`; config wins. Multi-node deployments do not sync it automatically |
 | `config/config.yaml` | Site configuration (contains the database password) | Mode should be 0600 |
 
 ## 7. Backup & restore
@@ -474,7 +491,10 @@ Common error patterns are listed below. Exact wording can vary by version, opera
 | `migration file modified after execution (violates append-only), refusing to start: framework/xxx.sql, .... Restore these files...` | An executed migration's content changed (including hand-editing framework files or overwriting with a different version) | Restore the file; write new changes into a new numbered SQL; check `migrate --status` for `CHECKSUM mismatch` files |
 | `N pending migrations (...), app.auto_migrate=false, run nexadmin-server migrate first` | `auto_migrate=false` with new migrations after upgrade | Run `nexadmin-server migrate` |
 | `migrate: cannot find framework migration directory <path> (engine <engine>; run from the project root or set NEXADMIN_MIGRATIONS_DIR)` / `migrate: cannot find framework migration directory migrations/framework (...)` | Missing `migrations/` directory, or no subdirectory for the engine | <br>Place `migrations/` under the working directory (or an ancestor / beside the executable), or set `NEXADMIN_MIGRATIONS_DIR`; don't forget it in systemd / container deployments |
-| `migrate: <scope>/<file>: executed N/M statements, statement N+1 failed, file not recorded, repair manually first: ...` (MySQL / MariaDB) | DDL cannot roll back; the file half-ran | Repair the database manually then mark with `migrate --mark-applied <scope>/<file>`; PostgreSQL reports `statement N/M failed, file rolled back entirely` — fix and re-run |
+| `migrate: <scope>/<file>: executed N/M statements, statement N+1 failed, file not recorded, repair manually first: ...` (MySQL / MariaDB) | DDL cannot roll back; the file half-ran | Repair the database manually then mark with `migrate --mark-applied <scope>/<file>`; PostgreSQL reports `statement N/M failed, file rolled back entirely` — fix and re-run. If all SQL ran but version recording failed, MySQL / MariaDB requires checking the real schema and repairing the version table manually; PostgreSQL rolled back the whole file transaction |
+| A pending migration reports that a table / index / other object already exists | `sys_migration` has no matching record; the runner no longer infers a baseline from table existence | Compare the whole migration with the real schema. If all of it matches, explicitly adopt it through the `AdoptBaseline` API; for a partial match, repair the differences or append a new migration — do not just skip it |
+| Plugin routes return HTTP 503 with `Retry-After: 1` | `Starter.Start` has not finished; routes are registered but blocked by the readiness gate | Retry shortly and inspect startup logs. If `Start` returns an error or panics, `needRestart=true` is set, `/plugins/active` and menus become unavailable, and a restart is required after fixing the cause |
+| A marketplace install / update / rebuild fails | Failure while landing sources, replacing dependencies or build artifacts, or replacing the executable | On detectable failure, this run's sources, dependency manifests, frontend artifacts, install ledger and replaced exe are restored; verify the task log. Use `nexadmin-server recover-plugin-change --status` for an unresolved transaction, then stop the service and run `--rollback --yes` or `--accept-current --yes`. Databases, licenses, uploads and user data are not automatically rolled back. After success, an old executable copy alone is not a complete recovery point. Unresolved transactions block startup and new marketplace changes; the latest completed record also makes startup verify that the running program path matches the canonical exe and that its SHA matches, so starting a copy or old `.old` binary is refused |
 | `migrate: migration lock wait timed out (2m0s), another instance may still be migrating` | Another instance held the lock over 2 minutes | Check whether other instances are stuck; the MySQL lock is `nexadmin_migrate_<dbname>`, auto-released when the session ends |
 | `cache: redis/valkey at <addr> is unavailable: ...` / `config: cache.addr is required when cache.driver is redis` | Cache unreachable / address missing | Check `cache.*` |
 | `auth: auth.jwt_secret must be at least 32 characters` | Explicit JWT secret too short | At least 32 characters, or leave empty to auto-generate |
@@ -503,6 +523,9 @@ The following still need acceptance in the target environment; builds, mocks and
 - Docker images, Compose, systemd, Windows/macOS lifecycle scripts and file permissions. Deployment examples are not validated installations.
 - Browser setup and login, rejection of non-super-admin calls to platform-global management APIs, tenant isolation, plugin installation and license lifecycle. LDAP/AD/CAS integrations require real services.
 - For website deployments, check light/dark themes, language switching and documentation pages. Edit technical documents only in `docs/`; rebuild and deploy after embedded Markdown or source-dictionary changes. Use the CMS for marketing pages; restart after changes to the `sys_language` language set or route prefixes.
+- Upload separate light/dark hero images and verify that a light-only setting also supplies the dark fallback, while two empty fields restore the theme defaults. After saving a robots.txt override, `/robots.txt` returns that content with `{sitemap}` replaced by the site's absolute sitemap URL; clearing it restores the generated rules including Sitemap.
+- With the website chat switch off, the page contains no chat DOM and loads neither `chat-widget.js` nor `chat-enhance.js`; re-enable it with IM available to restore the widget. A message-notification recipient overrides the contact email; an empty recipient still falls back to the contact email.
+- On mobile, Live chat and Tickets provide a direct return to the queue. Invalid, unauthorized or failed `?conv=` / `?ticket=` deep links also show a return action that clears the URL parameter without immediately reopening stale state; browser back/forward must synchronize the selected item.
 
 ## 15. Windows runtime notes
 

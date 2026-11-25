@@ -70,6 +70,12 @@ func cmdRemove(args []string, out io.Writer) error {
 		return err
 	}
 	return market.WithProjectLock(root, func() error {
-		return market.Remove(root, fs.Arg(0), market.RemoveOptions{Purge: *purge, AllowUnmanaged: *allowUnmanaged}, out)
+		err := market.ChangeSources(root, fs.Arg(0), func() error {
+			return market.Remove(root, fs.Arg(0), market.RemoveOptions{Purge: *purge, AllowUnmanaged: *allowUnmanaged}, out)
+		})
+		if err != nil && *purge {
+			return fmt.Errorf("%w；purge 已执行的数据库删除不在自动回退范围内", err)
+		}
+		return err
 	})
 }

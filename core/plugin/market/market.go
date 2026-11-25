@@ -355,15 +355,22 @@ func exists(p string) bool {
 	return err == nil
 }
 
-// Install 校验清单 -> 拷贝 backend/ 与 web/ -> 更新 plugins.go 和安装指纹。返回插件 id。
+// Install 校验清单 -> 拷贝 backend/ 与 web/ -> 更新 plugins.go 和安装指纹，并建立独立恢复事务。
 func Install(root, src string, opts InstallOptions) (string, error) {
 	return InstallSub(root, src, "", opts)
 }
 
-// InstallSub 支持从多插件包（目录或 monorepo zip）的 sub 子目录安装。
-// 与 CheckInstall 共用完整检查；获准覆盖时永久保留旧源码，写入失败时恢复本次文件改动。
-// 调用方应串行执行同一项目的源码变更（批量操作可外包 ChangeSourcesBatch）。
+// InstallSub 为单插件安装建立恢复事务；批量安装须由 ChangeSourcesBatch 串行调用 InstallSubInTransaction。
 func InstallSub(root, src, sub string, opts InstallOptions) (string, error) {
+	return installSub(root, src, sub, opts, true)
+}
+
+// InstallSubInTransaction 仅用于 ChangeSourcesBatch 已覆盖插件源码路径的外层事务，避免嵌套恢复事务。
+func InstallSubInTransaction(root, src, sub string, opts InstallOptions) (string, error) {
+	return installSub(root, src, sub, opts, false)
+}
+
+func installSub(root, src, sub string, opts InstallOptions, transactional bool) (string, error) {
 	plan, err := prepareInstall(root, src, sub, opts)
 	if err != nil {
 		return "", err
@@ -381,12 +388,14 @@ func InstallSub(root, src, sub string, opts InstallOptions) (string, error) {
 		}
 		fmt.Fprintf(installWarn, "插件 %s 覆盖前源码备份: %s（不含数据库和授权）\n", man.ID, backup)
 	}
-	// 单个安装也有回滚边界；外层批量回滚另外保护构建可能改写的依赖和产物。
-	err = changeSourcePaths(root, []string{
-		"plugins/" + man.ID, "web/src/plugins/" + man.ID, "plugins/plugins.go", "data/plugins/installed.json",
-	}, func() error {
-		return applyInstall(root, plan)
-	})
+	apply := func() error { return applyInstall(root, plan) }
+	if transactional {
+		err = changeSourcePaths(root, []string{
+			"plugins/" + man.ID, "web/src/plugins/" + man.ID, "plugins/plugins.go", "data/plugins/installed.json",
+		}, apply)
+	} else {
+		err = apply()
+	}
 	if err != nil {
 		if backup != "" {
 			return "", fmt.Errorf("%w；覆盖前源码备份: %s", err, backup)

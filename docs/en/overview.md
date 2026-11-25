@@ -78,8 +78,8 @@ These pages come from plugins installed on demand — you see the ones you insta
 
 - **Identity verification**: ID number validation and name + ID two-factor checks, with a ledger of results.
 - **Payments**: integrations with Alipay, WeChat Pay and other channels. Payment orders, refunds, reconciliation, payouts and settlement all live here, and every money movement is recorded.
-- **Live chat**: the agent console behind the chat bubble on the website. Visitor messages are auto-assigned or queued; an agent claims and replies. Transfers, quick replies, internal notes, satisfaction ratings, conversation merging and export are supported.
-- **Tickets**: the full submit → assign → handle → close flow for customer issues. Priorities, SLA deadlines, internal notes, attachments and automation rules.
+- **Live chat**: the agent console behind the chat bubble on the website. Visitor messages are auto-assigned or queued; an agent claims and replies. Transfers, quick replies, internal notes, satisfaction ratings, conversation merging and export are supported. Mobile switches between queue and detail, synchronizes selection with the URL and browser history, and clears deep links when the current conversation is closed or deleted.
+- **Tickets**: the full submit → assign → handle → close flow for customer issues. Priorities, SLA deadlines, internal notes, attachments and automation rules. Mobile keeps a return path between queue and detail, including invalid or failed detail deep links.
 - **Approval center**: approvals for business processes (leave, expenses). Admins draw the flow on a BPMN canvas and instances follow it; or-sign / all-sign, timeout escalation, withdrawal and rollback.
 - **Device monitoring**: connect industrial devices such as inverters and PLCs; live readings, historical curves, threshold alarms and remote commands.
 - **Customer master data**: customer profiles, contacts, follow-up records and opportunity ledger; align members from external systems (hotels, shops) to the same customer.
@@ -89,11 +89,11 @@ These pages come from plugins installed on demand — you see the ones you insta
 Manage the corporate website (the public site visitors browse without signing in). The first item in this group, "Open website", opens the public site in a new tab:
 
 - **News / Pages**: the site's news and static pages (About us and so on), both with multiple languages, scheduled publishing and draft preview.
-- **Products / Product categories**: publish and unpublish products, galleries, price and MOQ; categories support multiple levels. With Alibaba.com credentials configured, products can be pushed to Alibaba in one click.
+- **Products / Product categories**: publish and unpublish products, galleries, price and MOQ; categories support multiple levels.
 - **Messages**: enquiries submitted from the "Contact" page — unread badges, a three-state workflow (to follow up / followed up / ignored), batch actions and export.
 - **Navigation**: the site's top navigation, supporting external links and internal pages.
 - **Features**: the copy and icons of the "product features" cards on the home page.
-- **Site settings**: site name, logo, home title, footer, SEO and privacy policy URL; "Default language" can follow the browser (first visit lands on the matching language) or pin one language to the root path (the previous default moves under a prefix; restart required).
+- **Site settings**: site name, logo, home title, separate light/dark hero images (dark falls back to light; empty fields restore theme defaults), footer, SEO including a whole-file robots.txt override (clear it to restore defaults), notification recipients (empty falls back to the contact email), a website-chat switch (off removes both chat DOM and scripts), and privacy policy URL. "Default language" can follow the browser (first visit lands on the matching language) or pin one language to the root path (the previous default moves under a prefix; restart required).
 
 ## Profile
 

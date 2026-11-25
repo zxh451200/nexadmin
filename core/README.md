@@ -54,12 +54,14 @@
 | --- | --- | --- | --- |
 | `metrics` | Prometheus 指标（`/metrics`，token/回环保护） | `metrics.enabled` / `metrics.token` 配置 | `metrics/` |
 | `apidoc` | 运行时接口文档（OpenAPI 3.0.3 + 路由清单），自动跟踪模块路由 | `GET /openapi.json` | `apidoc/` |
-| `migrate` | 迁移运行器（checksum、锁、baseline、mark-applied） | `nexadmin-server migrate` | `migrate/` |
+| `migrate` | 迁移运行器（checksum、锁、引擎感知 SQL 分词、显式基线采纳与 mark-applied；不按表存在推断） | `nexadmin-server migrate`；存量对齐用 `AdoptBaseline` 或 `--mark-applied` | `migrate/` |
 | `openapi` | 开放平台：PAT、应用签名、Webhook、事件 | 见功能清单 §3 | `openapi/` |
-| `plugin` | 插件管理器：安装/卸载/授权闸门/热挂载/市场下载 | `nexadmin plugin ...` | `plugin/` |
+| `plugin` | 插件管理器：安装/卸载/授权闸门/热挂载/市场下载、Starter 就绪与持久恢复事务 | `nexadmin plugin ...`；恢复用 `nexadmin-server recover-plugin-change --status/--rollback/--accept-current` | `plugin/` |
 | `cache` | 缓存抽象（memory / redis）+ GetDel/Incr/Lease 原子原语 | `d.Cache` | `cache/` |
 | `testkit` `testdata` | 测试辅助（构造 App/固件）；当前仓库无自动化用例引用 | `testkit/` |
 | `health`（health.go） | `/healthz` 与健康详情（db/cache/storage/migrations/plugins/disk） | `GET /healthz`、`GET /monitor/health` | `health.go`、`health_probes.go` |
+
+Starter 完成前，插件路由已注册但由就绪闸门返回 HTTP 503 与 `Retry-After: 1`，`/plugins/active` 与菜单不可用；`Start` 错误或 panic 会关闭本轮就绪并置 `needRestart=true`。菜单按已注册插件的运行时可用性过滤，未注册 ID 保持既有菜单数据兼容行为。市场源码变更与二进制替换使用持久恢复事务；未解决事务或最近完成记录的二进制 SHA 不匹配会阻止启动和新变更，启动时还会核对当前运行程序与事务 canonical exe 路径一致。停服后用 `nexadmin-server recover-plugin-change --status` 查看，再选择 `--rollback --yes` 或 `--accept-current --yes`；两种恢复写操作与安装、卸载、重建共用项目锁，选择规则见《部署与运维指南》。
 
 ## 常见"我想…"速查
 

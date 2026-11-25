@@ -90,7 +90,7 @@ export function MobileCardContent<T>({ columns, row, index, leading, actions, on
             </div>
           ))}
           {shownCols.length > 0 ? (
-            <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5">
+            <dl className="mt-2.5 grid grid-cols-1 gap-x-4 gap-y-2.5 min-[480px]:grid-cols-2">
               {shownCols.map((c) => (
                 <div key={c.key} className="min-w-0">
                   <dt className="text-xs text-muted-foreground">{c.title}</dt>

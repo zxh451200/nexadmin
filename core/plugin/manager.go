@@ -121,6 +121,7 @@ type entry struct {
 type pluginRun struct {
 	ctx    context.Context
 	cancel context.CancelFunc
+	ready  chan struct{}
 }
 
 // Manager 管理所有已 Register 的插件。
@@ -416,11 +417,39 @@ func (m *Manager) ActiveIDs() []string {
 	ids := []string{}
 	for _, id := range m.order {
 		e := m.entries[id]
-		if m.enabledLocked(e) && (e.live || e.sub.Load() != nil) {
+		if m.enabledLocked(e) && (e.live || e.sub.Load() != nil) && starterReady(e) {
 			ids = append(ids, id)
 		}
 	}
 	return ids
+}
+
+// starterReady 只判断 Starter 本轮是否完成启动；调用方持有 m.mu。
+func starterReady(e *entry) bool {
+	if _, ok := e.p.Module.(Starter); !ok {
+		return true
+	}
+	run := e.run
+	if run == nil {
+		return false
+	}
+	select {
+	case <-run.ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Registered 报告插件 id 是否存在于当前二进制；菜单可据此只对真实插件标记归属。
+func (m *Manager) Registered(id string) bool {
+	if !ValidID(id) {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.entries[id]
+	return ok
 }
 
 // MenuVisible 报告属于插件 id 的侧边栏菜单是否该显示。未注册的 id 返回 true（沿用现状：
@@ -438,7 +467,7 @@ func (m *Manager) MenuVisible(id string) bool {
 	}
 	m.refreshRevocationsLocked()
 	m.expireLocked(m.opts.Now())
-	return m.enabledLocked(e) && (e.live || e.sub.Load() != nil)
+	return m.enabledLocked(e) && (e.live || e.sub.Load() != nil) && starterReady(e)
 }
 
 // Root 返回插件管理使用的项目根目录（市场安装等文件操作需要）。
@@ -665,10 +694,42 @@ func (m *Manager) verifyRevocationOutside(size int64) (*Revocations, revFail, er
 // gate 是挂在插件路由组上的中间件。
 func (m *Manager) gate(e *entry) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if m.admit(c, e) {
+		if !m.admit(c, e) {
+			return
+		}
+		if _, ok := e.p.Module.(Starter); !ok {
 			c.Next()
+			return
+		}
+		m.mu.Lock()
+		run := e.run
+		m.mu.Unlock()
+		if run == nil {
+			pluginNotReady(c)
+			return
+		}
+		select {
+		case <-run.ready:
+			m.mu.Lock()
+			current := e.run == run
+			m.mu.Unlock()
+			if !current {
+				pluginNotReady(c)
+				return
+			}
+			if m.admit(c, e) {
+				c.Next()
+			}
+		default:
+			pluginNotReady(c)
 		}
 	}
+}
+
+func pluginNotReady(c *gin.Context) {
+	err := response.Unavailable("plugin.starting")
+	err.RetryAfter = 1
+	response.Fail(c, err)
 }
 
 // activeGuard lets registered authenticators and workers recheck their license
@@ -806,19 +867,27 @@ func (m *Manager) syncLifecycleLocked(e *entry) {
 		return
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	run := &pluginRun{ctx: ctx, cancel: cancel}
+	run := &pluginRun{ctx: ctx, cancel: cancel, ready: make(chan struct{})}
 	e.run = run
 	go m.runStarter(e, run, s, e.startDeps)
 }
 
 func (m *Manager) runStarter(e *entry, run *pluginRun, s Starter, d *core.Deps) {
 	if run.ctx.Err() != nil {
+		close(run.ready)
 		m.finishRun(e)
 		return
 	}
 	dd := *d
 	guard := m.activeGuard(e)
-	dd.PluginActive = func() bool { return run.ctx.Err() == nil && guard() }
+	dd.PluginActive = func() bool {
+		select {
+		case <-run.ready:
+			return run.ctx.Err() == nil && guard()
+		default:
+			return false
+		}
+	}
 	rt := lifecycle.NewRuntime(run.ctx, e.p.ID)
 	dd.PluginRuntime = rt
 	defer rt.Close()
@@ -846,8 +915,10 @@ func (m *Manager) runStarter(e *entry, run *pluginRun, s Starter, d *core.Deps) 
 		run.cancel()
 		m.log().Error("plugin Start failed; restart required", zap.String("plugin", e.p.ID), zap.Error(err))
 		m.mu.Unlock()
+		close(run.ready)
 		return
 	}
+	close(run.ready)
 	<-run.ctx.Done()
 	rt.Close()
 	if done == nil {
@@ -924,7 +995,7 @@ func (m *Manager) buildSub(e *entry, d *core.Deps) (err error) {
 	dd.PluginActive = m.activeGuard(e)
 	dd.Public = grp
 	dd.Admin = grp.Group("/admin", middleware.RequireSuper(), middleware.SkipTenant())
-	e.p.Module.Register(grp.Group("", middleware.RequireLogin()), &dd)
+	e.p.Module.Register(grp.Group("", m.gate(e), middleware.RequireLogin()), &dd)
 	for _, route := range sub.Routes() {
 		if !strings.HasPrefix(route.Path, "/api/v1/plugins/"+e.p.ID+"/") {
 			return fmt.Errorf("热挂载路由超出插件命名空间: %s", route.Path)
@@ -966,13 +1037,22 @@ func (m *Manager) Dispatch(c *gin.Context, id string) {
 	if !m.admit(c, e) {
 		return
 	}
+	m.mu.Lock()
+	ready := starterReady(e)
 	keys := make(map[string]any, len(c.Keys))
-	// gin v1.12 起 Context.Keys 是 map[any]any：插件侧登记表仍是 string 键，
-	// 非 string 键（框架/中间件自定义）不透传。
-	for k, v := range c.Keys {
-		if s, ok := k.(string); ok {
-			keys[s] = v
+	if ready {
+		// gin v1.12 起 Context.Keys 是 map[any]any：插件侧登记表仍是 string 键，
+		// 非 string 键（框架/中间件自定义）不透传。
+		for k, v := range c.Keys {
+			if s, ok := k.(string); ok {
+				keys[s] = v
+			}
 		}
+	}
+	m.mu.Unlock()
+	if !ready {
+		pluginNotReady(c)
+		return
 	}
 	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), keysCtxKey{}, keys))
 	sub.HandleContext(c)

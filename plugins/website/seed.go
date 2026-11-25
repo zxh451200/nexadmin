@@ -117,12 +117,12 @@ func defaultPosts() []Post {
 			Slug: "hello-nexadmin", Title: "NexAdmin 上线：以源码交付的后台管理框架",
 			Summary: "后端 Gin + GORM、前端 React + shadcn/ui，生产构建为单一二进制。" +
 				"框架区与用户区在目录上分开，`nexadmin upgrade` 升级不丢定制。",
-			Content:   "<p> NexAdmin 以源码交付：后端 Gin + GORM，前端 React + shadcn/ui，生产构建为单一二进制（前端产物通过 <code>-tags embedweb</code> 嵌入）。</p><p>多租户、RBAC 与五档数据范围、开放平台（访问令牌、应用签名、Webhook、MCP）、监控与国际化，全部出厂即备。</p><p>十分钟上手：构建、启动、打开 <code>/setup</code> 向导四步完成初始化。</p>",
+			Content:   "<p>NexAdmin 以源码交付：后端 Gin + GORM，前端 React + shadcn/ui，生产构建为单一二进制（前端产物通过 <code>-tags embedweb</code> 嵌入）。</p><p>多租户、RBAC 与五档数据范围、开放平台（访问令牌、应用签名、Webhook、MCP）、监控与国际化，全部出厂即备。</p><p>快速开始：构建、启动，打开 <code>/admin/setup</code>，按六步向导完成初始化。</p>",
 			Published: true, PublishedAt: &now,
 			I18nJSON: enText(map[string]string{
 				"title":   "NexAdmin is live: an admin framework delivered as source",
 				"summary": "Gin + GORM on the backend, React + shadcn/ui on the frontend, built into a single binary. Framework and user code live apart, so nexadmin upgrade never drops your customizations.",
-				"content": "<p>NexAdmin ships as source: Gin + GORM on the backend, React + shadcn/ui on the frontend, and a single production binary with the frontend embedded via <code>-tags embedweb</code>.</p><p>Multi-tenancy, RBAC with five data-scope levels, the open platform (access tokens, app signatures, webhooks, MCP), monitoring, and internationalization are all included.</p><p>Get started in ten minutes: build, start, and finish the four-step wizard at <code>/setup</code>.</p>",
+				"content": "<p>NexAdmin ships as source: Gin + GORM on the backend, React + shadcn/ui on the frontend, and a single production binary with the frontend embedded via <code>-tags embedweb</code>.</p><p>Multi-tenancy, RBAC with five data-scope levels, the open platform (access tokens, app signatures, webhooks, MCP), monitoring, and internationalization are all included.</p><p>Quick start: build, start, open <code>/admin/setup</code>, and finish the six-step wizard.</p>",
 			}),
 		},
 		{

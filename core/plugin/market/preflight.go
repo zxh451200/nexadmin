@@ -53,6 +53,9 @@ func checkEnvironment(root string, lookPath func(string) (string, error), restar
 	if !e.CanRestart {
 		e.Issues = append(e.Issues, "restart")
 	}
+	if err := CheckRecovery(root); err != nil {
+		e.Issues = append(e.Issues, "recovery")
+	}
 	e.Ready = len(e.Issues) == 0
 	return e
 }

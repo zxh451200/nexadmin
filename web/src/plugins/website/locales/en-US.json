@@ -56,7 +56,8 @@
       "officeDrag": "Drag to reorder this office",
       "officesEmpty": "No offices yet — use \"Add location\" to create the first one.",
       "capUnsupported": "The current theme “{{theme}}” does not render “{{what}}”, so saving it will not show up on the site.",
-      "capCurrency": "Currency conversion"
+      "capCurrency": "Currency conversion",
+      "messageRecipientInvalid": "Invalid message notification email"
     },
     "social": {
       "github": "GitHub",
@@ -101,7 +102,7 @@
       "deleteBatchConfirm": "Delete the selected {{count}} messages?",
       "searchPlaceholder": "Search name, email or content",
       "notifyEmail": "Copy new messages by email",
-      "notifyEmailHint": "Send a copy of every new message to the contact email in “Contact & footer”. Skipped automatically when SMTP is not configured. In-app notifications are always sent.",
+      "notifyEmailHint": "Email a copy of every new message. Recipient is the “Message notification email” under Contact & footer, falling back to the contact email. Skipped automatically when SMTP is not configured. In-app notifications are always sent",
       "consent": "Messages require consent to the privacy policy",
       "consentHint": "When on, the contact page adds a required checkbox and submissions without it are rejected. Recommended for delivered client sites — collecting a name, phone and email is processing personal data.",
       "attachments": "Attachments",
@@ -555,7 +556,11 @@
       "staffCount": "Employees",
       "annualRevenue": "Annual revenue",
       "mainMarkets": "Main markets",
-      "responseTime": "Response time"
+      "responseTime": "Response time",
+      "heroImageUrl": "Hero image (light)",
+      "heroImageDarkUrl": "Hero image (dark)",
+      "robotsTxt": "Custom robots.txt",
+      "messageRecipientEmail": "Message notification email"
     },
     "hint": {
       "defaultLang": "Follow browser = first visit opens the matching version; pick a language = it owns the root path and the previous default moves under a prefix (e.g. /zh). Public-site routes register at startup, so a restart is required after changing",
@@ -567,7 +572,7 @@
       "ogImageUrl": "Fallback share image when content has none, 1200×630 recommended; leave empty to use the built-in one",
       "siteOrigin": "The canonical origin with scheme (e.g. https://www.example.com): sitemap, robots, JSON-LD and on-page canonical URLs prefer it. Required for multi-domain setups or proxies that do not pass Host/scheme headers; leave empty to derive from the request",
       "headCode": "Injected as-is into every page's <head> (GA / Baidu Analytics / site verification); configurable only by site-settings admins who own the script content, limited to 5000 characters",
-      "titleSuffix": "Appended after page titles, replacing \" - SiteName\"; leave empty to use the site name",
+      "titleSuffix": "Appended after inner-page titles, replacing \" - SiteName\". The homepage always uses \"SiteName — Home title\" and ignores this field; leave empty to use the site name",
       "theme": "Themes come from theme plugins and take effect right after saving; when a theme plugin is uninstalled the site falls back to the default theme without downtime",
       "demoImport": "Writes the brand's sample products and news (insert-only), and replaces brand identity (site name / home copy / navigation / feature cards); safe to repeat",
       "homeSlug": "Pick a custom page to serve as the site homepage (replaces the built-in hero page). Deleted or unpublished pages fall back to the built-in home; a draft takes effect once published",
@@ -577,7 +582,11 @@
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor.",
       "navDesc": "Entries with a description show up as title + description cards in the dropdown; the rest fall into a plain link column on the right.",
       "establishedYear": "Shown on the supplier card; leave empty to hide this row",
-      "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon."
+      "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon.",
+      "heroImageUrl": "Overrides the homepage hero shot (upload or pick from the library). Leave empty to keep the current theme’s built-in image; branded themes also prefer this image",
+      "heroImageDarkUrl": "Only used by the default theme’s light/dark pair: takes precedence in dark scheme. Falls back to the light hero image or the built-in dark image",
+      "robotsTxt": "Replaces the site robots.txt wholesale. Leave empty for the built-in rules (admin/API/machine endpoints disallowed, Sitemap included). Use {sitemap} as a placeholder for the absolute sitemap URL",
+      "messageRecipientEmail": "Notification copies go here; falls back to the contact email when empty. Useful for a shared sales inbox; in-app notifications are unaffected"
     },
     "placeholder": {
       "siteName": "NexAdmin",
@@ -603,7 +612,10 @@
       "mainMarkets": "Multi-select, e.g. Europe, North America",
       "responseTime": "e.g. ≤4h",
       "officeName": "e.g. Shenzhen HQ",
-      "officeName2": "e.g. Shanghai office"
+      "officeName2": "e.g. Shanghai office",
+      "heroImageUrl": "Empty = theme default hero",
+      "heroImageDarkUrl": "Empty = light image or built-in dark image",
+      "robotsTxt": "User-agent: *\nAllow: /\nSitemap: {sitemap}"
     },
     "market": {
       "enabled": "Enable public plugin marketplace",
@@ -765,6 +777,10 @@
         "inquiries": "Inquiries",
         "rate": "Conversion"
       }
+    },
+    "chat": {
+      "enabled": "Live chat widget",
+      "enabledHint": "When off, the site ships neither the widget DOM nor its scripts — the launcher never appears even if the im plugin has online agents. When on, visibility follows im online status"
     }
   }
 }

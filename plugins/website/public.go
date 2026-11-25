@@ -87,8 +87,10 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		SiteOrigin: set.SiteOrigin, FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
 		TitleSuffix: set.TitleSuffix, HomeSlug: set.HomeSlug,
-		ThemeID:   set.Theme,
-		HomeTitle: set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
+		HeroImageURL: set.HeroImageURL, HeroImageDarkURL: set.HeroImageDarkURL,
+		ChatEnabled: set.ChatEnabled,
+		ThemeID:     set.Theme,
+		HomeTitle:   set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
 		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
 		EstablishedYear: set.EstablishedYear, StaffCount: set.StaffCount,
@@ -1078,6 +1080,13 @@ func (h *siteHandler) robots(c *gin.Context) {
 	base := baseURL(c)
 	if set, serr := h.svc.Settings(c.Request.Context()); serr == nil {
 		base = siteBase(c, set.SiteOrigin)
+		// 运营整段覆盖：留 `{sitemap}` 占位给绝对地址，避免自定义后漏掉站点地图。
+		// 空 = 继续走下面与站点实际机器入口对齐的内置规则。
+		if custom := strings.TrimSpace(set.RobotsTxt); custom != "" {
+			c.Header("Cache-Control", "public, max-age=3600")
+			c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(strings.ReplaceAll(custom, "{sitemap}", base+"/sitemap.xml")))
+			return
+		}
 	}
 	var b strings.Builder
 	b.WriteString("User-agent: *\n")

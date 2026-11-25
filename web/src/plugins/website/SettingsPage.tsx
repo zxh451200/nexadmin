@@ -54,10 +54,11 @@ import { ThemeCapNote, useThemeCap } from './ThemeCapNotice'
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
   | 'siteName' | 'siteOrigin' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
+  | 'messageRecipientEmail' | 'heroImageUrl' | 'heroImageDarkUrl' | 'robotsTxt'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme' | 'defaultLang'
   | 'defaultCurrency' | 'currencyRates'
   | 'staffCount' | 'annualRevenue' | 'mainMarkets' | 'responseTime'
-type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'purchaseEnabled' | 'messageNotifyEmail' | 'contactConsent' | 'establishedYear'> & {
+type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'purchaseEnabled' | 'chatEnabled' | 'messageNotifyEmail' | 'contactConsent' | 'establishedYear'> & {
   socials: SocialLink[]
   friendLinks: FriendLink[]
   offices: WebsiteOffice[]
@@ -250,7 +251,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
           size="sm"
           className="w-fit"
           disabled={disabled || rows.length >= RATES_MAX}
-          onClick={() => setRows((rs) => [...rs, { code: '', rate: '' }])}
+          onClick={() => commit([...rows, { code: '', rate: '' }])}
         >
           <Plus aria-hidden="true" />
           {t('plugin_website.rates.add')}
@@ -418,6 +419,7 @@ function SettingsFormBody({
 
   // 邮箱格式校验：设置侧此前没有（投稿侧有）；留空合法——联系邮箱选填
   const emailInvalid = shared.contactEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.contactEmail.trim())
+  const messageRecipientInvalid = shared.messageRecipientEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.messageRecipientEmail.trim())
   // 留言同意开着时政策地址必填，格式与后端 footerURLValid 同规则：站内路径/锚点或完整 http(s) 地址。
   const consentInvalid = shared.contactConsent && !/^(https?:\/\/[^\s/]+|[#/])/i.test(shared.contactConsentUrl.trim())
   // 自定义 <head> 代码：拦截未闭合的 script/style 与文档级标签（校验规则见 headCodeInvalid）
@@ -453,6 +455,10 @@ function SettingsFormBody({
     const base = lf.baseValues()
     if (emailInvalid) {
       toast.error(t('plugin_website.settings.emailInvalid'))
+      return
+    }
+    if (messageRecipientInvalid) {
+      toast.error(t('plugin_website.settings.messageRecipientInvalid'))
       return
     }
     if (consentInvalid) {
@@ -625,6 +631,31 @@ function SettingsFormBody({
               {localizedField('homeSubtitle')}
               {localizedField('homeCtaLabel')}
               {sharedInput('homeCtaHref')}
+              {/* 首页主视觉覆盖：四套主题都消费 heroImageUrl；默认主题深浅双图可分别指定。 */}
+              <SharedFieldShell labelKey="plugin_website.fields.heroImageUrl" hint={t('plugin_website.hint.heroImageUrl', mediaHint)}>
+                <ImageUrlField
+                  value={shared.heroImageUrl}
+                  onChange={(v) => set('heroImageUrl', v)}
+                  title={t('plugin_website.fields.heroImageUrl')}
+                  crop="free"
+                  disabled={sharedDisabled}
+                  placeholder={t('plugin_website.placeholder.heroImageUrl', { defaultValue: '' })}
+                  previewBelow
+                  aria-label={t('plugin_website.fields.heroImageUrl')}
+                />
+              </SharedFieldShell>
+              <SharedFieldShell labelKey="plugin_website.fields.heroImageDarkUrl" hint={t('plugin_website.hint.heroImageDarkUrl', mediaHint)}>
+                <ImageUrlField
+                  value={shared.heroImageDarkUrl}
+                  onChange={(v) => set('heroImageDarkUrl', v)}
+                  title={t('plugin_website.fields.heroImageDarkUrl')}
+                  crop="free"
+                  disabled={sharedDisabled}
+                  placeholder={t('plugin_website.placeholder.heroImageDarkUrl', { defaultValue: '' })}
+                  previewBelow
+                  aria-label={t('plugin_website.fields.heroImageDarkUrl')}
+                />
+              </SharedFieldShell>
               {/* 设为首页：把某张自定义单页顶到 / 上；空 = 内置 Hero 页。Radix Select 不收空串值，用哨兵。 */}
               <SharedFieldShell labelKey="plugin_website.fields.homeSlug" hint={t('plugin_website.hint.homeSlug')}>
                 <Select
@@ -685,6 +716,16 @@ function SettingsFormBody({
                         : t('plugin_website.settings.headInvalidDocTag')}
                   </span>
                 ) : null}
+              </SharedFieldShell>
+              <SharedFieldShell labelKey="plugin_website.fields.robotsTxt" hint={t('plugin_website.hint.robotsTxt')}>
+                <Textarea
+                  rows={5}
+                  value={shared.robotsTxt}
+                  disabled={sharedDisabled}
+                  maxLength={5000}
+                  onChange={(e) => set('robotsTxt', e.target.value)}
+                  placeholder={t('plugin_website.placeholder.robotsTxt', { defaultValue: '' })}
+                />
               </SharedFieldShell>
               {/* 官网默认语言：跟随浏览器（auto）或指定语言占根路径；原文语言（平台默认）只作标记不隐藏。
                   Radix Select 不收空串值，用 auto 哨兵，与 homeSlug 同一手法。 */}
@@ -750,6 +791,7 @@ function SettingsFormBody({
           {tab === 'footer' ? (
             <>
               {sharedInput('contactEmail', emailInvalid ? t('plugin_website.settings.emailInvalid') : undefined)}
+              {sharedInput('messageRecipientEmail', messageRecipientInvalid ? t('plugin_website.settings.messageRecipientInvalid') : undefined, t('plugin_website.hint.messageRecipientEmail'))}
               {sharedInput('contactPhone')}
               {/* 供应商实力档案：商详左栏供应商卡的五行数据，对齐阿里的「店铺实力」；
                   全空就不展示那一块，所以这里不设必填 */}
@@ -994,6 +1036,15 @@ function SettingsFormBody({
               <SwitchRow
                 bare
                 className="px-3 py-2.5"
+                label={t('plugin_website.chat.enabled')}
+                description={t('plugin_website.chat.enabledHint')}
+                checked={shared.chatEnabled}
+                disabled={sharedDisabled}
+                onCheckedChange={(v) => onSharedChange({ ...shared, chatEnabled: v })}
+              />
+              <SwitchRow
+                bare
+                className="px-3 py-2.5"
                 label={t('plugin_website.message.notifyEmail')}
                 description={t('plugin_website.message.notifyEmailHint')}
                 checked={shared.messageNotifyEmail}
@@ -1047,7 +1098,7 @@ function SettingsFormBody({
         {/* 保存条常驻：五个分区共用一份表单，切分区不丢改动，也不该让人以为每个分区各存一次。
             「有未保存的修改」文案撤掉：保存按钮就在旁边，这行字只会制造噪音（2026-11-20 用户反馈）。 */}
         <div className="flex items-center gap-3">
-          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || consentInvalid || !!headInvalid || estYearInvalid}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || messageRecipientInvalid || consentInvalid || !!headInvalid || estYearInvalid}>{t('common.save')}</Button>
         </div>
       </div>
     </div>
@@ -1076,6 +1127,9 @@ export default function SettingsPage() {
         ogImageUrl: data.ogImageUrl ?? '',
         headCode: data.headCode ?? '',
         titleSuffix: data.titleSuffix ?? '',
+        heroImageUrl: data.heroImageUrl ?? '',
+        heroImageDarkUrl: data.heroImageDarkUrl ?? '',
+        robotsTxt: data.robotsTxt ?? '',
         homeSlug: data.homeSlug ?? '',
         siteOrigin: data.siteOrigin ?? '',
         homeCtaHref: data.homeCtaHref,
@@ -1091,6 +1145,8 @@ export default function SettingsPage() {
         marketEnabled: data.marketEnabled,
         purchaseEnabled: data.purchaseEnabled ?? false,
         messageNotifyEmail: data.messageNotifyEmail,
+        messageRecipientEmail: data.messageRecipientEmail ?? '',
+        chatEnabled: data.chatEnabled,
         contactConsent: data.contactConsent,
         contactConsentUrl: data.contactConsentUrl ?? '',
         establishedYear: data.establishedYear ?? 0,

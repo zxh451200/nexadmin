@@ -56,7 +56,8 @@
       "officeDrag": "拖动调整此地点的顺序",
       "officesEmpty": "还没有办公地点，点「添加地点」创建第一个。",
       "capUnsupported": "当前主题「{{theme}}」不渲染“{{what}}”，保存后官网上看不到效果。",
-      "capCurrency": "币种换算"
+      "capCurrency": "币种换算",
+      "messageRecipientInvalid": "询盘抄送邮箱格式不正确"
     },
     "social": {
       "github": "GitHub",
@@ -101,7 +102,7 @@
       "deleteBatchConfirm": "确认删除选中的 {{count}} 条留言？",
       "searchPlaceholder": "搜索称呼、邮箱或内容",
       "notifyEmail": "新留言抄送邮箱",
-      "notifyEmailHint": "把新收到的留言抄送到「联系与页脚」里配置的联系邮箱；未配置 SMTP 时自动跳过。站内信不受这一项影响，始终发送。",
+      "notifyEmailHint": "把新收到的留言抄送一封邮件；收件人优先取「联系与页脚 → 询盘抄送邮箱」，没填才发到联系邮箱。未配置 SMTP 时自动跳过。站内信始终发送",
       "consent": "留言需同意隐私政策",
       "consentHint": "打开后，官网联系页的留言表单会多一个必勾项，没勾选就不入库。交付客户的站点建议打开——收集称呼、电话、邮箱属于处理个人信息。",
       "attachments": "附件",
@@ -555,7 +556,11 @@
       "staffCount": "员工人数",
       "annualRevenue": "年营收",
       "mainMarkets": "主要市场",
-      "responseTime": "平均响应"
+      "responseTime": "平均响应",
+      "heroImageUrl": "首页主视觉（浅色）",
+      "heroImageDarkUrl": "首页主视觉（深色）",
+      "robotsTxt": "robots.txt 自定义",
+      "messageRecipientEmail": "询盘抄送邮箱"
     },
     "hint": {
       "defaultLang": "跟随浏览器 = 首访按浏览器语言进入对应版本；选具体语言 = 该语言独占根路径、原默认语言挂前缀（如 /zh）。公开站路由在启动期注册，改完需重启生效",
@@ -567,7 +572,7 @@
       "ogImageUrl": "内容没配分享图时的兜底图，建议 1200×630；留空使用内置分享图",
       "siteOrigin": "填带协议的规范域名（如 https://www.example.com）：sitemap、robots、JSON-LD 与页内 canonical 的绝对地址优先用它。多域名接入或反代没透传 Host/协议头时必填；留空按请求推导",
       "headCode": "原样注入每个页面的 <head>（GA / 百度统计 / 站点验证）；仅站点设置管理员可配，脚本内容由其自行负责，限 5000 字符",
-      "titleSuffix": "拼在页面标题之后替换「 - 站点名」；留空使用站点名",
+      "titleSuffix": "拼在内页标题之后替换「 - 站点名」；首页标题固定为「站点名 — 首页主标题」，不受这一项影响。留空使用站点名",
       "theme": "主题由主题插件提供，保存设置后官网立即换肤；主题插件被卸载时自动回退默认主题，站点不断线",
       "demoImport": "写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称/首页文案/导航/特性卡片等品牌门面内容；可重复执行",
       "homeSlug": "选一张自定义单页作为官网首页（替换内置 Hero 页）；页面删除或未发布时自动回退内置首页，草稿页发布后即生效",
@@ -577,7 +582,11 @@
       "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。",
       "navDesc": "填了说明的子项在二级菜单里显示成「标题 + 说明」卡片；不填就排到右侧的纯链接列。",
       "establishedYear": "商详供应商卡展示；留空则不显示这一行",
-      "certifications": "多个用逗号分隔，如 CE, UL 1973, UN38.3；详情页会渲染成认证徽章，识别的认证自动配图标。"
+      "certifications": "多个用逗号分隔，如 CE, UL 1973, UN38.3；详情页会渲染成认证徽章，识别的认证自动配图标。",
+      "heroImageUrl": "覆盖首页首屏截图（支持上传/文件库）；留空继续用当前主题内置图。品牌主题也会优先使用这张图",
+      "heroImageDarkUrl": "仅默认主题深浅双图布局使用：深色配色时优先这张；留空则回退到「首页主视觉（浅色）」或内置深色图",
+      "robotsTxt": "整段替换官网的 robots.txt；留空则用内置规则（已挡后台/API/机器入口并附 Sitemap）。可写 {sitemap} 占位自动填站点地图绝对地址",
+      "messageRecipientEmail": "留言邮件抄送到这里；留空则发到「联系邮箱」。适合销售组共用收件箱，站内信不受影响"
     },
     "placeholder": {
       "siteName": "NexAdmin",
@@ -603,7 +612,10 @@
       "mainMarkets": "可多选，如 欧洲、北美",
       "responseTime": "如 ≤4h",
       "officeName": "如：深圳总部",
-      "officeName2": "如：上海办事处"
+      "officeName2": "如：上海办事处",
+      "heroImageUrl": "留空 = 主题内置主视觉",
+      "heroImageDarkUrl": "留空 = 跟随浅色图或内置深色图",
+      "robotsTxt": "User-agent: *\nAllow: /\nSitemap: {sitemap}"
     },
     "market": {
       "enabled": "启用官网插件市场",
@@ -765,6 +777,10 @@
         "inquiries": "询盘",
         "rate": "转化率"
       }
+    },
+    "chat": {
+      "enabled": "在线客服挂件",
+      "enabledHint": "关闭后官网不再下发挂件 DOM 与专用脚本；即使装了 im 插件且客服在线也不会浮出。开启时仍按 im 在线状态自动显隐"
     }
   }
 }

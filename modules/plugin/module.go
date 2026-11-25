@@ -481,7 +481,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, d *core.Deps, act
 	})
 }
 
-// startRemove 移除 → 重建 → 自重启。purge 已经删库，无法回滚，因此不做源码恢复。
+// startRemove 移除 → 重建 → 自重启。purge 已删除数据库数据，不能回滚，源码与构建产物仍按事务恢复。
 func startRemove(root, id string, purge bool) string {
 	return marketRunner.Run("remove", id, func(x *market.Ctx) error {
 		err := market.WithProjectLock(root, func() error {
@@ -496,20 +496,17 @@ func startRemove(root, id string, purge bool) string {
 					return err
 				}
 				x.Log("开始重建…")
-				if err := market.Rebuild(context.Background(), root, true, x.LogPlain); err != nil {
+				if err := market.RebuildInTransaction(context.Background(), root, true, x.LogPlain); err != nil {
 					return fmt.Errorf("重建失败: %w", err)
 				}
 				return nil
 			}
-			var err error
-			if purge {
-				err = change()
-			} else {
-				err = market.ChangeSources(root, id, change)
-			}
+			err := market.ChangeSources(root, id, change)
 			if err != nil {
 				if !purge {
 					x.Log("失败，源码已恢复到移除前状态；可修正后重试")
+				} else {
+					x.Log("失败，源码与构建产物已按恢复记录处理；已删除的插件数据无法自动恢复")
 				}
 				return err
 			}
@@ -525,12 +522,10 @@ func startRemove(root, id string, purge bool) string {
 // startRebuild 仅重建 + 自重启（不装不删）。
 func startRebuild(root string, withWeb bool) string {
 	return marketRunner.Run("rebuild", "", func(x *market.Ctx) error {
-		if err := market.WithProjectLock(root, func() error {
-			if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
-				return err
-			}
-			return market.Rebuild(context.Background(), root, withWeb, x.LogPlain)
-		}); err != nil {
+		if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
+			return err
+		}
+		if err := market.Rebuild(context.Background(), root, withWeb, x.LogPlain); err != nil {
 			return err
 		}
 		return triggerRestart(root, x)

@@ -143,7 +143,10 @@ func register(typ, owner string, h Handler) {
 	stack := registry[typ]
 	for i, reg := range stack {
 		if reg.owner == owner {
-			stack = append(stack[:i], stack[i+1:]...)
+			last := len(stack) - 1
+			copy(stack[i:], stack[i+1:])
+			stack[last] = registration{}
+			stack = stack[:last]
 			break
 		}
 	}
@@ -157,7 +160,10 @@ func UnregisterOwner(owner string) {
 	for typ, stack := range registry {
 		for i, reg := range stack {
 			if reg.owner == owner {
-				stack = append(stack[:i], stack[i+1:]...)
+				last := len(stack) - 1
+				copy(stack[i:], stack[i+1:])
+				stack[last] = registration{}
+				stack = stack[:last]
 				break
 			}
 		}

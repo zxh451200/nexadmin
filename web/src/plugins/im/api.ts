@@ -162,8 +162,10 @@ export interface ChatSession {
   messages: ImMessage[]
   hasMore: boolean
   loading: boolean
+  error: boolean
   refresh: () => Promise<void>
   loadOlder: () => Promise<void>
+  retry: () => void
 }
 
 export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatSession {
@@ -172,6 +174,8 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
   const [messages, setMessages] = useState<ImMessage[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
   const lastSeq = useRef(0)
   const inFlight = useRef(false)
   const current = useRef<string | undefined>(convNo)
@@ -179,6 +183,7 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
   const apply = useCallback((no: string, r: MessagesResult, mode: 'replace' | 'append' | 'prepend') => {
     if (current.current !== no) return
     setConv(r.conversation)
+    setError(false)
     setMessages((prev) => {
       const rows = mode === 'prepend' ? [...r.messages, ...prev] : mode === 'append' ? [...prev, ...r.messages] : r.messages
       const seen = new Set<number>()
@@ -210,6 +215,7 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
     setConv(undefined)
     setMessages([])
     setHasMore(false)
+    setError(false)
     lastSeq.current = 0
     if (!convNo) return
     let cancelled = false
@@ -219,14 +225,16 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
       .then((r) => {
         if (!cancelled) apply(convNo, r, 'replace')
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!cancelled) setError(true)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [convNo, apply])
+  }, [convNo, apply, reloadToken])
 
   const refresh = useCallback(async () => {
     const no = current.current
@@ -237,7 +245,7 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
       const r = await api.get<MessagesResult>(`${BASE}/conversations/${no}/messages`, since > 0 ? { since, limit: 200 } : { limit: 50 })
       apply(no, r, since > 0 ? 'append' : 'replace')
     } catch {
-      // 轮询失败静默，下一轮再试
+      if (current.current === no) setError(true)
     } finally {
       inFlight.current = false
     }
@@ -263,7 +271,11 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
     return () => window.clearInterval(timer)
   }, [convNo, pollMs, refresh])
 
-  return { conv, messages, hasMore, loading, refresh, loadOlder }
+  const retry = useCallback(() => {
+    if (current.current) void refresh()
+    else setReloadToken((n) => n + 1)
+  }, [refresh])
+  return { conv, messages, hasMore, loading, error, refresh, loadOlder, retry }
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'

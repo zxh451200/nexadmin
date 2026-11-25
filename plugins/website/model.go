@@ -15,18 +15,18 @@ import (
 // Setting 是站点设置，单行表（首次启动 seed 建行，之后一直更新这一行）。
 type Setting struct {
 	database.PlatformModel
-	SiteName      string `gorm:"size:64;not null" json:"siteName"`
-	SiteDesc      string `gorm:"size:300;not null" json:"siteDesc"`     // SEO 描述 / 副标题
-	LogoURL       string `gorm:"size:255;not null" json:"logoUrl"`      // 空 = 用内置标志
-	HomeTitle     string `gorm:"size:200;not null" json:"homeTitle"`    // 首页主标题
-	HomeSubtitle  string `gorm:"size:500;not null" json:"homeSubtitle"` // 首页副文
-	HomeCTALabel  string `gorm:"size:64;not null" json:"homeCtaLabel"`  // 主按钮文字，空 = 不显示
-	HomeCTAHref   string `gorm:"size:255;not null" json:"homeCtaHref"`
-	SeoKeywords   string `gorm:"size:300;not null" json:"seoKeywords"`
+	SiteName     string `gorm:"size:64;not null" json:"siteName"`
+	SiteDesc     string `gorm:"size:300;not null" json:"siteDesc"`     // SEO 描述 / 副标题
+	LogoURL      string `gorm:"size:255;not null" json:"logoUrl"`      // 空 = 用内置标志
+	HomeTitle    string `gorm:"size:200;not null" json:"homeTitle"`    // 首页主标题
+	HomeSubtitle string `gorm:"size:500;not null" json:"homeSubtitle"` // 首页副文
+	HomeCTALabel string `gorm:"size:64;not null" json:"homeCtaLabel"`  // 主按钮文字，空 = 不显示
+	HomeCTAHref  string `gorm:"size:255;not null" json:"homeCtaHref"`
+	SeoKeywords  string `gorm:"size:300;not null" json:"seoKeywords"`
 	// SiteOrigin 是站点规范域名（如 https://www.example.com）：sitemap/robots/atom/RSS/JSON-LD
 	// 与页内 canonical、og:url 的绝对地址优先用它，空 = 按请求 Host + X-Forwarded-Proto 推导。
 	// 多域名接入或反代未透传 Host/协议头时填它，避免爬虫把 http/https 或多个域名当有效 URL。
-	SiteOrigin string `gorm:"column:site_origin;size:200;not null;default:''" json:"siteOrigin"`
+	SiteOrigin    string `gorm:"column:site_origin;size:200;not null;default:''" json:"siteOrigin"`
 	ContactEmail  string `gorm:"size:128;not null" json:"contactEmail"`
 	ContactPhone  string `gorm:"size:64;not null" json:"contactPhone"`   // 页脚与联系页的电话，空 = 不显示
 	QRCodeURL     string `gorm:"size:255;not null" json:"qrCodeUrl"`     // 页脚二维码（公众号/客服），空 = 不显示
@@ -38,9 +38,13 @@ type Setting struct {
 	SocialsJSON     string `gorm:"column:socials;type:text" json:"-"`
 	FriendLinksJSON string `gorm:"column:friend_links;type:text" json:"-"`
 	MarketEnabled   bool   `gorm:"not null;default:true" json:"marketEnabled"` // 官网插件市场入口开关
-	// MessageNotifyEmail 是新留言是否抄送一封到站点联系邮箱（ContactEmail）。
-	// 站内信始终发（零配置），这一项只管邮件；SMTP 未配置时发送自然跳过并记日志。
-	MessageNotifyEmail bool `gorm:"column:message_notify_email;not null;default:true" json:"messageNotifyEmail"`
+	// ChatEnabled 控制官网在线客服挂件是否注入页面。默认 true = 老站点行为不变：
+	// 挂件仍由 chat-widget.js 探测 im 插件在线状态后自行显隐；关掉后 DOM 与脚本都不下发。
+	ChatEnabled bool `gorm:"column:chat_enabled;not null;default:true" json:"chatEnabled"`
+	// MessageNotifyEmail 是新留言是否抄送一封邮件；收件人优先 MessageRecipientEmail，
+	// 空则回退 ContactEmail（老站点行为不变）。站内信始终发，SMTP 未配置时发送自然跳过。
+	MessageNotifyEmail    bool   `gorm:"column:message_notify_email;not null;default:true" json:"messageNotifyEmail"`
+	MessageRecipientEmail string `gorm:"column:message_recipient_email;size:128;not null;default:''" json:"messageRecipientEmail"`
 	// ContactConsent 打开后，官网留言必须先勾选「已阅读并同意隐私政策」。
 	// 默认关：升级不改存量站点的公开表单；交付客户时在站点设置里打开。
 	ContactConsent bool `gorm:"column:contact_consent;not null;default:false" json:"contactConsent"`
@@ -57,6 +61,12 @@ type Setting struct {
 	HeadCode string `gorm:"column:head_code;type:text" json:"headCode"`
 	// TitleSuffix 拼在 <title> 的「标题」之后，替换默认的「 - 站点名」；空 = 沿用内置组合。
 	TitleSuffix string `gorm:"column:title_suffix;size:100;not null;default:''" json:"titleSuffix"`
+	// HeroImageURL / HeroImageDarkURL 覆盖首页主视觉：浅色用前者，深色优先后者。
+	// 空 = 用主题内置截图（default 主题是内置深浅双图，品牌主题是各自的产品图）。
+	HeroImageURL     string `gorm:"column:hero_image_url;size:500;not null;default:''" json:"heroImageUrl"`
+	HeroImageDarkURL string `gorm:"column:hero_image_dark_url;size:500;not null;default:''" json:"heroImageDarkUrl"`
+	// RobotsTxt 非空时覆盖服务端生成的 robots.txt，其中 {sitemap} 替换为站点地图绝对地址；空 = 内置规则。
+	RobotsTxt string `gorm:"column:robots_txt;type:text" json:"robotsTxt"`
 	// HomeSlug 是用作首页的自定义单页 slug：非空时首页渲染该页内容（替换内置 Hero 页）；空 = 内置首页。
 	// 页面本身仍可通过 /p/:slug 访问，不冲突。
 	HomeSlug string `gorm:"column:home_slug;size:64;not null;default:''" json:"homeSlug"`

@@ -19,7 +19,7 @@ type SettingForm struct {
 	HomeCTAHref  string `json:"homeCtaHref"`
 	SeoKeywords  string `json:"seoKeywords"`
 	// SiteOrigin 是站点规范域名：存前剥尾部斜杠，非空必须以 http(s):// 开头（服务层校验）。
-	SiteOrigin string `json:"siteOrigin"`
+	SiteOrigin   string `json:"siteOrigin"`
 	ContactEmail string `json:"contactEmail"`
 	ContactPhone string `json:"contactPhone"`
 	QRCodeURL    string `json:"qrCodeUrl"`
@@ -30,10 +30,12 @@ type SettingForm struct {
 	FriendLinks []FriendLink `json:"friendLinks"`
 	ICP         string       `json:"icp"`
 	FooterNote  string       `json:"footerNote"`
-	// 指针：旧客户端不传该字段时保持原值，避免误关市场。
+	// 指针：旧客户端不传该字段时保持原值，避免误关市场/客服挂件。
 	MarketEnabled *bool `json:"marketEnabled"`
+	ChatEnabled   *bool `json:"chatEnabled"`
 	// MessageNotifyEmail 同样是指针：不传保持原值（设置页分区块保存时不误改）。
-	MessageNotifyEmail *bool `json:"messageNotifyEmail"`
+	MessageNotifyEmail    *bool  `json:"messageNotifyEmail"`
+	MessageRecipientEmail string `json:"messageRecipientEmail"`
 	// ContactConsent / ContactConsentURL 是留言的隐私同意勾选：默认关，开启时地址必填。
 	ContactConsent    *bool  `json:"contactConsent"`
 	ContactConsentURL string `json:"contactConsentUrl"`
@@ -46,6 +48,11 @@ type SettingForm struct {
 	HeadCode string `json:"headCode"`
 	// TitleSuffix 拼在 <title> 的「标题」之后；空 = 沿用「 - 站点名」。
 	TitleSuffix string `json:"titleSuffix"`
+	// HeroImageURL / HeroImageDarkURL 覆盖首页主视觉；空 = 主题内置图。
+	HeroImageURL     string `json:"heroImageUrl"`
+	HeroImageDarkURL string `json:"heroImageDarkUrl"`
+	// RobotsTxt 非空时覆盖 robots.txt，{sitemap} 替换为站点地图绝对地址；空 = 服务端生成的默认规则。
+	RobotsTxt string `json:"robotsTxt"`
 	// HomeSlug 是用作首页的自定义单页 slug；空 = 内置首页。服务层校验页面存在。
 	HomeSlug string `json:"homeSlug"`
 	// Theme 是公开站主题 id；空 = 内置 default。服务层校验主题已注册。
