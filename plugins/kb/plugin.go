@@ -54,9 +54,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h.Register(r, d)
 }
 
-// Start 实现 plugin.Starter：订阅 im.message.created 驱动 AI 自动回答（worker 随插件 ctx 退出）。
+// Start 实现 plugin.Starter：启动异步入库 worker（与 IM 是否装配无关），
+// 再订阅 im.message.created 驱动 AI 自动回答；两者都随插件 ctx 退出。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
+	svc.queue.start(ctx)
 	b := newBot(ctx, d, svc)
 	if b == nil {
 		return nil

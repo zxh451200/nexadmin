@@ -55,6 +55,7 @@ type Service struct {
 	log   logger
 	now   func() time.Time
 	cache *indexCache
+	queue *ingestQueue // 异步入库队列；handler 在插件未 Start 时也能安全 notify
 }
 
 // NewService 创建知识库服务。
@@ -62,7 +63,9 @@ func NewService(db *gorm.DB, gw *ai.Gateway, log logger) *Service {
 	if log == nil {
 		log = nullLog{}
 	}
-	return &Service{db: db, gw: gw, log: log, now: func() time.Time { return time.Now().UTC() }, cache: newIndexCache()}
+	s := &Service{db: db, gw: gw, log: log, now: func() time.Time { return time.Now().UTC() }, cache: newIndexCache()}
+	s.queue = newIngestQueue(s)
+	return s
 }
 
 // Ready 报告问答链路是否可用（对话模型与 embedding 都配置完整）。
@@ -161,6 +164,12 @@ func (s *Service) Ingest(ctx context.Context, in IngestInput) (*Document, error)
 
 // embedAll 按单批 ≤64 条调 embeddings；失败包装成用户可读的错误 key（模型配置错 / 调用失败）。
 func (s *Service) embedAll(ctx context.Context, cfg ai.Config, inputs []string) ([][]float64, error) {
+	return s.embedAllWithProgress(ctx, cfg, inputs, nil)
+}
+
+// embedAllWithProgress 与 embedAll 同一条调用链，只是每批完成后回调一次——
+// 异步入库用它把「向量化 12/40 块」写进文档 stage，管理端不用对着转圈干等。
+func (s *Service) embedAllWithProgress(ctx context.Context, cfg ai.Config, inputs []string, onBatch func(done int)) ([][]float64, error) {
 	out := make([][]float64, 0, len(inputs))
 	for start := 0; start < len(inputs); start += embedBatchSize {
 		end := min(start+embedBatchSize, len(inputs))
@@ -177,6 +186,9 @@ func (s *Service) embedAll(ctx context.Context, cfg ai.Config, inputs []string) 
 			}
 		}
 		out = append(out, batch...)
+		if onBatch != nil {
+			onBatch(end)
+		}
 	}
 	return out, nil
 }
@@ -652,12 +664,14 @@ type DocumentQuery struct {
 	PageSize   int
 }
 
-// Stats 是后台统计条的数据。【按全库聚合，不受列表分页影响。
+// Stats 是后台统计条的数据。按全库聚合，不受列表分页影响。
 type Stats struct {
 	Docs   int64 `json:"docs"`
 	Chunks int64 `json:"chunks"`
 	Ready  int64 `json:"ready"`
 	Failed int64 `json:"failed"`
+	// Queued 是排队 + 处理中的文档数：异步入库后这几个状态不该算作失败。
+	Queued int64 `json:"queued"`
 	Size   int64 `json:"size"`
 	// PendingMiss 是未命中问题池里待补的条数——「知识库还缺什么」的直接读数。
 	PendingMiss int64 `json:"pendingMiss"`
@@ -710,12 +724,17 @@ func (s *Service) Stats(ctx context.Context) (*Stats, error) {
 		Docs   int64 `gorm:"column:docs"`
 		Chunks int64 `gorm:"column:chunks"`
 		Ready  int64 `gorm:"column:ready"`
+		Failed int64 `gorm:"column:failed"`
+		Queued int64 `gorm:"column:queued"`
 		Size   int64 `gorm:"column:size"`
 	}
 	err := s.db.WithContext(ctx).Model(&Document{}).
 		Select("COUNT(*) AS docs, COALESCE(SUM(chunk_count),0) AS chunks, "+
 			"COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END),0) AS ready, "+
-			"COALESCE(SUM(size),0) AS size", StatusReady).
+			"COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END),0) AS failed, "+
+			"COALESCE(SUM(CASE WHEN status IN ? THEN 1 ELSE 0 END),0) AS queued, "+
+			"COALESCE(SUM(size),0) AS size",
+			StatusReady, StatusFailed, []string{StatusPending, StatusProcessing}).
 		Scan(&row).Error
 	if err != nil {
 		return nil, err
@@ -725,8 +744,8 @@ func (s *Service) Stats(ctx context.Context) (*Stats, error) {
 		return nil, err
 	}
 	return &Stats{
-		Docs: row.Docs, Chunks: row.Chunks, Ready: row.Ready,
-		Failed: row.Docs - row.Ready, Size: row.Size, PendingMiss: pending,
+		Docs: row.Docs, Chunks: row.Chunks, Ready: row.Ready, Failed: row.Failed,
+		Queued: row.Queued, Size: row.Size, PendingMiss: pending,
 	}, nil
 }
 

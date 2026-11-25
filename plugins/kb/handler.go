@@ -51,6 +51,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/documents/:id", core.Perm("kb:edit"), h.rename)
 	g.DELETE("/documents/:id", core.Perm("kb:delete"), d.OperLogMiddleware("kb", "delete"), h.remove)
 	g.POST("/documents/:id/reembed", core.Perm("kb:edit"), h.reembed)
+	// 异步入库失败重试：原文已在库里，不用重传文件。
+	g.POST("/documents/:id/retry", core.Perm("kb:edit"), h.retryIngest)
 	// 重新切分：GET 只预览（改没改对先看切出来的块），POST 才落库。
 	g.GET("/documents/:id/rechunk", core.Perm("kb:edit"), h.rechunkPreview)
 	g.POST("/documents/:id/rechunk", core.Perm("kb:edit"), h.rechunk)
@@ -113,7 +115,8 @@ func (h *handler) stats(c *gin.Context) {
 	respond(c, st, err)
 }
 
-// POST /plugins/kb/documents —— multipart 上传（file + 可选 title），同步切分并向量化。
+// POST /plugins/kb/documents —— multipart 上传（file + 可选 title）。
+// 这里只做抽取与建档，切块/向量化交给后台 worker：批量上传投递即返回。
 func (h *handler) upload(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxDocBytes+(64<<10))
 	fh, err := c.FormFile("file")
@@ -164,7 +167,7 @@ func (h *handler) upload(c *gin.Context) {
 	if utf8.RuneCountInString(title) > 200 {
 		title = string([]rune(title)[:200])
 	}
-	doc, err := h.svc.Ingest(c.Request.Context(), IngestInput{
+	doc, err := h.svc.Enqueue(c.Request.Context(), IngestInput{
 		Title: title, Source: fh.Filename, Mime: mime, Size: fh.Size, Text: text,
 	})
 	respond(c, doc, err)
@@ -240,7 +243,7 @@ func (h *handler) uploadFromLibrary(c *gin.Context) {
 	if utf8.RuneCountInString(title) > 200 {
 		title = string([]rune(title)[:200])
 	}
-	doc, err := h.svc.Ingest(c.Request.Context(), IngestInput{
+	doc, err := h.svc.Enqueue(c.Request.Context(), IngestInput{
 		Title: title, Source: ref.Name, Mime: mime, Size: ref.Size, Text: text,
 	})
 	respond(c, doc, err)
@@ -277,6 +280,12 @@ func (h *handler) remove(c *gin.Context) {
 // POST /plugins/kb/documents/:id/reembed —— 用当前 embedding 模型重跑该文档。
 func (h *handler) reembed(c *gin.Context) {
 	doc, err := h.svc.Reembed(c.Request.Context(), c.Param("id"))
+	respond(c, doc, err)
+}
+
+// POST /plugins/kb/documents/:id/retry —— 失败文档重新排队（原文已在库里）。
+func (h *handler) retryIngest(c *gin.Context) {
+	doc, err := h.svc.RetryIngest(c.Request.Context(), c.Param("id"))
 	respond(c, doc, err)
 }
 

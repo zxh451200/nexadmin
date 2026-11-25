@@ -11,10 +11,13 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
-// 文档状态。
+// 文档状态。pending/processing 是异步入库的中间态：上传请求只建档，
+// 切块与向量化在后台 worker 里做，列表轮询看状态即可。
 const (
-	StatusReady  = "ready"
-	StatusFailed = "failed"
+	StatusPending    = "pending"
+	StatusProcessing = "processing"
+	StatusReady      = "ready"
+	StatusFailed     = "failed"
 )
 
 // Document 是一份已向量化（或失败）的知识文档。
@@ -33,6 +36,8 @@ type Document struct {
 	Model      string `gorm:"size:128;not null;default:''" json:"model"`
 	Dimension  int    `gorm:"not null;default:0" json:"dimension"`
 	Error      string `gorm:"size:500;not null;default:''" json:"error,omitempty"`
+	// Stage 是异步入库的进度说明（"切分中" / "向量化 12/40 块"），失败后留空。
+	Stage string `gorm:"size:128;not null;default:''" json:"stage,omitempty"`
 	// SourceText 是抽取出的原文（不参与检索、不外发）：改分块参数重新切分时以它为输入。
 	// 003 之前入库的老文档为 NULL，代码回退到「把切块拼回去」。
 	SourceText sql.NullString `gorm:"column:source_text;type:text" json:"-"`
