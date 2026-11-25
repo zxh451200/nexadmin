@@ -1094,6 +1094,9 @@ function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
   const eventRows = events.data?.list ?? []
   const eventTotal = events.data?.total ?? 0
   const eventPages = Math.max(1, Math.ceil(eventTotal / EVENTS_PAGE_SIZE))
+  useEffect(() => {
+    if (page > eventPages) setPage(eventPages)
+  }, [page, eventPages])
 
   const onAck = async (event: AlarmEvent) => {
     try {

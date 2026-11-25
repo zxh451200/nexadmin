@@ -254,8 +254,10 @@ defineMock([
     handler: ({ params }) => {
       const event = alarmEvents.find((e) => e.id === params.id)
       if (!event) throw Object.assign(new Error('alarm event not found'), { code: 404 })
-      event.status = 'cleared'
-      event.clearedAt = new Date().toISOString()
+      if (event.status !== 'cleared') {
+        event.status = 'cleared'
+        event.clearedAt = new Date().toISOString()
+      }
       return event
     },
   },
@@ -266,6 +268,9 @@ defineMock([
       if (!event) throw Object.assign(new Error('alarm event not found'), { code: 404 })
       if (event.status === 'cleared') throw Object.assign(new Error('alarm already cleared'), { code: 409 })
       const minutes = Number(body?.minutes ?? 0)
+      if (minutes < 0 || minutes > 10080) {
+        throw Object.assign(new Error('invalid silence duration'), { code: 400 })
+      }
       event.silencedUntil = minutes > 0 ? new Date(Date.now() + minutes * 60_000).toISOString() : null
       return event
     },

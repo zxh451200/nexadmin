@@ -988,7 +988,14 @@ func (s *Service) AckAlarmEvent(ctx context.Context, id idgen.ID, operatorID idg
 		return nil, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return s.alarmEventByID(ctx, id)
+		latest, err := s.alarmEventByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if latest.Status == AlarmStatusCleared {
+			return nil, response.Conflict("devicehub.alarm_already_cleared")
+		}
+		return latest, nil
 	}
 	event.Status, event.AckBy, event.AckByName, event.AckAt = AlarmStatusAck, operatorID, operatorName, &now
 	event.UpdatedAt = now
@@ -1045,7 +1052,14 @@ func (s *Service) SilenceAlarmEvent(ctx context.Context, id idgen.ID, minutes in
 		return nil, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return s.alarmEventByID(ctx, id)
+		latest, err := s.alarmEventByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if latest.Status == AlarmStatusCleared {
+			return nil, response.Conflict("devicehub.alarm_already_cleared")
+		}
+		return latest, nil
 	}
 	event.SilencedUntil, event.UpdatedAt = until, now
 	return event, nil
@@ -1072,11 +1086,10 @@ func (s *Service) clearActiveAlarmEvents(ctx context.Context, ruleID, deviceID, 
 	}
 }
 
-// alarmSilenced 判断同一规则（状态告警按设备）是否还有未结且未到期的静默。
-// 只压制业务告警通知，事件照常落库；恢复通知不走这个判断。
+// alarmSilenced 判断同一规则（状态告警按设备）是否还有未到期的静默。
+// 静默独立于事件生命周期，源告警恢复后仍生效到截止时间；恢复通知不走这个判断。
 func (s *Service) alarmSilenced(ctx context.Context, ruleID, deviceID idgen.ID) bool {
 	q := s.db.WithContext(ctx).Model(&AlarmEvent{}).
-		Where("status <> ?", AlarmStatusCleared).
 		Where("silenced_until IS NOT NULL AND silenced_until > ?", time.Now().UTC()).
 		Where("device_id = ?", deviceID)
 	if ruleID > 0 {
