@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, Copy, Download, FileCode2, Files } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, Copy, Download, FileCode2, Files } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -7,7 +7,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { cardSurface } from '@/framework/ui/card'
 import { cn } from '@/lib/utils'
-import { saveBlob, type GenFile, type GenOutput } from './api'
+import { saveBlob, type GenFile, type GenOutput, type ValidationReport } from './api'
 import { CodeView } from './CodeView'
 
 interface Props {
@@ -54,6 +54,7 @@ export function PreviewStep({ output }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+      {output.validation ? <ValidationReportView report={output.validation} /> : null}
       <ul className={cn(cardSurface, 'flex flex-col gap-1 p-3 text-sm text-muted-foreground')}>
         {output.notes.map((n) => {
           const [head, tail] = t(`plugin_codegen.notes.${n.code}`).split('{{value}}')

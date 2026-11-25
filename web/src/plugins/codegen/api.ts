@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, http } from '@/framework/request/http'
 
-export type Kind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime' | 'id' | ''
+export type Kind = 'string' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'date' | 'datetime' | 'id' | ''
 export type Control = 'input' | 'textarea' | 'number' | 'switch' | 'date' | 'datetime' | 'dict'
 export type QueryOp = 'like' | 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le' | 'between'
 export type FieldKind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime'
@@ -36,6 +36,8 @@ export interface ColumnInfo {
   supported: boolean
   reason?: string
   length?: number
+  precision?: number
+  scale?: number
   /** 推荐配置携带的字典编码（仅新建表定义了 dict 字段时非空） */
   dict?: string
   config: ColumnConfig
@@ -101,6 +103,26 @@ export interface GenNote {
 export interface GenOutput {
   files: GenFile[]
   notes: GenNote[]
+  validation?: ValidationReport
+}
+
+export interface ValidationIssue {
+  code: string
+  severity: 'failed' | 'warning'
+  path?: string
+  detail?: string
+}
+
+export interface ValidationCheck {
+  code: string
+  status: 'passed' | 'failed' | 'warning'
+}
+
+export interface ValidationReport {
+  ok: boolean
+  checkedAt: string
+  checks: ValidationCheck[]
+  issues: ValidationIssue[]
 }
 
 const BASE = '/plugins/codegen'
@@ -173,16 +195,45 @@ export interface InstallResult {
   root: string
   written: string[]
   skipped: string[]
+  overwritten: string[]
+  backupDir?: string
   registered: boolean
   registerNote?: 'already' | 'no_file' | 'no_markers' | 'failed'
   registerError?: string
+  validation?: ValidationReport
+}
+
+export interface InstallFile {
+  path: string
+  action: 'new' | 'unchanged' | 'skipped' | 'overwrite' | 'protected' | 'register'
+  currentHash?: string
+  generatedHash?: string
+}
+
+export interface InstallPlan {
+  root: string
+  canInstall: boolean
+  files: InstallFile[]
+  validation?: ValidationReport
+  registerNote?: string
+  registerError?: string
+}
+
+export type InstallRequest = GenRequest & { overwrite: boolean; register: boolean }
+
+/** 只读预检：选项变化后重新读取目标文件与迁移状态，不写任何文件。 */
+export function useInstallPlan(req: InstallRequest, enabled: boolean) {
+  return useQuery({
+    queryKey: [...KEY, 'install-plan', req],
+    queryFn: () => api.post<InstallPlan>(`${BASE}/install/plan`, req),
+    enabled,
+  })
 }
 
 /** 写入项目根目录：后端进程工作目录（可用 NEXADMIN_ROOT 指定），默认不覆盖已有文件。 */
 export function useInstall() {
   return useMutation({
-    mutationFn: (req: GenRequest & { overwrite: boolean; register: boolean }) =>
-      api.post<InstallResult>(`${BASE}/install`, req),
+    mutationFn: (req: InstallRequest) => api.post<InstallResult>(`${BASE}/install`, req),
   })
 }
 
@@ -243,13 +294,14 @@ export function useDeleteConfigs() {
 }
 
 /** 与服务端一致：哪些类型支持作为查询条件 / 必填，以及每种类型允许的表单控件（第一个是默认）。 */
-export const QUERYABLE: Kind[] = ['string', 'int', 'float', 'id', 'bool', 'date', 'datetime']
-export const REQUIRABLE: Kind[] = ['string', 'text', 'date', 'datetime']
+export const QUERYABLE: Kind[] = ['string', 'int', 'float', 'decimal', 'id', 'bool', 'date', 'datetime']
+export const REQUIRABLE: Kind[] = ['string', 'text', 'decimal', 'date', 'datetime']
 export const CONTROLS: Record<string, Control[]> = {
   string: ['input', 'textarea', 'dict'],
   text: ['textarea', 'input'],
   int: ['number', 'input'],
   float: ['number', 'input'],
+  decimal: ['number', 'input'],
   id: ['input'],
   bool: ['switch'],
   date: ['date'],
@@ -261,6 +313,7 @@ export const QUERY_OPS: Record<string, QueryOp[]> = {
   string: ['like', 'eq', 'ne'],
   int: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
   float: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
+  decimal: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
   id: ['eq', 'ne'],
   bool: ['eq'],
   date: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
