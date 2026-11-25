@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/pkg/idgen"
 
@@ -289,6 +290,8 @@ func jsonUnmarshal(raw string, v any) error {
 // 批量降采样：把 48h 前的原始读数按小时聚合进 _agg，然后删除原始行。
 // 用 Go 层聚合而不是 SQL group by：三引擎的日期截断语法不同，Go 只写一遍。
 func (c *collector) downsampleLoop(ctx context.Context) {
+	// 先采一次当前小时，进程刚启动时总览页也能看到一个实时点；之后每小时覆盖同一桶。
+	c.sampleStatus(ctx)
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
@@ -296,8 +299,28 @@ func (c *collector) downsampleLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			c.sampleStatus(ctx)
 			c.downsampleOnce(ctx)
 		}
+	}
+}
+
+// sampleStatus 把当前在线率落到小时快照表。唯一键 bucket 冲突时更新，重启/多实例不重复。
+func (c *collector) sampleStatus(ctx context.Context) {
+	st, err := c.svc.DeviceStats(ctx)
+	if err != nil {
+		c.svc.logWarn("devicehub: sample device status failed", "err", err.Error())
+		return
+	}
+	row := StatusSample{
+		Bucket: time.Now().UTC().Truncate(time.Hour),
+		Total:  st.Total, Online: st.Online, Offline: st.Offline, Disabled: st.Disabled,
+	}
+	if err := c.svc.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "bucket"}},
+		DoUpdates: clause.AssignmentColumns([]string{"total", "online", "offline", "disabled", "updated_at"}),
+	}).Create(&row).Error; err != nil {
+		c.svc.logWarn("devicehub: store status sample failed", "err", err.Error())
 	}
 }
 

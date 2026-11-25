@@ -11,6 +11,30 @@
     "overview": {
       "total": "设备总数"
     },
+    "overviewPage": {
+      "menu": "设备总览",
+      "title": "设备总览",
+      "description": "机群在线率、告警趋势与需要优先处理的异常设备；点任意一项可直接跳到设备监控",
+      "range": "统计时间范围",
+      "viewMonitor": "进入监控",
+      "viewAll": "查看全部",
+      "sampled": "窗口内告警较多，趋势与计数按最近 20000 条事件统计。",
+      "onlineRate": "在线率",
+      "offline": "离线设备",
+      "disabledHint": "另有 {{count}} 台停用",
+      "unsettled": "未处理告警",
+      "unsettledHint": "严重 {{critical}} · 警告 {{warn}}",
+      "windowAlarms": "时间窗告警",
+      "days": "近 {{days}} 天",
+      "onlineTrend": "在线率趋势",
+      "alarmTrend": "告警趋势",
+      "topDevices": "异常设备 Top",
+      "topEmpty": "当前没有需要优先处理的异常设备",
+      "topCounts": "未处理 {{count}} · 窗口 {{window}}",
+      "unsettledShort": "未处理",
+      "recentAlarms": "最近告警",
+      "recentEmpty": "还没有告警事件"
+    },
     "status": {
       "online": "在线",
       "offline": "离线",

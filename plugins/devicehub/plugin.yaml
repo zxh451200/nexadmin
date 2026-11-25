@@ -11,6 +11,16 @@ requires_nexadmin: ">=0.1.0"
 # edit / control 是按钮级权限点：设备写操作（下发指令）与配置改动分开授权，不挂根级。
 menus:
   # 业务插件入口统一收在「业务中心」：设备监控不是运维监控，不单独占一级。
+  # 总览单独一个权限码：MenuSpec.Code() 对普通菜单取 perm，复用 devicehub:list 会被判重复菜单键。
+  - parent: /biz
+    type: menu
+    title: plugin_devicehub.overviewPage.menu
+    path: /devicehub/overview
+    component: plugins/devicehub/OverviewPage
+    perm: devicehub:overview
+    icon: LayoutDashboard
+    sort: 59
+    keep_alive: true
   - parent: /biz
     type: menu
     title: plugin_devicehub.menu

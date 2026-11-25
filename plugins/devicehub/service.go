@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -223,13 +225,423 @@ type DeviceStats struct {
 
 func (s *Service) DeviceStats(ctx context.Context) (*DeviceStats, error) {
 	var st DeviceStats
+	// 停用是 enabled=false，不会写成 status='disabled'：按 status 统计会让停用数永远是 0。
 	err := s.db.WithContext(ctx).Model(&Device{}).Select(
 		"COUNT(*) AS total",
-		"COALESCE(SUM(CASE WHEN status = 'online' THEN 1 ELSE 0 END), 0) AS online",
-		"COALESCE(SUM(CASE WHEN status = 'offline' THEN 1 ELSE 0 END), 0) AS offline",
-		"COALESCE(SUM(CASE WHEN status = 'disabled' THEN 1 ELSE 0 END), 0) AS disabled",
+		"COALESCE(SUM(CASE WHEN enabled = ? AND status = ? THEN 1 ELSE 0 END), 0) AS online",
+		"COALESCE(SUM(CASE WHEN enabled = ? AND status = ? THEN 1 ELSE 0 END), 0) AS offline",
+		"COALESCE(SUM(CASE WHEN enabled = ? THEN 1 ELSE 0 END), 0) AS disabled",
+		true, StatusOnline, true, StatusOffline, false,
 	).Scan(&st).Error
 	return &st, err
+}
+
+// Overview 是设备监控总览页的聚合结果：当前健康度 + 时间趋势 + 异常设备 + 最近告警。
+type Overview struct {
+	GeneratedAt time.Time `json:"generatedAt"`
+	Days        int       `json:"days"`
+	Bucket      string    `json:"bucket"`
+	// Sampled=true 表示窗口内告警超过扫描上限，趋势与计数只覆盖前 20000 条。
+	Sampled      bool                  `json:"sampled"`
+	Devices      OverviewDeviceCounts  `json:"devices"`
+	Alarms       OverviewAlarmSummary  `json:"alarms"`
+	OnlineTrend  []OverviewOnlinePoint `json:"onlineTrend"`
+	AlarmTrend   []OverviewAlarmPoint  `json:"alarmTrend"`
+	TopDevices   []OverviewTopDevice   `json:"topDevices"`
+	RecentAlarms []OverviewRecentAlarm `json:"recentAlarms"`
+}
+
+type OverviewDeviceCounts struct {
+	Total      int64   `json:"total"`
+	Online     int64   `json:"online"`
+	Offline    int64   `json:"offline"`
+	Disabled   int64   `json:"disabled"`
+	OnlineRate float64 `json:"onlineRate"`
+}
+
+type OverviewAlarmCounts struct {
+	Critical int64 `json:"critical"`
+	Warn     int64 `json:"warn"`
+	Info     int64 `json:"info"`
+	Total    int64 `json:"total"`
+}
+
+type OverviewAlarmSummary struct {
+	// Unsettled 是当前 active/ack 的存量；Window 是所选时间窗内新产生的事件。
+	Unsettled OverviewAlarmCounts `json:"unsettled"`
+	Window    OverviewAlarmCounts `json:"window"`
+}
+
+type OverviewOnlinePoint struct {
+	TS         time.Time `json:"ts"`
+	Total      int64     `json:"total"`
+	Online     int64     `json:"online"`
+	Offline    int64     `json:"offline"`
+	Disabled   int64     `json:"disabled"`
+	OnlineRate float64   `json:"onlineRate"`
+}
+
+type OverviewAlarmPoint struct {
+	TS       time.Time `json:"ts"`
+	Critical int64     `json:"critical"`
+	Warn     int64     `json:"warn"`
+	Info     int64     `json:"info"`
+	Total    int64     `json:"total"`
+}
+
+type OverviewTopDevice struct {
+	DeviceNo    string     `json:"deviceNo"`
+	Name        string     `json:"name"`
+	Status      string     `json:"status"`
+	Enabled     bool       `json:"enabled"`
+	LastSeenAt  *time.Time `json:"lastSeenAt,omitempty"`
+	LastError   string     `json:"lastError,omitempty"`
+	LastErrorAt *time.Time `json:"lastErrorAt,omitempty"`
+	AlarmCount  int64      `json:"alarmCount"`
+	Unsettled   int64      `json:"unsettled"`
+	Critical    int64      `json:"critical"`
+	Warn        int64      `json:"warn"`
+	Score       int64      `json:"score"`
+}
+
+type OverviewRecentAlarm struct {
+	ID         idgen.ID  `json:"id"`
+	DeviceNo   string    `json:"deviceNo"`
+	DeviceName string    `json:"deviceName"`
+	Level      string    `json:"level"`
+	Status     string    `json:"status"`
+	Message    string    `json:"message"`
+	AckByName  string    `json:"ackByName,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type overviewDeviceRow struct {
+	ID          idgen.ID
+	DeviceNo    string
+	Name        string
+	Status      string
+	Enabled     bool
+	LastSeenAt  *time.Time
+	LastError   string
+	LastErrorAt *time.Time
+}
+
+type overviewAlarmRow struct {
+	DeviceID  idgen.ID
+	Level     string
+	CreatedAt time.Time
+}
+
+type overviewLevelCount struct {
+	Level string
+	Cnt   int64 `gorm:"column:cnt"`
+}
+
+type overviewDeviceLevelCount struct {
+	DeviceID idgen.ID
+	Level    string
+	Cnt      int64 `gorm:"column:cnt"`
+}
+
+type overviewDeviceAlarmStat struct {
+	Critical int64
+	Warn     int64
+	Info     int64
+	Window   int64
+}
+
+// Overview 计算总览页数据。days 只接受 1/7/30，其它值回落到 7 天。
+// 在线率历史来自按小时采样的 plg_devhub_status_sample；告警趋势用同一批窗口事件在 Go 里分桶，
+// 不写 DATE_FORMAT/date_trunc，避免三引擎各写一套。
+func (s *Service) Overview(ctx context.Context, days int) (*Overview, error) {
+	if days != 1 && days != 7 && days != 30 {
+		days = 7
+	}
+	now := time.Now().UTC()
+	bucket := "day"
+	step := 24 * time.Hour
+	steps := days
+	var start time.Time
+	if days == 1 {
+		bucket, step, steps = "hour", time.Hour, 24
+		start = now.Truncate(step).Add(-time.Duration(steps-1) * step)
+	} else {
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		start = today.AddDate(0, 0, -(steps - 1))
+	}
+	end := start.Add(time.Duration(steps) * step)
+	out := &Overview{
+		GeneratedAt: now, Days: days, Bucket: bucket,
+		OnlineTrend:  make([]OverviewOnlinePoint, 0, steps),
+		AlarmTrend:   make([]OverviewAlarmPoint, 0, steps),
+		TopDevices:   make([]OverviewTopDevice, 0, 5),
+		RecentAlarms: make([]OverviewRecentAlarm, 0, 6),
+	}
+
+	// 设备只取总览需要的窄列：不要 SELECT *，config 里可能有协议密码。
+	var devices []overviewDeviceRow
+	if err := s.db.WithContext(ctx).Model(&Device{}).
+		Select("id, device_no, name, status, enabled, last_seen_at, last_error, last_error_at").
+		Find(&devices).Error; err != nil {
+		return nil, err
+	}
+	for _, d := range devices {
+		out.Devices.Total++
+		if !d.Enabled {
+			out.Devices.Disabled++
+			continue
+		}
+		switch d.Status {
+		case StatusOnline:
+			out.Devices.Online++
+		case StatusOffline:
+			out.Devices.Offline++
+		}
+	}
+	if active := out.Devices.Total - out.Devices.Disabled; active > 0 {
+		out.Devices.OnlineRate = math.Round(float64(out.Devices.Online)/float64(active)*1000) / 10
+	}
+
+	livePoint := func(ts time.Time) OverviewOnlinePoint {
+		p := OverviewOnlinePoint{
+			TS: ts, Total: out.Devices.Total, Online: out.Devices.Online,
+			Offline: out.Devices.Offline, Disabled: out.Devices.Disabled,
+			OnlineRate: out.Devices.OnlineRate,
+		}
+		return p
+	}
+
+	var alarmRows []overviewAlarmRow
+	if err := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Select("device_id, level, created_at").
+		Where("created_at >= ? AND created_at < ?", start, end).
+		Order("created_at").Limit(20001).Find(&alarmRows).Error; err != nil {
+		return nil, err
+	}
+	if len(alarmRows) > 20000 {
+		alarmRows = alarmRows[:20000]
+		out.Sampled = true
+	}
+
+	alarmByBucket := make(map[time.Time]*OverviewAlarmPoint, steps)
+	for i := 0; i < steps; i++ {
+		b := start.Add(time.Duration(i) * step)
+		alarmByBucket[b] = &OverviewAlarmPoint{TS: b}
+	}
+	deviceWindow := make(map[idgen.ID]*overviewDeviceAlarmStat, len(devices))
+	for _, row := range alarmRows {
+		switch row.Level {
+		case LevelCritical:
+			out.Alarms.Window.Critical++
+		case LevelWarn:
+			out.Alarms.Window.Warn++
+		case LevelInfo:
+			out.Alarms.Window.Info++
+		}
+		if row.Level != LevelInfo {
+			out.Alarms.Window.Total++
+		}
+		key := row.CreatedAt.UTC().Truncate(step)
+		if p := alarmByBucket[key]; p != nil {
+			switch row.Level {
+			case LevelCritical:
+				p.Critical++
+			case LevelWarn:
+				p.Warn++
+			case LevelInfo:
+				p.Info++
+			}
+			if row.Level != LevelInfo {
+				p.Total++
+			}
+		}
+		ds := deviceWindow[row.DeviceID]
+		if ds == nil {
+			ds = &overviewDeviceAlarmStat{}
+			deviceWindow[row.DeviceID] = ds
+		}
+		switch row.Level {
+		case LevelCritical:
+			ds.Critical++
+			ds.Window++
+		case LevelWarn:
+			ds.Warn++
+			ds.Window++
+		case LevelInfo:
+			ds.Info++
+		}
+	}
+	for i := 0; i < steps; i++ {
+		out.AlarmTrend = append(out.AlarmTrend, *alarmByBucket[start.Add(time.Duration(i)*step)])
+	}
+
+	var levelCounts []overviewLevelCount
+	if err := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Select("level, COUNT(*) AS cnt").
+		Where("status IN ?", []string{AlarmStatusActive, AlarmStatusAck}).
+		Group("level").Find(&levelCounts).Error; err != nil {
+		return nil, err
+	}
+	for _, c := range levelCounts {
+		switch c.Level {
+		case LevelCritical:
+			out.Alarms.Unsettled.Critical = c.Cnt
+		case LevelWarn:
+			out.Alarms.Unsettled.Warn = c.Cnt
+		case LevelInfo:
+			out.Alarms.Unsettled.Info = c.Cnt
+		}
+		out.Alarms.Unsettled.Total += c.Cnt
+	}
+
+	var deviceLevelCounts []overviewDeviceLevelCount
+	if err := s.db.WithContext(ctx).Model(&AlarmEvent{}).
+		Select("device_id, level, COUNT(*) AS cnt").
+		Where("status IN ?", []string{AlarmStatusActive, AlarmStatusAck}).
+		Group("device_id, level").Find(&deviceLevelCounts).Error; err != nil {
+		return nil, err
+	}
+	deviceUnsettled := make(map[idgen.ID]*OverviewAlarmCounts, len(devices))
+	for _, c := range deviceLevelCounts {
+		cur := deviceUnsettled[c.DeviceID]
+		if cur == nil {
+			cur = &OverviewAlarmCounts{}
+			deviceUnsettled[c.DeviceID] = cur
+		}
+		switch c.Level {
+		case LevelCritical:
+			cur.Critical = c.Cnt
+		case LevelWarn:
+			cur.Warn = c.Cnt
+		case LevelInfo:
+			cur.Info = c.Cnt
+		}
+		cur.Total += c.Cnt
+	}
+
+	for _, d := range devices {
+		if !d.Enabled {
+			continue
+		}
+		cur := deviceUnsettled[d.ID]
+		if cur == nil {
+			cur = &OverviewAlarmCounts{}
+		}
+		win := deviceWindow[d.ID]
+		if win == nil {
+			win = &overviewDeviceAlarmStat{}
+		}
+		score := int64(0)
+		if d.Status == StatusOffline {
+			score += 1000
+		}
+		if strings.TrimSpace(d.LastError) != "" {
+			score += 200
+		}
+		score += cur.Critical*100 + cur.Warn*10 + win.Critical*2 + win.Warn
+		if score == 0 {
+			continue
+		}
+		out.TopDevices = append(out.TopDevices, OverviewTopDevice{
+			DeviceNo: d.DeviceNo, Name: d.Name, Status: d.Status, Enabled: d.Enabled,
+			LastSeenAt: d.LastSeenAt, LastError: d.LastError, LastErrorAt: d.LastErrorAt,
+			AlarmCount: win.Window, Unsettled: cur.Total,
+			Critical: cur.Critical, Warn: cur.Warn, Score: score,
+		})
+	}
+	sort.Slice(out.TopDevices, func(i, j int) bool {
+		if out.TopDevices[i].Score != out.TopDevices[j].Score {
+			return out.TopDevices[i].Score > out.TopDevices[j].Score
+		}
+		return out.TopDevices[i].DeviceNo < out.TopDevices[j].DeviceNo
+	})
+	if len(out.TopDevices) > 5 {
+		out.TopDevices = out.TopDevices[:5]
+	}
+
+	if err := s.db.WithContext(ctx).Table("plg_devhub_alarm_event AS a").
+		Select("a.id, COALESCE(d.device_no, '') AS device_no, COALESCE(d.name, '') AS device_name, " +
+			"a.level, a.status, a.message, a.ack_by_name, a.created_at").
+		Joins("LEFT JOIN plg_devhub_device d ON d.id = a.device_id").
+		Order("a.id DESC").Limit(6).Scan(&out.RecentAlarms).Error; err != nil {
+		return nil, err
+	}
+
+	// 在线率历史：小时表按需聚成日；当前小时/当天用实时值覆盖，避免图表最后一个点落后一小时。
+	var samples []StatusSample
+	if err := s.db.WithContext(ctx).Where("bucket >= ? AND bucket < ?", start, end).
+		Order("bucket").Find(&samples).Error; err != nil {
+		return nil, err
+	}
+	if days == 1 {
+		byBucket := make(map[time.Time]StatusSample, len(samples))
+		for _, sm := range samples {
+			byBucket[sm.Bucket.UTC()] = sm
+		}
+		current := now.Truncate(time.Hour)
+		for i := 0; i < steps; i++ {
+			b := start.Add(time.Duration(i) * time.Hour)
+			if b.After(current) {
+				break
+			}
+			if b.Equal(current) {
+				out.OnlineTrend = append(out.OnlineTrend, livePoint(b))
+				continue
+			}
+			if sm, ok := byBucket[b]; ok {
+				p := OverviewOnlinePoint{
+					TS: b, Total: sm.Total, Online: sm.Online,
+					Offline: sm.Offline, Disabled: sm.Disabled,
+				}
+				if active := sm.Total - sm.Disabled; active > 0 {
+					p.OnlineRate = math.Round(float64(sm.Online)/float64(active)*1000) / 10
+				}
+				out.OnlineTrend = append(out.OnlineTrend, p)
+			}
+		}
+	} else {
+		type dayAgg struct {
+			Total, Online, Offline, Disabled, Samples int64
+		}
+		byDay := make(map[time.Time]*dayAgg, days)
+		for _, sm := range samples {
+			key := sm.Bucket.UTC().Truncate(24 * time.Hour)
+			agg := byDay[key]
+			if agg == nil {
+				agg = &dayAgg{}
+				byDay[key] = agg
+			}
+			agg.Total += sm.Total
+			agg.Online += sm.Online
+			agg.Offline += sm.Offline
+			agg.Disabled += sm.Disabled
+			agg.Samples++
+		}
+		current := now.Truncate(24 * time.Hour)
+		for i := 0; i < steps; i++ {
+			b := start.AddDate(0, 0, i)
+			if b.After(current) {
+				break
+			}
+			if b.Equal(current) {
+				out.OnlineTrend = append(out.OnlineTrend, livePoint(b))
+				continue
+			}
+			agg := byDay[b]
+			if agg == nil || agg.Samples == 0 {
+				continue
+			}
+			p := OverviewOnlinePoint{
+				TS: b, Total: agg.Total / agg.Samples, Online: agg.Online / agg.Samples,
+				Offline: agg.Offline / agg.Samples, Disabled: agg.Disabled / agg.Samples,
+			}
+			if active := p.Total - p.Disabled; active > 0 {
+				p.OnlineRate = math.Round(float64(p.Online)/float64(active)*1000) / 10
+			}
+			out.OnlineTrend = append(out.OnlineTrend, p)
+		}
+	}
+	return out, nil
 }
 
 // DeviceInput 是设备表单。Config 是协议 JSON 文本（前端已按协议拼好）。

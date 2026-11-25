@@ -1,6 +1,20 @@
 // 设备监控的 mock：开发模式（VITE_MOCK）下给页面喂数据，形状与真后端一致。
 import { defineMock } from '@/framework/request/mock'
 
+interface MockDevice {
+  id: string
+  deviceNo: string
+  name: string
+  protocol: string
+  endpoint: string
+  config: string
+  status: 'online' | 'offline' | 'disabled'
+  enabled: boolean
+  lastSeenAt: string | null
+  lastError?: string
+  lastErrorAt?: string | null
+}
+
 interface MockPoint {
   id: string
   deviceId: string
@@ -19,7 +33,7 @@ interface MockPoint {
   lastTs?: string | null
 }
 
-const devices = [
+const devices: MockDevice[] = [
   {
     id: '901', deviceNo: 'DEV901', name: '1# 变频器', protocol: 'modbus-tcp',
     endpoint: '192.168.1.20:502', config: '{"unitId":1,"pollIntervalMs":5000}',
@@ -29,6 +43,8 @@ const devices = [
     id: '902', deviceNo: 'DEV902', name: '边缘网关 A', protocol: 'mqtt',
     endpoint: 'tcp://192.168.1.10:1883', config: '{"upstreamPrefix":"devicehub/up/DEV902"}',
     status: 'offline', enabled: true, lastSeenAt: null,
+    lastError: 'read tcp 192.168.1.10:1883: i/o timeout',
+    lastErrorAt: new Date(Date.now() - 1800_000).toISOString(),
   },
 ]
 
@@ -80,10 +96,92 @@ defineMock([
   },
   { method: 'GET', url: '/plugins/devicehub/stats', handler: () => ({
     total: devices.length,
-    online: devices.filter((d) => d.status === 'online').length,
-    offline: devices.filter((d) => d.status === 'offline').length,
-    disabled: devices.filter((d) => d.status === 'disabled').length,
+    online: devices.filter((d) => d.enabled && d.status === 'online').length,
+    offline: devices.filter((d) => d.enabled && d.status === 'offline').length,
+    disabled: devices.filter((d) => !d.enabled).length,
   }) },
+  {
+    // 总览聚合：在线率趋势 + 告警趋势 + 异常设备 Top + 最近告警，形状与真后端一致。
+    method: 'GET', url: '/plugins/devicehub/overview',
+    handler: ({ query }) => {
+      const days = Number(query.days) === 1 ? 1 : Number(query.days) === 30 ? 30 : 7
+      const bucket = days === 1 ? 'hour' : 'day'
+      const steps = days === 1 ? 24 : days
+      const stepMs = days === 1 ? 3600_000 : 86400_000
+      const now = Date.now()
+      const enabled = devices.filter((d) => d.enabled)
+      const total = devices.length
+      const disabled = total - enabled.length
+      const active = total - disabled
+      const online = enabled.filter((d) => d.status === 'online').length
+      const offline = enabled.filter((d) => d.status === 'offline').length
+      const rate = active > 0 ? Number(((online / active) * 100).toFixed(1)) : 0
+      const at = (i: number) => new Date(now - (steps - 1 - i) * stepMs).toISOString()
+
+      const onlineTrend = Array.from({ length: steps }, (_, i) => {
+        const ts = at(i)
+        const onlineAt = i === steps - 1 ? online : Math.max(0, Math.min(active, Math.round(active * (0.8 + 0.2 * Math.sin(i / 3)))))
+        return {
+          ts, total, online: onlineAt, offline: Math.max(0, active - onlineAt), disabled,
+          onlineRate: active > 0 ? Number(((onlineAt / active) * 100).toFixed(1)) : 0,
+        }
+      })
+
+      const alarmTrend = Array.from({ length: steps }, (_, i) => {
+        const ts = at(i)
+        const critical = Math.max(0, Math.round(1 + 1.5 * Math.sin(i / 2)))
+        const warn = Math.max(0, Math.round(3 + 2 * Math.cos(i / 3)))
+        return { ts, critical, warn, info: Math.max(0, Math.round(1 + Math.sin(i / 4))), total: critical + warn }
+      })
+
+      const unsettled = { critical: 0, warn: 0, info: 0, total: 0 }
+      const windowCounts = { critical: 0, warn: 0, info: 0, total: 0 }
+      for (const e of alarmEvents) {
+        switch (e.level) {
+          case 'critical': windowCounts.critical++; break
+          case 'warn': windowCounts.warn++; break
+          case 'info': windowCounts.info++; break
+        }
+        if (e.level !== 'info') windowCounts.total++
+        if (e.status === 'cleared') continue
+        switch (e.level) {
+          case 'critical': unsettled.critical++; break
+          case 'warn': unsettled.warn++; break
+          case 'info': unsettled.info++; break
+        }
+        unsettled.total++
+      }
+
+      const topDevices = enabled.map((d) => {
+        const events = alarmEvents.filter((e) => e.deviceId === d.id)
+        const pending = events.filter((e) => e.status !== 'cleared')
+        const critical = pending.filter((e) => e.level === 'critical').length
+        const warn = pending.filter((e) => e.level === 'warn').length
+        const window = events.filter((e) => e.level !== 'info').length
+        const score = (d.status === 'offline' ? 1000 : 0) + (d.lastError ? 200 : 0) + critical * 100 + warn * 10 + window
+        return {
+          deviceNo: d.deviceNo, name: d.name, status: d.status, enabled: d.enabled,
+          lastSeenAt: d.lastSeenAt, lastError: d.lastError ?? '', lastErrorAt: d.lastErrorAt ?? null,
+          alarmCount: window, unsettled: pending.length, critical, warn, score,
+        }
+      }).filter((d) => d.score > 0).sort((a, b) => b.score - a.score).slice(0, 5)
+
+      const recentAlarms = [...alarmEvents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6).map((e) => {
+        const d = devices.find((x) => x.id === e.deviceId)
+        return {
+          id: e.id, deviceNo: d?.deviceNo ?? '', deviceName: d?.name ?? '',
+          level: e.level, status: e.status, message: e.message, ackByName: e.ackByName, createdAt: e.createdAt,
+        }
+      })
+
+      return {
+        generatedAt: new Date().toISOString(), days, bucket, sampled: false,
+        devices: { total, online, offline, disabled, onlineRate: rate },
+        alarms: { unsettled, window: windowCounts },
+        onlineTrend, alarmTrend, topDevices, recentAlarms,
+      }
+    },
+  },
   { method: 'GET', url: '/plugins/devicehub/devices/:no', handler: ({ params }) => {
     const d = deviceOf(params.no)
     if (!d) throw new Error('device not found')
@@ -94,9 +192,9 @@ defineMock([
     handler: ({ body }) => {
       const d = {
         id: String(900 + devices.length + 1), deviceNo: `DEV${900 + devices.length + 1}`,
-        name: String(body.name ?? ''), protocol: body.protocol ?? 'modbus-tcp',
+        name: String(body.name ?? ''), protocol: String(body.protocol ?? 'modbus-tcp'),
         endpoint: String(body.endpoint ?? ''), config: String(body.config ?? ''),
-        status: 'offline', enabled: body.enabled !== false, lastSeenAt: null,
+        status: 'offline' as const, enabled: body.enabled !== false, lastSeenAt: null,
       }
       devices.push(d)
       return d

@@ -6,6 +6,13 @@ import type { ModuleRoute } from '@/framework/router/types'
 
 export const routes: ModuleRoute[] = [
   {
+    path: 'devicehub/overview',
+    component: lazy(() => import('./OverviewPage')),
+    perm: 'devicehub:overview',
+    platform: true,
+    menu: { title: 'plugin_devicehub.overviewPage.menu', icon: 'LayoutDashboard', order: 63, group: 'system' },
+  },
+  {
     path: 'devicehub/monitor',
     component: lazy(() => import('./DevicePage')),
     perm: 'devicehub:list',

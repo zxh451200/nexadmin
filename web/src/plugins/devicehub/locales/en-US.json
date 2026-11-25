@@ -11,6 +11,30 @@
     "overview": {
       "total": "Devices"
     },
+    "overviewPage": {
+      "menu": "Device overview",
+      "title": "Device overview",
+      "description": "Fleet availability, alarm trends and devices that need attention first; click any item to jump into monitoring",
+      "range": "Time range",
+      "viewMonitor": "Open monitoring",
+      "viewAll": "View all",
+      "sampled": "This window has many alarms; trends and counts cover the latest 20,000 events only.",
+      "onlineRate": "Online rate",
+      "offline": "Offline devices",
+      "disabledHint": "{{count}} disabled",
+      "unsettled": "Unresolved alarms",
+      "unsettledHint": "Critical {{critical}} · Warning {{warn}}",
+      "windowAlarms": "Alarms in window",
+      "days": "Last {{days}} days",
+      "onlineTrend": "Online rate trend",
+      "alarmTrend": "Alarm trend",
+      "topDevices": "Top problem devices",
+      "topEmpty": "No devices need attention right now",
+      "topCounts": "{{count}} unresolved · {{window}} in window",
+      "unsettledShort": "unresolved",
+      "recentAlarms": "Recent alarms",
+      "recentEmpty": "No alarm events yet"
+    },
     "status": {
       "online": "Online",
       "offline": "Offline",

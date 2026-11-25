@@ -191,3 +191,15 @@ type AlarmEvent struct {
 }
 
 func (AlarmEvent) TableName() string { return "plg_devhub_alarm_event" }
+
+// StatusSample 是设备在线率的按小时快照：device.status 只有当前值，历史趋势要靠定时采样留存。
+type StatusSample struct {
+	database.PlatformModel
+	Bucket   time.Time `gorm:"not null;uniqueIndex:uk_plg_devhub_status_sample_bucket" json:"bucket"`
+	Total    int64     `gorm:"not null;default:0" json:"total"`
+	Online   int64     `gorm:"not null;default:0" json:"online"`
+	Offline  int64     `gorm:"not null;default:0" json:"offline"`
+	Disabled int64     `gorm:"not null;default:0" json:"disabled"`
+}
+
+func (StatusSample) TableName() string { return "plg_devhub_status_sample" }

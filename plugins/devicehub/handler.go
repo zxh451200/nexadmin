@@ -65,6 +65,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	// 设备
 	g.GET("/stats", core.Perm("devicehub:list"), h.stats)
+	g.GET("/overview", core.Perm("devicehub:list"), h.overview)
 	g.GET("/devices", core.Perm("devicehub:list"), h.listDevices)
 	g.GET("/devices/:no", core.Perm("devicehub:list"), h.getDevice)
 	g.POST("/devices", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "create"), h.saveDevice)
@@ -155,6 +156,12 @@ func (h *handler) getDevice(c *gin.Context) {
 func (h *handler) stats(c *gin.Context) {
 	st, err := h.svc.DeviceStats(c.Request.Context())
 	respond(c, st, err)
+}
+
+func (h *handler) overview(c *gin.Context) {
+	days, _ := strconv.Atoi(c.Query("days"))
+	row, err := h.svc.Overview(c.Request.Context(), days)
+	respond(c, row, err)
 }
 
 func (h *handler) deleteDevice(c *gin.Context) {

@@ -365,8 +365,13 @@ function DeviceDetail({
   // 列表分页后设备行不在当前页也得能看详情：单查这一台
   const d = useDevice(deviceNo).data
   const points = usePoints(deviceNo)
-  // 告警/指令用 Tab 切换，实时值常驻上方
-  const [tab, setTab] = useState('points')
+  // 告警/指令用 Tab 切换，实时值常驻上方；?tab=alarms 供总览/站内信深链直达。
+  const [params] = useSearchParams()
+  const urlTab = params.get('tab') ?? ''
+  const [tab, setTab] = useState(['points', 'history', 'commands', 'alarms', 'logs'].includes(urlTab) ? urlTab : 'points')
+  useEffect(() => {
+    if (['points', 'history', 'commands', 'alarms', 'logs'].includes(urlTab)) setTab(urlTab)
+  }, [urlTab])
 
   return (
     // 宽屏下是第二栏：自带分栏竖线，整栏自己滚（列表滚它的、详情滚它的）；

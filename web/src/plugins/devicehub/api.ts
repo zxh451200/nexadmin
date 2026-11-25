@@ -152,7 +152,7 @@ export const DEVICE_WS_FEED = 'device:feed'
 export const deviceWsTopic = (deviceNo: string) => `device:${deviceNo}`
 
 /** 可以按帧局部失效的查询域（queryKey 的第二段）。 */
-export type DeviceQueryPart = 'devices' | 'device' | 'stats' | 'points' | 'commands' | 'alarms' | 'rules' | 'history'
+export type DeviceQueryPart = 'devices' | 'device' | 'stats' | 'overview' | 'points' | 'commands' | 'alarms' | 'rules' | 'history'
 
 /**
  * 实时帧只刷受影响的那几块，不要把 `plugin_devicehub` 整域打红：
@@ -227,6 +227,78 @@ export interface DeviceStats {
   online: number
   offline: number
   disabled: number
+}
+
+export interface OverviewAlarmCounts {
+  critical: number
+  warn: number
+  info: number
+  total: number
+}
+
+export interface OverviewOnlinePoint {
+  ts: string
+  total: number
+  online: number
+  offline: number
+  disabled: number
+  onlineRate: number
+}
+
+export interface OverviewAlarmPoint {
+  ts: string
+  critical: number
+  warn: number
+  info: number
+  total: number
+}
+
+export interface OverviewTopDevice {
+  deviceNo: string
+  name: string
+  status: DeviceStatus
+  enabled: boolean
+  lastSeenAt?: string | null
+  lastError?: string
+  lastErrorAt?: string | null
+  alarmCount: number
+  unsettled: number
+  critical: number
+  warn: number
+  score: number
+}
+
+export interface OverviewRecentAlarm {
+  id: string
+  deviceNo: string
+  deviceName: string
+  level: AlarmLevel
+  status: AlarmStatus
+  message: string
+  ackByName?: string
+  createdAt: string
+}
+
+export interface DeviceOverview {
+  generatedAt: string
+  days: number
+  bucket: 'hour' | 'day'
+  sampled: boolean
+  devices: DeviceStats & { onlineRate: number }
+  alarms: { unsettled: OverviewAlarmCounts; window: OverviewAlarmCounts }
+  onlineTrend: OverviewOnlinePoint[]
+  alarmTrend: OverviewAlarmPoint[]
+  topDevices: OverviewTopDevice[]
+  recentAlarms: OverviewRecentAlarm[]
+}
+
+/** 总览是聚合查询，轮询间隔比监控页长；标签页不可见时暂停。 */
+export function useDeviceOverview(days: number) {
+  return useQuery({
+    queryKey: [...KEY, 'overview', days],
+    queryFn: () => api.get<DeviceOverview>(`${BASE}/overview`, { days }),
+    refetchInterval: useHiddenPause(15000),
+  })
 }
 
 export function useSaveDevice() {
