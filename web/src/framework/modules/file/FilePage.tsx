@@ -490,8 +490,8 @@ export default function FilePage() {
                     {rows.map((f) => {
                       const checked = selected.includes(f.id)
                       return (
-                        <li key={f.id} data-file-id={f.id}>
-                          <Card className={cn('group flex h-full min-h-28 overflow-hidden transition-shadow hover:shadow-md motion-reduce:transition-none sm:block', checked && 'ring-2 ring-primary')}>
+                        <li key={f.id} data-file-id={f.id} className="min-w-0">
+                          <Card className={cn('group flex h-full min-h-28 min-w-0 overflow-hidden transition-shadow hover:shadow-md motion-reduce:transition-none sm:block', checked && 'ring-2 ring-primary')}>
                             <div className="relative h-full w-28 shrink-0 overflow-hidden border-e border-border sm:aspect-4/3 sm:h-auto sm:w-auto sm:border-b sm:border-e-0">
                               <button
                                 type="button"
@@ -552,7 +552,7 @@ export default function FilePage() {
                             </div>
                             {/* 操作入口放文件名这一行的右端（竖三点），不再压在缩略图右下角：
                                 图片区留给缩略图本身，菜单也不会挡住画面内容 */}
-                            <div className="flex items-start gap-1 p-2.5">
+                            <div className="flex min-w-0 items-start gap-1 p-2.5">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium" title={f.name}>
                                   {f.name}
