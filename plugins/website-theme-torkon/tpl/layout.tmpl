@@ -93,12 +93,16 @@
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>
       </details>
-      {{if ne .Route "/"}}<a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}}</a>{{end}}
-      <details class="tk-mnav-btn">
+      {{if ne .Route "/"}}<a class="tk-btn tk-btn-red tk-header-cta" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}}</a>{{end}}
+      <details class="tk-mnav-btn" data-mnav>
         <summary aria-label="{{.T "layout.mainNav"}}"><span></span><span></span><span></span></summary>
         <div class="tk-mnav">
           {{range .Navs}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}
-          <a href="{{$.URL "/contact"}}">{{$.T "theme.torkon.quote"}}</a>
+          <a class="tk-mnav-cta" href="{{$.URL "/contact"}}">{{$.T "theme.torkon.quote"}}</a>
+          <div class="tk-mnav-lang">
+            <span class="tk-mnav-lang-label">{{.T "layout.lang"}}</span>
+            {{range .Languages}}{{if eq .Code $.Lang.Code}}<span class="tk-mnav-lang-current" aria-current="true">{{.Label}}</span>{{else}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}{{end}}
+          </div>
         </div>
       </details>
     </div>

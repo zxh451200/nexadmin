@@ -148,8 +148,15 @@ p { margin: 0; }
 .tk-mnav-btn summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 5px; padding: 10px 8px; }
 .tk-mnav-btn summary::-webkit-details-marker { display: none; }
 .tk-mnav-btn summary span { width: 20px; height: 2px; background: #fff; display: block; }
-.tk-mnav { position: absolute; left: 0; right: 0; top: 100%; background: var(--tk-ink); border-top: 1px solid rgba(255, 255, 255, .1); padding: 10px 22px 22px; display: flex; flex-direction: column; box-shadow: 0 24px 40px -20px rgba(0, 0, 0, .6); }
+.tk-mnav { position: absolute; left: 0; right: 0; top: 100%; max-height: calc(100dvh - 64px); overflow-y: auto; background: var(--tk-ink); border-top: 1px solid rgba(255, 255, 255, .1); padding: 10px 22px 22px; display: flex; flex-direction: column; box-shadow: 0 24px 40px -20px rgba(0, 0, 0, .6); }
 .tk-mnav a { color: #e7e8ea; padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); font-size: 15px; }
+.tk-mnav .tk-mnav-cta { margin-top: 12px; padding: 12px 16px; background: var(--tk-red); color: #fff; text-align: center; font-weight: 600; }
+.tk-mnav .tk-mnav-lang { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.tk-mnav .tk-mnav-lang-label { font-size: 12px; color: #9b9ea4; }
+.tk-mnav .tk-mnav-lang a,
+.tk-mnav .tk-mnav-lang-current { padding: 0; border: 0; font-size: 14px; color: #e7e8ea; }
+.tk-mnav .tk-mnav-lang a { display: inline-flex; align-items: center; min-height: 44px; }
+.tk-mnav .tk-mnav-lang-current { font-weight: 600; }
 /* details 折叠态：作者样式会盖过 UA 的隐藏行为，必须显式兜住，否则下拉白卡常驻 */
 .tk-navsub:not([open]) > ul,
 .tk-lang:not([open]) > .tk-langmenu,
@@ -172,6 +179,17 @@ p { margin: 0; }
   .tk-hlink, .tk-hsep { display: none; }
   .tk-mnav-btn { display: block; }
   .tk-brand-logo { height: 27px; }
+  .tk-mnav-btn summary { min-width: 44px; min-height: 44px; align-items: center; }
+}
+@media (max-width: 640px) {
+  .tk-header-in { gap: 8px; padding-inline: 16px; }
+  .tk-brand { min-width: 0; }
+  .tk-brand-logo { max-width: 180px; }
+  .tk-header-cta, .tk-lang { display: none; }
+  .tk-header-actions { gap: 0; }
+  .tk-mnav-btn summary { min-width: 44px; min-height: 44px; align-items: center; }
+  .tk-mnav { padding-inline: 16px; }
+  body.mnav-open { overflow: hidden; }
 }
 
 /* ---- HERO：全幅工业照 + 左侧竖栏 ---- */
@@ -268,6 +286,7 @@ p { margin: 0; }
 .tk-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .tk-chip { display: inline-flex; align-items: center; padding: 5px 11px; border: 1px solid var(--tk-line); border-radius: 999px; background: #fff; color: var(--tk-muted); font-size: 11px; font-weight: 600; transition: color .15s, border-color .15s, background .15s; }
 .tk-chip:hover { color: var(--tk-ink); border-color: var(--tk-ink); }
+@media (max-width: 980px) { .tk-chip { min-height: 44px; } }
 .tk-chip.active { background: var(--tk-red); border-color: var(--tk-red); color: #fff; }
 .tk-filter { justify-content: flex-start; margin-bottom: 26px; }
 
@@ -399,7 +418,7 @@ p { margin: 0; }
 .tk-table tbody tr:hover { background: #fdf6f6; }
 .tk-table td { color: var(--tk-text); }
 .tk-td-model { font-family: var(--tk-display); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
-.tk-table-link { color: var(--tk-red); font-weight: 600; white-space: nowrap; }
+.tk-table-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--tk-red); font-weight: 600; white-space: nowrap; }
 .tk-table-link:hover { text-decoration: underline; }
 .tk-spec-table { min-width: 0; margin: 26px 0; }
 .tk-spec-table caption { caption-side: top; text-align: start; padding: 0 0 10px; font-family: var(--tk-display); font-size: 16px; font-weight: 700; }
@@ -503,6 +522,7 @@ p { margin: 0; }
 .tk-social { list-style: none; display: flex; gap: 8px; margin: 18px 0 0; padding: 0; }
 .tk-social a { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, .16); border-radius: 3px; color: #c9ccd1; transition: color .15s, border-color .15s, background .15s; }
 .tk-social a:hover { color: #fff; border-color: var(--tk-red); background: var(--tk-red); }
+@media (max-width: 980px) { .tk-social a { width: 44px; height: 44px; } }
 .tk-social svg { width: 18px; height: 18px; }
 .tk-footer-col { display: flex; flex-direction: column; gap: 6px; }
 .tk-footer-col h4 { margin-bottom: 4px; color: #fff; font-family: var(--tk-body); font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }

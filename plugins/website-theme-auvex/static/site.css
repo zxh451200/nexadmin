@@ -131,8 +131,15 @@ p { margin: 0; }
 .au-mnav-btn summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 5px; padding: 10px 8px; }
 .au-mnav-btn summary::-webkit-details-marker { display: none; }
 .au-mnav-btn summary span { width: 20px; height: 2px; background: var(--au-ink); display: block; }
-.au-mnav { position: absolute; left: 0; right: 0; top: 100%; background: #fff; border-top: 1px solid var(--au-line); padding: 10px 24px 22px; display: flex; flex-direction: column; box-shadow: 0 24px 40px -24px rgba(11, 18, 24, .28); }
+.au-mnav { position: absolute; left: 0; right: 0; top: 100%; max-height: calc(100dvh - 64px); overflow-y: auto; background: #fff; border-top: 1px solid var(--au-line); padding: 10px 24px 22px; display: flex; flex-direction: column; box-shadow: 0 24px 40px -24px rgba(11, 18, 24, .28); }
 .au-mnav a { color: var(--au-text); padding: 12px 0; border-bottom: 1px solid var(--au-line); font-size: 15px; }
+.au-mnav .au-mnav-cta { margin-top: 12px; padding: 12px 16px; background: var(--au-blue); color: #fff; text-align: center; font-weight: 600; }
+.au-mnav .au-mnav-lang { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid var(--au-line); }
+.au-mnav .au-mnav-lang-label { font-size: 12px; color: var(--au-muted); }
+.au-mnav .au-mnav-lang a,
+.au-mnav .au-mnav-lang-current { padding: 0; border: 0; font-size: 14px; color: var(--au-text); }
+.au-mnav .au-mnav-lang a { display: inline-flex; align-items: center; min-height: 44px; }
+.au-mnav .au-mnav-lang-current { font-weight: 600; }
 /* details 折叠态：作者样式会盖过 UA 的隐藏行为，必须显式兜住，否则下拉白卡常驻 */
 .au-navsub:not([open]) > ul,
 .au-lang:not([open]) > .au-langmenu,
@@ -151,6 +158,17 @@ p { margin: 0; }
   .au-header-actions { margin-inline-start: auto; }
   .au-header-in { min-height: 64px; }
   .au-brand-logo { height: 27px; }
+  .au-mnav-btn summary { min-width: 44px; min-height: 44px; align-items: center; }
+}
+@media (max-width: 640px) {
+  .au-header-in { gap: 8px; padding-inline: 16px; }
+  .au-brand { min-width: 0; }
+  .au-brand-logo { max-width: 180px; }
+  .au-header-cta { display: none; }
+  .au-header-actions { gap: 0; }
+  .au-mnav-btn summary { min-width: 44px; min-height: 44px; align-items: center; }
+  .au-mnav { padding-inline: 16px; }
+  body.mnav-open { overflow: hidden; }
 }
 
 /* ---- HERO：全幅机床实景 + 左侧文案 ---- */
@@ -338,9 +356,10 @@ p { margin: 0; }
 .au-footer-grid-nav { grid-template-columns: 1.7fr repeat(auto-fit, minmax(140px, 1fr)); }
 .au-footer-brand .au-brand-logo { height: 30px; filter: brightness(0) invert(1); }
 .au-footer-brand p { margin-top: 14px; max-width: 30ch; line-height: 1.7; }
-.au-social { list-style: none; display: flex; gap: 8px; margin: 18px 0 0; padding: 0; }
+.au-social { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; }
 .au-social a { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, .16); border-radius: 2px; color: #a7b4c0; transition: color .15s, background .15s, border-color .15s; }
 .au-social a:hover { color: #fff; background: var(--au-blue); border-color: var(--au-blue); }
+@media (max-width: 980px) { .au-social a { width: 44px; height: 44px; } }
 .au-social svg { width: 18px; height: 18px; }
 .au-footer-col { display: flex; flex-direction: column; gap: 9px; }
 .au-footer-col h4 { margin-bottom: 4px; color: #fff; font-family: var(--au-sans); font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
@@ -351,7 +370,10 @@ p { margin: 0; }
 .au-footer-qr figcaption { margin-top: 6px; font-size: 11px; }
 .au-footer-bottom { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding-top: 18px; padding-bottom: 22px; border-top: 1px solid rgba(255, 255, 255, .1); color: #7c8996; font-size: 11.5px; }
 @media (max-width: 1080px) { .au-footer-grid { grid-template-columns: 1fr 1fr 1fr; } }
-@media (max-width: 700px) { .au-footer-grid { grid-template-columns: 1fr 1fr; gap: 26px; padding-top: 36px; } }
+@media (max-width: 700px) {
+  .au-footer-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; padding-top: 36px; }
+  .au-footer-grid > * { min-width: 0; }
+}
 
 /* ---- 内页 ---- */
 .au-pagehead { background: #fff; border-bottom: 1px solid var(--au-line); padding: 52px 0 28px; }

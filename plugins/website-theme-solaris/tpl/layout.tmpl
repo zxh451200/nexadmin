@@ -80,7 +80,7 @@
       {{/* 「设置语言和币种」弹层（对标阿里）：保存走共享 site.js，币种写 cookie
            由服务端换算价格，语言跳 Switch 地址。汇率表为空时回退纯语言菜单。 */}}
       <details class="sl-locale" data-locale-pop>
-        <summary aria-label="{{.T "locale.title"}}" data-locale-trigger>{{icon "globe"}}<span>{{.Lang.Label}}-{{.CurrencyName .DisplayCurrency}}</span></summary>
+        <summary aria-label="{{.T "locale.title"}}" data-locale-trigger>{{icon "globe"}}<span class="sl-locale-full">{{.Lang.Label}}-{{.CurrencyName .DisplayCurrency}}</span><span class="sl-locale-compact">{{.Lang.Code}}-{{.DisplayCurrency}}</span></summary>
         <div class="sl-pop" data-locale-menu>
           <h4>{{.T "locale.title"}}</h4>
           <p class="sl-pop-hint">{{.T "locale.hint"}}</p>
@@ -107,12 +107,16 @@
         </div>
       </details>
       {{end}}
-      <a class="sl-btn sl-btn-blue" href="{{.URL "/contact"}}">{{.T "theme.solaris.quote"}}</a>
-      <details class="sl-mnav-btn">
+      <a class="sl-btn sl-btn-blue sl-header-cta" href="{{.URL "/contact"}}">{{.T "theme.solaris.quote"}}</a>
+      <details class="sl-mnav-btn" data-mnav>
         <summary aria-label="{{.T "layout.openMenu"}}"><span></span><span></span><span></span></summary>
         <div class="sl-mnav" aria-label="{{.T "layout.mobileNav"}}">
           {{range .Navs}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}
-          {{range .Languages}}<a href="{{$.Switch .}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}
+          <a class="sl-mnav-cta" href="{{$.URL "/contact"}}">{{.T "theme.solaris.quote"}}</a>
+          <div class="sl-mnav-lang">
+            <span class="sl-mnav-lang-label">{{.T "layout.lang"}}</span>
+            {{range .Languages}}{{if eq .Code $.Lang.Code}}<span class="sl-mnav-lang-current" aria-current="true">{{.Label}}</span>{{else}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}{{end}}
+          </div>
         </div>
       </details>
     </div>

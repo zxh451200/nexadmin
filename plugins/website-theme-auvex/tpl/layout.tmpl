@@ -81,12 +81,16 @@
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>
       </details>
-      <a class="au-btn au-btn-blue" href="{{.URL "/contact"}}">{{.T "theme.auvex.quote"}}</a>
-      <details class="au-mnav-btn">
+      <a class="au-btn au-btn-blue au-header-cta" href="{{.URL "/contact"}}">{{.T "theme.auvex.quote"}}</a>
+      <details class="au-mnav-btn" data-mnav>
         <summary aria-label="{{.T "layout.openMenu"}}"><span></span><span></span><span></span></summary>
         <div class="au-mnav" aria-label="{{.T "layout.mobileNav"}}">
           {{range .Navs}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}
-          {{range .Languages}}<a href="{{$.Switch .}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}
+          <a class="au-mnav-cta" href="{{$.URL "/contact"}}">{{$.T "theme.auvex.quote"}}</a>
+          <div class="au-mnav-lang">
+            <span class="au-mnav-lang-label">{{.T "layout.lang"}}</span>
+            {{range .Languages}}{{if eq .Code $.Lang.Code}}<span class="au-mnav-lang-current" aria-current="true">{{.Label}}</span>{{else}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}{{end}}
+          </div>
         </div>
       </details>
     </div>
