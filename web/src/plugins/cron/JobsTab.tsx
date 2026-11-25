@@ -3,11 +3,13 @@ import { Activity, Pencil, Play, Plus, ScrollText, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
+import { RowActions } from '@/framework/components/RowActions'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -43,6 +45,7 @@ interface Props {
 
 export function JobsTab({ onViewLogs }: Props) {
   const { t, i18n } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const [draft, setDraft] = useState<{ keyword?: string; handler?: string[]; enabled?: string }>({})
   const [filters, setFilters] = useState<JobQuery>({})
@@ -248,31 +251,44 @@ export function JobsTab({ onViewLogs }: Props) {
           </>
         }
         rowActions={(j) => (
-          <>
-            <Can perm="cron:log">
-              <Button variant="ghost" size="icon" aria-label={t('plugin_cron.health.open')} title={t('plugin_cron.health.open')} onClick={() => setHealthTarget(j)}>
-                <Activity aria-hidden="true" />
-              </Button>
-            </Can>
-            <Can perm="cron:run">
-              <Button variant="ghost" size="icon" aria-label={t('plugin_cron.run')} onClick={() => setRunTarget(j)}>
-                <Play aria-hidden="true" />
-              </Button>
-            </Can>
-            <Can perm="cron:log">
-              <Button variant="ghost" size="icon" aria-label={t('plugin_cron.viewLogs')} onClick={() => onViewLogs(j)}>
-                <ScrollText aria-hidden="true" />
-              </Button>
-            </Can>
-            <Can perm="cron:edit">
-              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(j)}>
-                <Pencil aria-hidden="true" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(j)}>
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </Can>
-          </>
+          <RowActions
+            primaryKey="edit"
+            actions={[
+              ...(has('cron:log') ? [{
+                key: 'health',
+                label: t('plugin_cron.health.open'),
+                icon: <Activity aria-hidden="true" />,
+                onSelect: () => setHealthTarget(j),
+              }] : []),
+              ...(has('cron:run') ? [{
+                key: 'run',
+                label: t('plugin_cron.run'),
+                icon: <Play aria-hidden="true" />,
+                onSelect: () => setRunTarget(j),
+              }] : []),
+              ...(has('cron:log') ? [{
+                key: 'logs',
+                label: t('plugin_cron.viewLogs'),
+                icon: <ScrollText aria-hidden="true" />,
+                onSelect: () => onViewLogs(j),
+              }] : []),
+              ...(has('cron:edit') ? [
+                {
+                  key: 'edit',
+                  label: t('common.edit'),
+                  icon: <Pencil aria-hidden="true" />,
+                  onSelect: () => openForm(j),
+                },
+                {
+                  key: 'delete',
+                  label: t('common.delete'),
+                  icon: <Trash2 aria-hidden="true" />,
+                  destructive: true,
+                  onSelect: () => void onDelete(j),
+                },
+              ] : []),
+            ]}
+          />
         )}
       />
 

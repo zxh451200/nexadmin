@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -29,6 +30,7 @@ import {
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { RowActions } from '@/framework/components/RowActions'
 import { DateTimePicker } from '@/framework/components/DateTimePicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
@@ -970,6 +972,7 @@ function PostVersionsDialog({ post, onClose }: { post: SitePost | null; onClose:
 
 export default function PostPage() {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const { start: startExportJob } = useAsyncJob()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
@@ -1256,32 +1259,51 @@ export default function PostPage() {
             </Button>
           </Can>
         )}
-        rowActions={(row) => (
-          <Can perm="website:post">
-            {row.published && !isScheduled(row) ? (
-              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-                <a href={`/news/${row.slug}`} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden="true" />
-                </a>
-              </Button>
-            ) : null}
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.preview')} onClick={() => void onPreview(row)}>
-              <Eye aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.copy')} onClick={() => void onCopy(row)}>
-              <Copy aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openAt(row)}>
-              <Pencil aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.versions')} onClick={() => setVersionsOf(row)}>
-              <History aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row.id])}>
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </Can>
-        )}
+        rowActions={(row) => has('website:post') ? (
+          <RowActions
+            primaryKey="edit"
+            actions={[
+              ...(row.published && !isScheduled(row) ? [{
+                key: 'view-site',
+                label: t('plugin_website.viewSite'),
+                icon: <ExternalLink aria-hidden="true" />,
+                href: `/news/${row.slug}`,
+                external: true,
+              }] : []),
+              {
+                key: 'preview',
+                label: t('plugin_website.post.preview'),
+                icon: <Eye aria-hidden="true" />,
+                onSelect: () => void onPreview(row),
+              },
+              {
+                key: 'copy',
+                label: t('plugin_website.post.copy'),
+                icon: <Copy aria-hidden="true" />,
+                onSelect: () => void onCopy(row),
+              },
+              {
+                key: 'edit',
+                label: t('common.edit'),
+                icon: <Pencil aria-hidden="true" />,
+                onSelect: () => openAt(row),
+              },
+              {
+                key: 'versions',
+                label: t('plugin_website.post.versions'),
+                icon: <History aria-hidden="true" />,
+                onSelect: () => setVersionsOf(row),
+              },
+              {
+                key: 'delete',
+                label: t('common.delete'),
+                icon: <Trash2 aria-hidden="true" />,
+                destructive: true,
+                onSelect: () => void onDelete([row.id]),
+              },
+            ]}
+          />
+        ) : null}
       />
       {formOpen && (
         <PostFormDialog

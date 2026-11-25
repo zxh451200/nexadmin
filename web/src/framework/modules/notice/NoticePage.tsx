@@ -3,6 +3,7 @@ import { BarChart3, Pencil, Plus, Send, Trash2, Undo2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
@@ -11,6 +12,7 @@ import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RowActions } from '@/framework/components/RowActions'
 import { useHeaderSort } from '@/framework/hooks/use-header-sort'
 import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { Badge } from '@/framework/ui/badge'
@@ -55,6 +57,7 @@ const toNoticeQuery = (d: NoticeDraft): NoticeQuery => ({
 
 export default function NoticePage() {
   const { t, i18n } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const [draft, setDraft] = useState<NoticeDraft>({})
   const [filters, setFilters] = useState<NoticeQuery>({})
@@ -234,47 +237,37 @@ export default function NoticePage() {
         )}
         emptyText={t('notice.empty')}
         rowActions={(n) => (
-          <>
-            {/* 纯图标按钮：aria-label 给读屏，title 给鼠标——桌面用户悬停才知道这个图标是什么 */}
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t('notice.stats.action')}
-              title={t('notice.stats.action')}
-              disabled={n.status === 'draft'}
-              onClick={() => setStatsFor(n)}
-            >
-              <BarChart3 aria-hidden="true" />
-            </Button>
-            <Can perm="notice:update">
-              <Button variant="ghost" size="icon" aria-label={t('common.edit')} title={t('common.edit')} onClick={() => openForm(n)}>
-                <Pencil aria-hidden="true" />
-              </Button>
-            </Can>
-            <Can perm="notice:publish">
-              {n.status === 'published' ? (
-                <Button variant="ghost" size="icon" aria-label={t('notice.revoke')} title={t('notice.revoke')} onClick={() => onRevoke(n)}>
-                  <Undo2 aria-hidden="true" />
-                </Button>
-              ) : (
-                <Button variant="ghost" size="icon" aria-label={t('notice.publish')} title={t('notice.publish')} onClick={() => onPublish(n)}>
-                  <Send aria-hidden="true" />
-                </Button>
-              )}
-            </Can>
-            <Can perm="notice:delete">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive"
-                aria-label={t('common.delete')}
-                title={t('common.delete')}
-                onClick={() => onDelete([n.id])}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </Can>
-          </>
+          <RowActions
+            primaryKey="edit"
+            actions={[
+              {
+                key: 'stats',
+                label: t('notice.stats.action'),
+                icon: <BarChart3 aria-hidden="true" />,
+                disabled: n.status === 'draft',
+                onSelect: () => setStatsFor(n),
+              },
+              ...(has('notice:update') ? [{
+                key: 'edit',
+                label: t('common.edit'),
+                icon: <Pencil aria-hidden="true" />,
+                onSelect: () => openForm(n),
+              }] : []),
+              ...(has('notice:publish') ? [{
+                key: 'publish',
+                label: n.status === 'published' ? t('notice.revoke') : t('notice.publish'),
+                icon: n.status === 'published' ? <Undo2 aria-hidden="true" /> : <Send aria-hidden="true" />,
+                onSelect: () => n.status === 'published' ? onRevoke(n) : onPublish(n),
+              }] : []),
+              ...(has('notice:delete') ? [{
+                key: 'delete',
+                label: t('common.delete'),
+                icon: <Trash2 aria-hidden="true" />,
+                destructive: true,
+                onSelect: () => onDelete([n.id]),
+              }] : []),
+            ]}
+          />
         )}
       />
 

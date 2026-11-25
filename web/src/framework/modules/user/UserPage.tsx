@@ -3,6 +3,7 @@ import { Download, KeyRound, LockOpen, Pencil, Plus, Trash2, Upload } from 'luci
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
@@ -12,6 +13,7 @@ import { DictSelect } from '@/framework/components/DictSelect'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { hasActiveFilterValues } from '@/framework/components/table/use-client-filter'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RowActions } from '@/framework/components/RowActions'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Avatar, AvatarFallback, AvatarImage } from '@/framework/ui/avatar'
 import { Badge } from '@/framework/ui/badge'
@@ -34,11 +36,11 @@ import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserFormDialog } from './UserFormDialog'
 import { formatTime } from './format'
 
-const iconBtn = 'h-11 w-11 md:h-9 md:w-9'
 const isLocked = (u: User) => !!u.locked && (!u.lockedUntil || new Date(u.lockedUntil).getTime() > Date.now())
 
 export default function UserPage() {
   const { t, i18n } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const [draft, setDraft] = useState<UserFilters>({})
   const [applied, setApplied] = useState<UserFilters>({})
@@ -312,65 +314,37 @@ export default function UserPage() {
           </>
         )}
         rowActions={(u) => (
-          <>
-            <Can perm="user:update">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={iconBtn}
-                aria-label={t('common.edit')}
-                title={t('common.edit')}
-                onClick={() => openForm(u)}
-              >
-                <Pencil className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </Can>
-            <Can perm="user:resetPwd">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={iconBtn}
-                aria-label={t('user.resetPassword.action')}
-                title={t('user.resetPassword.action')}
-                onClick={() => setResetTarget(u)}
-              >
-                <KeyRound className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </Can>
-            {isLocked(u) ? (
-              <Can perm="user:unlock">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={iconBtn}
-                  aria-label={t('user.unlock.action')}
-                  title={t('user.unlock.action')}
-                  disabled={unlock.isPending}
-                  onClick={() => unlockUser(u)}
-                >
-                  <LockOpen className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </Can>
-            ) : null}
-            {u.username !== 'admin' ? (
-              <Can perm="user:delete">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={`${iconBtn} text-destructive`}
-                  aria-label={t('common.delete')}
-                  title={t('common.delete')}
-                  onClick={() => remove([u.id], t('user.deleteOne', { name: u.nickname }))}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </Can>
-            ) : null}
-          </>
+          <RowActions
+            primaryKey="edit"
+            actions={[
+              ...(has('user:update') ? [{
+                key: 'edit',
+                label: t('common.edit'),
+                icon: <Pencil className="size-4" aria-hidden="true" />,
+                onSelect: () => openForm(u),
+              }] : []),
+              ...(has('user:resetPwd') ? [{
+                key: 'reset-password',
+                label: t('user.resetPassword.action'),
+                icon: <KeyRound className="size-4" aria-hidden="true" />,
+                onSelect: () => setResetTarget(u),
+              }] : []),
+              ...(isLocked(u) && has('user:unlock') ? [{
+                key: 'unlock',
+                label: t('user.unlock.action'),
+                icon: <LockOpen className="size-4" aria-hidden="true" />,
+                disabled: unlock.isPending,
+                onSelect: () => unlockUser(u),
+              }] : []),
+              ...(u.username !== 'admin' && has('user:delete') ? [{
+                key: 'delete',
+                label: t('common.delete'),
+                icon: <Trash2 className="size-4" aria-hidden="true" />,
+                destructive: true,
+                onSelect: () => remove([u.id], t('user.deleteOne', { name: u.nickname })),
+              }] : []),
+            ]}
+          />
         )}
       />
 
