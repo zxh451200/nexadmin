@@ -1,7 +1,7 @@
 import { defineMock, mockError } from '@/framework/request/mock'
 import { createMockJob } from '@/framework/modules/exportcenter/exportcenter.mock'
 import type { EntitySchema } from '@/framework/components/i18n'
-import type { FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, ProductCategoryNode, SiteMessage, SitePage, SitePost, SiteProduct, SiteSettings } from './api'
+import type { AnalyticsData, FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, ProductCategoryNode, SiteMessage, SitePage, SitePost, SiteProduct, SiteSettings, SuggestedProduct } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 const id = (n: number) => String(8100000000000000000n + BigInt(n))
@@ -466,6 +466,34 @@ defineMock([
     },
   },
   { method: 'GET', url: '/plugins/website/settings', handler: () => settings },
+  {
+    method: 'GET',
+    url: '/plugins/website/analytics',
+    handler: ({ query }): AnalyticsData => {
+      const requested = Number(query.days)
+      const days = requested === 14 || requested === 30 ? requested : 7
+      const trend = Array.from({ length: days }, (_, index) => {
+        const date = new Date(Date.now() - (days - index - 1) * 86_400_000).toISOString().slice(0, 10)
+        return { day: date, views: 120 + index * 13, sessions: 80 + index * 9, inquiries: 1 + (index % 5) }
+      })
+      return {
+        days,
+        views: trend.reduce((sum, point) => sum + point.views, 0),
+        sessions: trend.reduce((sum, point) => sum + point.sessions, 0),
+        inquiries: trend.reduce((sum, point) => sum + point.inquiries, 0),
+        realtime: 5,
+        bounceRate: 38.4,
+        avgDuration: 96,
+        trend,
+        topPaths: [{ path: '/products/portable-power', views: 320 }],
+        entryPages: [{ path: '/', views: 460 }],
+        referrers: [{ kind: 'search', host: 'google.com', sessions: 280 }],
+        refKindStats: [{ key: 'direct', sessions: 320 }, { key: 'search', sessions: 280 }],
+        browsers: [{ key: 'Chrome', sessions: 620 }, { key: 'Safari', sessions: 180 }],
+        oses: [{ key: 'Windows', sessions: 510 }, { key: 'macOS', sessions: 240 }],
+      }
+    },
+  },
   {
     // 主题清单：default 恒在最前；hasDemo 与后端注册表一致（演示内容插件带 seed）。
     method: 'GET',
@@ -1005,6 +1033,31 @@ defineMock([
     method: 'GET',
     url: '/plugins/website/messages/unread-count',
     handler: () => ({ count: messages.filter((m) => m.status === 'new').length }),
+  },
+  {
+    method: 'GET',
+    url: '/plugins/website/messages/suggest/:id',
+    handler: ({ params }): { suggested: SuggestedProduct[] } => {
+      if (!messages.some((m) => m.id === params.id)) return mockError(404, 'not found')
+      return {
+        suggested: products
+          .filter((p) => p.status === 'online')
+          .slice()
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+          .slice(0, 4)
+          .map((p) => ({
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            currency: p.currency,
+            priceMin: p.priceMin,
+            priceMax: p.priceMax,
+            moq: p.moq,
+            coverUrl: p.coverUrl,
+            path: `/products/${p.slug}`,
+          })),
+      }
+    },
   },
   {
     method: 'POST',
