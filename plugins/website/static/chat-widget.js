@@ -16,6 +16,7 @@
     root.setAttribute('data-chat-ready', '1');
 
     var t = opts && typeof opts.t === 'function' ? opts.t : function (key, fallback) { return fallback || key; };
+    var openImage = opts && typeof opts.openImage === 'function' ? opts.openImage : null;
     var base = (opts && opts.base) || '/api/v1/plugins/im/visitor';
 
     var launcher = root.querySelector('[data-chat-open]');
@@ -411,6 +412,15 @@
             // 取图失败时退回文件名链接，气泡里不会剩一块空白
             img.addEventListener('error', function () {
               if (link.parentNode) link.parentNode.replaceChild(fileLink(att, url), link);
+            });
+            link.addEventListener('click', function (e) {
+              if (!openImage || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              e.preventDefault();
+              try {
+                openImage(url, att.name || '', img);
+              } catch (err) {
+                window.open(url, '_blank', 'noopener');
+              }
             });
             link.appendChild(img);
             bubble.appendChild(link);

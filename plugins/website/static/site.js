@@ -677,15 +677,9 @@
     return list;
   }
 
-  // Viewer.js 从容器的 <img> 列表里取图：把 lbCollect 的结果临时铺到一个隐藏容器，
-  // 这样商品主图、缩略图、正文图都能进同一组，翻页和缩略图导航自然连起来。
-  function openLb(img) {
-    var items = lbCollect(img);
-    var want = lbSrc(img);
-    var index = 0;
-    for (var i = 0; i < items.length; i++) {
-      if (items[i].src === want) { index = i; break; }
-    }
+  function openViewer(items, index, origin) {
+    var want = items[index] && items[index].src;
+    var originVisibility = origin ? origin.style.visibility : '';
     ensureViewer().then(function (Viewer) {
       // 脚本没加载成功（极老的浏览器 / 本地资源被拦）时退化成新窗口打开原图，不装死。
       if (!Viewer) { window.open(want, '_blank', 'noopener'); return; }
@@ -702,37 +696,63 @@
       document.body.appendChild(host);
 
       var instance = null;
-      instance = new Viewer(host, {
-        url: 'data-zoom-src',
-        initialViewIndex: index,
-        inline: false,
-        button: true,       // 右上角关闭（模态模式）
-        navbar: items.length > 1,
-        title: false,
-        toolbar: {
-          zoomIn: true, zoomOut: true, oneToOne: true, reset: true,
-          prev: items.length > 1, play: items.length > 1, next: items.length > 1,
-          rotateLeft: true, rotateRight: true, flipHorizontal: true, flipVertical: true
-        },
-        tooltip: true,
-        transition: true,
-        keyboard: true,
-        focus: true,
-        zoomRatio: 0.15,
-        minZoomRatio: 0.1,
-        maxZoomRatio: 10,
-        zIndex: 10010,      // 比客服挂件/询盘弹窗高一档
-        toggleOnDblclick: true,
-        zoomOnWheel: true,
-        slideOnTouch: true,
-        shown: function () { viewerLabels(instance); },
-        hidden: function () {
-          if (instance) instance.destroy();
-          if (host.parentNode) host.parentNode.removeChild(host);
-        }
-      });
-      instance.show();
+      try {
+        instance = new Viewer(host, {
+          url: 'data-zoom-src',
+          initialViewIndex: index,
+          inline: false,
+          button: true,       // 右上角关闭（模态模式）
+          navbar: items.length > 1,
+          title: false,
+          toolbar: {
+            zoomIn: true, zoomOut: true, oneToOne: true, reset: true,
+            prev: items.length > 1, play: items.length > 1, next: items.length > 1,
+            rotateLeft: true, rotateRight: true, flipHorizontal: true, flipVertical: true
+          },
+          tooltip: true,
+          transition: true,
+          keyboard: true,
+          focus: true,
+          zoomRatio: 0.15,
+          minZoomRatio: 0.1,
+          maxZoomRatio: 10,
+          zIndex: 10010,      // 比客服挂件/询盘弹窗高一档
+          toggleOnDblclick: true,
+          zoomOnWheel: true,
+          slideOnTouch: true,
+          shown: function () { viewerLabels(instance); },
+          hidden: function () {
+            if (instance) instance.destroy();
+            if (origin) origin.style.visibility = originVisibility;
+            if (host.parentNode) host.parentNode.removeChild(host);
+          }
+        });
+        // 预览打开时藏起原图，避免半透明遮罩下出现两张重影。
+        if (origin) origin.style.visibility = 'hidden';
+        instance.show();
+      } catch (err) {
+        if (origin) origin.style.visibility = originVisibility;
+        if (host.parentNode) host.parentNode.removeChild(host);
+        throw err;
+      }
+    }).catch(function () {
+      window.open(want, '_blank', 'noopener');
     });
+  }
+
+  function openLb(img) {
+    var items = lbCollect(img);
+    var want = lbSrc(img);
+    var index = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].src === want) { index = i; break; }
+    }
+    openViewer(items, index, img);
+  }
+
+  function openChatImage(src, alt, origin) {
+    if (!src) return;
+    openViewer([{ src: src, alt: alt || '' }], 0, origin);
   }
 
   // Viewer.js 1.x 的工具栏只有图形、导航按钮写死英文；这里按本站点语言补上可访问名称，
@@ -2659,7 +2679,7 @@
   function initChat() {
     var root = document.querySelector('[data-chat]');
     if (!root || !window.NexChat) return;
-    window.NexChat.mount(root, { t: msg });
+    window.NexChat.mount(root, { t: msg, openImage: openChatImage });
   }
 
   window.__siteInit = initSite;
