@@ -34,14 +34,14 @@ function routeIsActive(route: ModuleRoute, active: ActivePluginIds): boolean {
   return !plugin || active === null || (active ?? []).includes(plugin)
 }
 
-/** 生成菜单树：分组（按 groups 顺序）→ 菜单项（按 order）；空分组不出现 */
+/** 生成菜单树：分组（按 groups 顺序）→ 菜单项（按 order）；top 路由单独一级展示，空分组不出现 */
 export function buildMenuTree(perms: string[], routes?: ModuleRoute[], active: ActivePluginIds = null): MenuNode[] {
   const available = routes ?? discoverRoutes(active)
   const visible = filterRoutes(perms, available).filter((r) => !r.hidden && r.menu && routeIsActive(r, active))
   const tree: MenuNode[] = []
   for (const group of [...menuGroups].sort((a, b) => a.order - b.order)) {
     const items = visible
-      .filter((r) => (r.menu!.group ?? 'system') === group.key)
+      .filter((r) => !r.menu!.top && (r.menu!.group ?? 'system') === group.key)
       .sort((a, b) => (a.menu!.order ?? 100) - (b.menu!.order ?? 100))
     if (items.length === 0) continue
     tree.push({
@@ -54,6 +54,13 @@ export function buildMenuTree(perms: string[], routes?: ModuleRoute[], active: A
         icon: r.menu!.icon,
         path: `/${r.path}`,
       })),
+    })
+  }
+  for (const r of visible.filter((r) => r.menu!.top).sort((a, b) => (a.menu!.order ?? 100) - (b.menu!.order ?? 100))) {
+    tree.push({
+      key: `top-${r.path}`,
+      title: '',
+      children: [{ key: r.path, title: r.menu!.title, icon: r.menu!.icon, path: `/${r.path}` }],
     })
   }
   // 目录只剩一个可见页面时（角色只分到一个页面）不摆空壳目录，直接提成一级单项。

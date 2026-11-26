@@ -35,7 +35,8 @@ export interface ModuleRoute {
   // 不再渲染页面（否则页面会发出一串必然 404 的插件接口请求）。
   plugin?: string
   hidden?: boolean // true 则不进菜单
-  menu?: { title: string; icon?: string; order?: number; group?: MenuGroupKey } // title 为 i18n key；icon 为 lucide 图标名
+  // title 为 i18n key；icon 为 lucide 图标名；top 为 true 时直接生成一级单项，不归入分组
+  menu?: { title: string; icon?: string; order?: number; group?: MenuGroupKey; top?: boolean }
   settings?: SettingsSectionSpec // 声明后该页同时出现在「系统设置」的分区导航里
   // true = 沉浸式全屏页：有鉴权但无布局壳（侧边栏/顶栏不渲染），数据大屏、三维场景等用；
   // 页面仍可出现在菜单里，适合搭配页面内自实现的全屏 API 使用。

@@ -6,6 +6,6 @@ export const routes: ModuleRoute[] = [
     path: 'mine/totp',
     component: lazy(() => import('./TotpPage')),
     perm: 'totp:manage',
-    menu: { title: 'plugin_totp.menu', icon: 'ShieldCheck', order: 1, group: 'mine' },
+    menu: { title: 'plugin_totp.menu', icon: 'ShieldCheck', order: 140, top: true },
   },
 ]
