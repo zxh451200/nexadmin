@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
+  Users,
   XCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -27,12 +28,14 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
+import { Input } from '@/framework/ui/input'
 import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import {
   getSPCert,
   importSPKey,
   promoteSPCert,
+  previewRoles,
   refreshMetadata,
   rotateSPCert,
   useDeleteSource,
@@ -40,6 +43,7 @@ import {
   useSources,
   useTestSource,
   type SamlSource,
+  type RolePreview,
   type SPCert,
   type TestResult,
 } from './api'
@@ -353,11 +357,120 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
   )
 }
 
+function RolePreviewDialog({ source, onClose }: { source: SamlSource | null; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [groups, setGroups] = useState('')
+  const [userId, setUserId] = useState('')
+  const [result, setResult] = useState<RolePreview | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!source) return
+    setGroups('')
+    setUserId('')
+    setResult(null)
+    setError('')
+  }, [source])
+
+  const run = async () => {
+    if (!source) return
+    setBusy(true)
+    setError('')
+    try {
+      setResult(
+        await previewRoles(source.id, {
+          groups: groups.split('\n').filter((group) => group !== ''),
+          userId: userId.trim() || undefined,
+        }),
+      )
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const row = (key: string, values: string[]) => (
+    <div className="grid gap-1 sm:grid-cols-[7rem_1fr] sm:items-start sm:gap-3">
+      <span className="text-sm text-muted-foreground">{t(`plugin_saml.rolePreview.${key}`)}</span>
+      <code className="min-w-0 break-all rounded bg-muted px-2 py-1 text-xs">
+        {values.length > 0 ? values.join(', ') : '—'}
+      </code>
+    </div>
+  )
+
+  return (
+    <ResponsiveDialog
+      open={!!source}
+      onOpenChange={(open) => !open && onClose()}
+      title={t('plugin_saml.rolePreview.title')}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            {t('common.close')}
+          </Button>
+          <Button type="button" onClick={() => void run()} disabled={busy || groups.split('\n').length > 1000}>
+            {busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Users aria-hidden="true" />}
+            {t('plugin_saml.rolePreview.run')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t('plugin_saml.rolePreview.hint')}</p>
+        <div className="space-y-2">
+          <label htmlFor="saml-preview-groups" className="text-sm font-medium">
+            {t('plugin_saml.rolePreview.groups')}
+          </label>
+          <Textarea
+            id="saml-preview-groups"
+            rows={5}
+            value={groups}
+            onChange={(e) => setGroups(e.target.value)}
+            placeholder={t('plugin_saml.rolePreview.groupsPlaceholder')}
+            className="font-mono text-xs"
+          />
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="saml-preview-user" className="text-sm font-medium">
+            {t('plugin_saml.rolePreview.userId')}
+          </label>
+          <Input
+            id="saml-preview-user"
+            value={userId}
+            inputMode="numeric"
+            onChange={(e) => setUserId(e.target.value)}
+            placeholder={t('plugin_saml.rolePreview.userIdHint')}
+          />
+        </div>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {result ? (
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <Badge variant={result.allowed ? 'success' : 'destructive'}>
+              {t(result.allowed ? 'plugin_saml.rolePreview.allowed' : 'plugin_saml.rolePreview.denied')}
+            </Badge>
+            {result.reason ? <p className="break-all text-xs text-destructive">{result.reason}</p> : null}
+            {row('matchedGroups', result.matchedGroups)}
+            {row('desiredRoles', result.desiredRoles)}
+            {row('previousRoles', result.previousRoles)}
+            {row('wouldAdd', result.wouldAdd)}
+            {row('wouldRemove', result.wouldRemove)}
+            {row('unavailableRoles', result.unavailableRoles)}
+            {!result.userScoped ? <p className="text-xs text-muted-foreground">{t('plugin_saml.rolePreview.noUser')}</p> : null}
+            {!result.syncRolesOnLogin ? <p className="text-xs text-muted-foreground">{t('plugin_saml.rolePreview.syncOff')}</p> : null}
+          </div>
+        ) : null}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
 export default function SamlPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const qc = useQueryClient()
-  const { data = [], isLoading } = useSources()
+  const { data = [], isLoading, error: loadError, refetch: reloadSources } = useSources()
   const setEnabled = useSetEnabled()
   const remove = useDeleteSource()
   const test = useTestSource()
@@ -365,6 +478,7 @@ export default function SamlPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [certSource, setCertSource] = useState<SamlSource | null>(null)
+  const [previewSource, setPreviewSource] = useState<SamlSource | null>(null)
   const [refreshing, setRefreshing] = useState<string | null>(null)
 
   const openForm = (s: SamlSource | null) => {
@@ -376,16 +490,16 @@ export default function SamlPage() {
     try {
       await remove.mutateAsync(s.id)
       toast.success(t('common.operateSuccess'))
-    } catch {
-      toast.error(t('common.operateFailed'))
+    } catch (e) {
+      toast.error((e as Error).message)
     }
   }
   const onToggle = async (s: SamlSource, enabled: boolean) => {
     try {
       await setEnabled.mutateAsync({ id: s.id, enabled })
       toast.success(t('common.operateSuccess'))
-    } catch {
-      toast.error(t('common.operateFailed'))
+    } catch (e) {
+      toast.error((e as Error).message)
     }
   }
   const onRefresh = async (s: SamlSource) => {
@@ -422,7 +536,15 @@ export default function SamlPage() {
       {/* 新建入口放列表工具行左侧（与全站列表页同一口径），不悬浮在标题右侧 */}
       <PageHeader title={t('plugin_saml.title')} description={t('plugin_saml.description')} />
 
-      {isLoading ? (
+      {loadError ? (
+        <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{loadError.message}</p>
+          <Button type="button" variant="outline" onClick={() => void reloadSources()}>
+            <RefreshCw aria-hidden="true" />
+            {t('plugin_saml.btn.retry')}
+          </Button>
+        </div>
+      ) : isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="animate-spin" aria-hidden="true" />
           {t('common.loading')}
@@ -466,6 +588,7 @@ export default function SamlPage() {
                   >
                     <Switch
                       checked={s.enabled}
+                      disabled={setEnabled.isPending && setEnabled.variables?.id === s.id}
                       aria-label={t('plugin_saml.fields.enabled')}
                       onCheckedChange={(v) => void onToggle(s, v)}
                     />
@@ -507,7 +630,14 @@ export default function SamlPage() {
                         : ''
                     }
                   />
-                  <ValueRow label={t('plugin_saml.fields.idpSlo')} value={s.idp?.sloUrl} />
+                  <ValueRow
+                    label={t('plugin_saml.fields.idpSlo')}
+                    value={
+                      s.idp?.sloUrl
+                        ? `${s.idp.sloUrl}${s.idp.sloBinding ? ` (${t(`plugin_saml.binding.${s.idp.sloBinding}`)})` : ''}`
+                        : ''
+                    }
+                  />
                   <ValueRow label={t('plugin_saml.fields.metadataSource')} value={s.idpMetadataUrl || t('plugin_saml.source.pasted')} />
                   {s.metadataRefreshedAt ? (
                     <ValueRow
@@ -546,6 +676,12 @@ export default function SamlPage() {
                   <CopyButton text={s.sp?.sloUrl ?? ''} label={t('plugin_saml.btn.copy')} />
                 </ValueRow>
                 <div className="flex flex-wrap gap-2 pt-1">
+                  <Can perm="saml:edit">
+                    <Button variant="outline" size="sm" onClick={() => setPreviewSource(s)}>
+                      <Users aria-hidden="true" />
+                      {t('plugin_saml.btn.previewRoles')}
+                    </Button>
+                  </Can>
                   <Button variant="outline" size="sm" onClick={() => setCertSource(s)}>
                     <ShieldCheck aria-hidden="true" />
                     {t('plugin_saml.btn.viewCert')}
@@ -567,16 +703,18 @@ export default function SamlPage() {
 
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">
-                  {t('plugin_saml.summary.attrs')}: {[s.attrUsername, s.attrEmail, s.attrNickname, s.attrPhone, s.attrGroups].filter(Boolean).join(' / ')}
+                  {t('plugin_saml.summary.attrs')}: {[s.attrUsername, s.attrEmail, s.attrNickname, s.attrPhone, s.attrExternalId, s.attrGroups].filter(Boolean).join(' / ')}
                 </span>
                 <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">
                   {t('plugin_saml.summary.policy')}:{' '}
                   {[
                     s.autoCreate ? t('plugin_saml.summary.autoCreate') : null,
                     s.matchExisting ? t('plugin_saml.summary.matchExisting') : null,
+                    s.matchProvisionedExternalId ? t('plugin_saml.summary.matchExternalId') : null,
                     s.defaultRole ? t('plugin_saml.summary.defaultRole', { role: s.defaultRole }) : null,
                     s.requireMappedGroup ? t('plugin_saml.summary.requireGroup') : null,
                     s.syncRolesOnLogin ? t('plugin_saml.summary.roleSync') : null,
+                    s.revokeRolesOnEmptyGroups ? t('plugin_saml.summary.revokeEmptyRoles') : null,
                     s.forceAuthn ? t('plugin_saml.summary.forceAuthn') : null,
                   ]
                     .filter(Boolean)
@@ -606,6 +744,7 @@ export default function SamlPage() {
       <SourceFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
       <TestDialog result={testResult} onClose={() => setTestResult(null)} />
       <CertDialog source={certSource} onClose={() => setCertSource(null)} />
+      <RolePreviewDialog source={previewSource} onClose={() => setPreviewSource(null)} />
     </PageContainer>
   )
 }

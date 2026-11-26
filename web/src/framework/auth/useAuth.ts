@@ -92,7 +92,10 @@ export const useAuth = create<AuthState>((set, get) => ({
       try {
         const base = import.meta.env.BASE_URL || '/'
         const next = base.endsWith('/') ? base + 'login' : base + '/login'
-        const r = await api.post<{ redirect: string }>(
+        const r = await api.post<
+          | { binding: 'redirect'; redirect: string }
+          | { binding: 'post'; url: string; samlRequest: string; relayState: string }
+        >(
           `/plugins/saml/sources/${encodeURIComponent(samlId)}/logout?next=${encodeURIComponent(next)}`,
           undefined,
           { silent: true },
@@ -100,7 +103,27 @@ export const useAuth = create<AuthState>((set, get) => ({
         sessionStorage.removeItem(SAML_SOURCE_KEY)
         clearLocalSession()
         set({ token: null, user: null, perms: [] })
-        window.location.href = r.redirect
+        if (r.binding === 'redirect') {
+          window.location.href = r.redirect
+        } else {
+          const form = document.createElement('form')
+          form.method = 'POST'
+          form.action = r.url
+          form.target = '_top'
+          for (const [name, value] of [
+            ['SAMLRequest', r.samlRequest],
+            ['RelayState', r.relayState],
+          ]) {
+            const input = document.createElement('input')
+            input.type = 'hidden'
+            input.name = name
+            input.value = value
+            form.appendChild(input)
+          }
+          document.body.appendChild(form)
+          form.submit()
+          form.remove()
+        }
         return
       } catch {
         // 回落本地登出

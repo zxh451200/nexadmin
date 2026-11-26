@@ -159,7 +159,7 @@ func (*module) Seed(db *gorm.DB) error {
 			if err := tx.Create(u).Error; err != nil {
 				return err
 			}
-			if err := replaceRelations(tx, u.ID, s.roles, nil); err != nil {
+			if err := replaceRelations(context.Background(), tx, u.TenantID, u.ID, s.roles, nil); err != nil {
 				return err
 			}
 		}

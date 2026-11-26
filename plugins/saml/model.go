@@ -35,13 +35,13 @@ type Source struct {
 	MetadataCACert   string `gorm:"column:metadata_ca_cert;type:text"`
 	MetadataSignCert string `gorm:"column:metadata_sign_cert;type:text"`
 	SPCert           string `gorm:"column:sp_cert;type:text"`
-	SPKeyEnc         string `gorm:"column:sp_key_enc;type:text"`
+	SPKeyEnc         string `gorm:"column:sp_key_enc;type:text" json:"-"`
 	// 两段式轮换：next 已发布但尚未启用（元数据同时列出，签发仍用 current）；
 	// 切换后旧证书落到 prev，保留一段时间用于解密 IdP 仍按旧证书加密的断言。
 	NextSPCert      string     `gorm:"column:next_sp_cert;type:text"`
-	NextSPKeyEnc    string     `gorm:"column:next_sp_key_enc;type:text"`
+	NextSPKeyEnc    string     `gorm:"column:next_sp_key_enc;type:text" json:"-"`
 	PrevSPCert      string     `gorm:"column:prev_sp_cert;type:text"`
-	PrevSPKeyEnc    string     `gorm:"column:prev_sp_key_enc;type:text"`
+	PrevSPKeyEnc    string     `gorm:"column:prev_sp_key_enc;type:text" json:"-"`
 	PrevSPExpiresAt *time.Time `gorm:"column:prev_sp_expires_at"`
 	// RequireEncryptedAssertion 要求 IdP 必须用 SP 证书加密断言，明文断言直接拒绝。
 	RequireEncryptedAssertion bool `gorm:"column:require_encrypted_assertion;not null;default:false"`
@@ -50,23 +50,27 @@ type Source struct {
 	// AllowSHA1 允许 IdP 用 SHA-1 签消息；默认 false（SAML 生态已弃用 SHA-1）。
 	AllowSHA1 bool `gorm:"column:allow_sha1_signatures;not null;default:false"`
 
-	AttrUsername string `gorm:"column:attr_username;size:255;not null;default:''"`
-	AttrEmail    string `gorm:"column:attr_email;size:255;not null;default:''"`
-	AttrNickname string `gorm:"column:attr_nickname;size:255;not null;default:''"`
-	AttrGroups   string `gorm:"column:attr_groups;size:255;not null;default:''"`
-	AttrPhone    string `gorm:"column:attr_phone;size:255;not null;default:''"`
+	AttrUsername   string `gorm:"column:attr_username;size:255;not null;default:''"`
+	AttrEmail      string `gorm:"column:attr_email;size:255;not null;default:''"`
+	AttrNickname   string `gorm:"column:attr_nickname;size:255;not null;default:''"`
+	AttrGroups     string `gorm:"column:attr_groups;size:255;not null;default:''"`
+	AttrPhone      string `gorm:"column:attr_phone;size:255;not null;default:''"`
+	AttrExternalID string `gorm:"column:attr_external_id;size:255;not null;default:''"`
 
-	AutoCreate    bool   `gorm:"column:auto_create;not null;default:false"`
-	MatchExisting bool   `gorm:"column:match_existing;not null;default:false"`
-	DefaultRole   string `gorm:"column:default_role;size:64;not null;default:''"`
+	AutoCreate                 bool   `gorm:"column:auto_create;not null;default:false"`
+	MatchExisting              bool   `gorm:"column:match_existing;not null;default:false"`
+	MatchProvisionedExternalID bool   `gorm:"column:match_provisioned_external_id;not null;default:false"`
+	DefaultRole                string `gorm:"column:default_role;size:64;not null;default:''"`
 
 	// GroupRoleMappingsJSON 是落库形态；API 只暴露解析后的 groupRoleMappings。
 	GroupRoleMappingsJSON string             `gorm:"column:group_role_mappings;type:text" json:"-"`
 	GroupRoleMappings     []GroupRoleMapping `gorm:"-" json:"groupRoleMappings"`
 	RequireMappedGroup    bool               `gorm:"column:require_mapped_group;not null;default:false"`
 	// SyncRolesOnLogin 每次登录按组映射重算角色：只收回本来源授过的角色，
-	// 手工授权与其它来源授予的角色都不动；本次断言没命中任何组时整体不动。
+	// 手工授权与其它来源授予的角色都不动；默认在本次断言没命中任何组时整体不动。
 	SyncRolesOnLogin bool `gorm:"column:sync_roles_on_login;not null;default:false"`
+	// RevokeRolesOnEmptyGroups 显式允许空组收回本来源授过的角色；IdP 漏发 groups 时也会收权。
+	RevokeRolesOnEmptyGroups bool `gorm:"column:revoke_roles_on_empty_groups;not null;default:false"`
 
 	AllowIDPInitiated bool   `gorm:"column:allow_idp_initiated;not null;default:false"`
 	SignAuthnRequest  bool   `gorm:"column:sign_authn_request;not null;default:false"`

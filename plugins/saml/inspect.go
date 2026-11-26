@@ -3,6 +3,8 @@ package saml
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -14,6 +16,8 @@ import (
 	"time"
 
 	"github.com/crewjam/saml"
+
+	"nexadmin/core/secret"
 )
 
 // certWarnWindow 是证书「即将过期」的提示窗口（仍可登录，只在界面上提示）。
@@ -24,6 +28,8 @@ type IdPCandidate struct {
 	EntityID         string `json:"entityId"`
 	SSOURL           string `json:"ssoUrl"`
 	SSOBinding       string `json:"ssoBinding"`
+	SLOURL           string `json:"sloUrl,omitempty"`
+	SLOBinding       string `json:"sloBinding,omitempty"`
 	CertNotAfter     string `json:"certNotAfter,omitempty"`
 	CertCount        int    `json:"certCount"`
 	CertExpired      bool   `json:"certExpired"`
@@ -35,6 +41,7 @@ type IdPInfo struct {
 	SSOURL           string         `json:"ssoUrl"`
 	SSOBinding       string         `json:"ssoBinding"`
 	SLOURL           string         `json:"sloUrl"`
+	SLOBinding       string         `json:"sloBinding,omitempty"`
 	CertNotAfter     string         `json:"certNotAfter,omitempty"`
 	CertCount        int            `json:"certCount"`
 	CertExpired      bool           `json:"certExpired"`
@@ -171,9 +178,9 @@ func describeEntity(ed *saml.EntityDescriptor) IdPInfo {
 			}
 		}
 	}
-	info.SLOURL = sloRedirect
+	info.SLOURL, info.SLOBinding = sloRedirect, "redirect"
 	if info.SLOURL == "" {
-		info.SLOURL = sloPost
+		info.SLOURL, info.SLOBinding = sloPost, "post"
 	}
 
 	var earliest time.Time
@@ -208,6 +215,7 @@ func describeEntity(ed *saml.EntityDescriptor) IdPInfo {
 func candidateOf(i IdPInfo) IdPCandidate {
 	return IdPCandidate{
 		EntityID: i.EntityID, SSOURL: i.SSOURL, SSOBinding: i.SSOBinding,
+		SLOURL: i.SLOURL, SLOBinding: i.SLOBinding,
 		CertNotAfter: i.CertNotAfter, CertCount: i.CertCount,
 		CertExpired: i.CertExpired, CertExpiringSoon: i.CertExpiringSoon,
 	}
@@ -377,7 +385,40 @@ func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
 		add("spKey", false, false, "SP 私钥不可用："+err.Error())
 		res.OK = false
 	} else {
-		add("spKey", true, false, "SP 私钥可解密并解析")
+		key, _ := parseSPPrivateKey(m.SPKeyEnc)
+		algorithm := "RSA"
+		if _, ok := key.(*ecdsa.PrivateKey); ok {
+			algorithm = "ECDSA"
+		}
+		add("spKey", true, false, "SP 私钥可解密并解析（"+algorithm+"）")
+		if !secret.IsEncrypted(m.SPKeyEnc) {
+			add("spKeyStorage", true, true, "检测到历史明文私钥，请导入同证书私钥以加密重存")
+		}
+		if m.RequireEncryptedAssertion {
+			if _, ok := key.(*rsa.PrivateKey); !ok {
+				add("assertionEncryption", false, false, "要求加密断言时 SP 密钥必须为 RSA；ECDSA 不能解密 XML 加密断言")
+				res.OK = false
+			}
+		}
+	}
+
+	if idp.SLOURL == "" {
+		add("sloUrl", true, true, "IdP 未提供 HTTP-Redirect / HTTP-POST 单点登出端点，只能本地登出")
+	} else {
+		add("sloUrl", true, false, fmt.Sprintf("%s（%s）", idp.SLOURL, idp.SLOBinding))
+	}
+
+	if err := validateGroupMappings(m.GroupRoleMappings, m.RequireMappedGroup); err != nil {
+		add("roleMappings", false, false, err.Error())
+		res.OK = false
+	} else if m.SyncRolesOnLogin && m.RevokeRolesOnEmptyGroups {
+		add("roleMappings", true, true, "空组断言会收回本来源授予的角色；IdP 漏发组属性时也会收权")
+	} else {
+		add("roleMappings", true, false, fmt.Sprintf("已配置 %d 条精确组映射", len(m.GroupRoleMappings)))
+	}
+	if m.MatchProvisionedExternalID && m.AttrExternalID == "" {
+		add("externalIdMatching", false, false, "已开启外部 ID 精确匹配，但未配置属性名")
+		res.OK = false
 	}
 
 	if notAfter, err := spCertNotAfter(m.SPCert); err != nil {
@@ -464,6 +505,14 @@ func parsePrivateKey(pemText string) error {
 	if block == nil {
 		return errors.New("私钥格式错误")
 	}
-	_, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	return err
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return err
+	}
+	switch parsed.(type) {
+	case *rsa.PrivateKey, *ecdsa.PrivateKey:
+		return nil
+	default:
+		return errors.New("私钥类型仅支持 RSA 或 ECDSA")
+	}
 }

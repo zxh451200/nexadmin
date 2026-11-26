@@ -13,6 +13,7 @@ import (
 
 	"nexadmin/core/cache"
 	"nexadmin/core/response"
+	"nexadmin/pkg/idgen"
 )
 
 // 二次验证挑战的默认限制。
@@ -28,6 +29,8 @@ type LoginMeta struct {
 	UserAgent string
 	// SessionBinding 是登录发起方（插件）提供的会话归属，二次验证后签发令牌时原样落到 Claims。
 	SessionBinding string
+	// Completion 是插件登录收尾数据；挑战期间只存 JSON，不保存回调函数。
+	Completion json.RawMessage
 }
 
 // Challenge 是要求二次验证时返回给前端的短期挑战（不含令牌）。
@@ -42,6 +45,8 @@ type LoginOutcome struct {
 	Pair      Pair
 	User      *User
 	Challenge *Challenge
+	// CreatedUserID 仅供登录插件在 MFA 挑战前持久化新账号初始化状态，不进入响应。
+	CreatedUserID idgen.ID `json:"-"`
 }
 
 // Payload 返回对外的响应体：已签发时与原 /auth/login 完全一致，需二次验证时为 {challenge}。
@@ -92,6 +97,9 @@ type challengeRec struct {
 	// Binding 是发起登录的插件给的不透明会话归属（如 SAML 源+NameID），
 	// 二次验证通过后签发令牌时要继续带上，否则 IdP 发起的登出吊销不到这段会话。
 	Binding string `json:"b,omitempty"`
+	// Completion 保存插件收尾所需的非敏感 JSON；Created 保留自动建号标记。
+	Completion json.RawMessage `json:"c,omitempty"`
+	Created    bool            `json:"created,omitempty"`
 }
 
 // 缓存里只放挑战 ID 的哈希，明文只在响应里出现一次。
@@ -115,6 +123,9 @@ func (s *Service) FinishLogin(ctx context.Context, u *User, meta LoginMeta) (*Lo
 }
 
 func (s *Service) passGates(ctx context.Context, u *User, meta LoginMeta, from int) (*LoginOutcome, error) {
+	if len(meta.Completion) > 0 && !json.Valid(meta.Completion) {
+		return nil, response.Internal().Wrap(errors.New("auth: invalid login completion data"))
+	}
 	if err := s.checkExternalSession(ctx, externalSessionFrom(ctx)); err != nil {
 		return nil, err
 	}
@@ -131,7 +142,11 @@ func (s *Service) passGates(ctx context.Context, u *User, meta LoginMeta, from i
 		if err != nil {
 			return nil, err
 		}
-		return &LoginOutcome{Challenge: ch}, nil
+		out := &LoginOutcome{Challenge: ch}
+		if u.ExternalCreated {
+			out.CreatedUserID = u.ID
+		}
+		return out, nil
 	}
 	s.Decorate(ctx, u)
 	pair, err := s.issuePair(ctx, u, "", 0, meta.SessionBinding)
@@ -139,7 +154,23 @@ func (s *Service) passGates(ctx context.Context, u *User, meta LoginMeta, from i
 		return nil, err
 	}
 	s.notifySessionTrackers(ctx, pair)
-	return &LoginOutcome{Pair: pair, User: u}, nil
+	if complete := s.loginCompletion(meta.Method); complete != nil {
+		complete(ctx, u, meta.Completion)
+		// 插件可能在建号收尾时补授角色；尽力重读资料，让本次登录响应也带上最新权限。
+		if p := s.Provider(); p != nil {
+			if fresh, err := p.Profile(ctx, u.ID); err == nil && fresh != nil && fresh.ID == u.ID {
+				fresh.ExternalCreated = u.ExternalCreated
+				fresh.LoginMethod = u.LoginMethod
+				s.Decorate(ctx, fresh)
+				u = fresh
+			}
+		}
+	}
+	out := &LoginOutcome{Pair: pair, User: u}
+	if u.ExternalCreated {
+		out.CreatedUserID = u.ID
+	}
+	return out, nil
 }
 
 func (s *Service) newChallenge(ctx context.Context, u *User, meta LoginMeta, gate string, req *GateRequirement) (*Challenge, error) {
@@ -152,9 +183,12 @@ func (s *Service) newChallenge(ctx context.Context, u *User, meta LoginMeta, gat
 	}
 	id := hex.EncodeToString(b)
 	ttl, _ := s.limits()
-	rec := challengeRec{UID: u.ID.String(), TID: u.TenantID.String(), Username: u.Username, Method: meta.Method, Gate: gate, IP: meta.IP, Exp: time.Now().Add(ttl).Unix(), Binding: meta.SessionBinding}
+	rec := challengeRec{UID: u.ID.String(), TID: u.TenantID.String(), Username: u.Username, Method: meta.Method, Gate: gate, IP: meta.IP, Exp: time.Now().Add(ttl).Unix(), Binding: meta.SessionBinding, Completion: meta.Completion, Created: u.ExternalCreated}
 	rec.ExternalSession = externalSessionFrom(ctx)
-	raw, _ := json.Marshal(rec)
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		return nil, response.Internal().Wrap(errors.New("auth: encode second-factor challenge"))
+	}
 	if err := s.cache.Set(ctx, challengeKey(id), string(raw), ttl); err != nil {
 		return nil, err
 	}

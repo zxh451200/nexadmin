@@ -51,11 +51,14 @@ function buildSchema(t: (k: string) => string) {
       attrNickname: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
       attrGroups: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
       attrPhone: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
+      attrExternalId: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
       autoCreate: z.boolean(),
       matchExisting: z.boolean(),
+      matchProvisionedExternalId: z.boolean(),
       defaultRole: z.string().trim().refine((v) => !v || validRole(v), t('plugin_saml.errors.defaultRole')),
       requireMappedGroup: z.boolean(),
       syncRolesOnLogin: z.boolean(),
+      revokeRolesOnEmptyGroups: z.boolean(),
       groupRoleMappings: z
         .array(
           z.object({
@@ -96,6 +99,12 @@ function buildSchema(t: (k: string) => string) {
         .refine((v) => !hasControl(v), t('plugin_saml.errors.authnContextInvalid')),
     })
     .superRefine((v, ctx) => {
+      if (v.matchProvisionedExternalId && !v.attrExternalId) {
+        ctx.addIssue({ code: 'custom', path: ['attrExternalId'], message: t('plugin_saml.errors.externalIdRequired') })
+      }
+      if (v.revokeRolesOnEmptyGroups && !v.syncRolesOnLogin) {
+        ctx.addIssue({ code: 'custom', path: ['revokeRolesOnEmptyGroups'], message: t('plugin_saml.errors.revokeSyncRequired') })
+      }
       if (v.requireMappedGroup && v.groupRoleMappings.length === 0) {
         ctx.addIssue({ code: 'custom', path: ['groupRoleMappings'], message: t('plugin_saml.errors.mappingRequired') })
       }
@@ -142,11 +151,14 @@ const empty: FormValues = {
   attrNickname: 'displayName',
   attrGroups: '',
   attrPhone: '',
+  attrExternalId: '',
   autoCreate: false,
   matchExisting: false,
+  matchProvisionedExternalId: false,
   defaultRole: '',
   requireMappedGroup: false,
   syncRolesOnLogin: false,
+  revokeRolesOnEmptyGroups: false,
   groupRoleMappings: [],
   allowIdpInitiated: false,
   signAuthnRequest: false,
@@ -178,11 +190,14 @@ function toValues(s?: SamlSource | null): FormValues {
     attrNickname: s.attrNickname,
     attrGroups: s.attrGroups ?? '',
     attrPhone: s.attrPhone ?? '',
+    attrExternalId: s.attrExternalId ?? '',
     autoCreate: s.autoCreate,
     matchExisting: s.matchExisting,
+    matchProvisionedExternalId: s.matchProvisionedExternalId ?? false,
     defaultRole: s.defaultRole ?? '',
     requireMappedGroup: s.requireMappedGroup,
     syncRolesOnLogin: s.syncRolesOnLogin ?? false,
+    revokeRolesOnEmptyGroups: s.revokeRolesOnEmptyGroups ?? false,
     groupRoleMappings: (s.groupRoleMappings ?? []).map((m) => ({ externalGroup: m.externalGroup, roleCodes: m.roleCodes.join('\n') })),
     allowIdpInitiated: s.allowIdpInitiated,
     signAuthnRequest: s.signAuthnRequest,
@@ -275,8 +290,12 @@ const ACCOUNT_ERROR_KEYS = [
   'attrNickname',
   'attrGroups',
   'attrPhone',
+  'attrExternalId',
+  'matchProvisionedExternalId',
   'defaultRole',
   'requireMappedGroup',
+  'syncRolesOnLogin',
+  'revokeRolesOnEmptyGroups',
   'groupRoleMappings',
 ]
 const ADVANCED_ERROR_KEYS = ['nameIdFormat', 'authnContextPreset', 'authnContextCustom', 'requireAuthnContext']
@@ -321,8 +340,8 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
       await save.mutateAsync({ id: editing?.id, data: toPayload(v) })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch {
-      toast.error(t('common.operateFailed'))
+    } catch (e) {
+      toast.error((e as Error).message)
     }
   }
 
@@ -619,11 +638,20 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                 <TextField control={c} name="attrNickname" label={p('attrNickname')} mono placeholder="displayName" />
                 <TextField control={c} name="attrGroups" label={p('attrGroups')} hint={h('attrGroups')} mono placeholder="groups" />
                 <TextField control={c} name="attrPhone" label={p('attrPhone')} mono placeholder="telephoneNumber" />
+                <TextField control={c} name="attrExternalId" label={p('attrExternalId')} hint={h('attrExternalId')} mono placeholder="immutableId" />
 
                 <FormGridFull>
                   <div className="space-y-3 rounded-md bg-muted/40 p-3">
                     <SwitchField control={c} name="autoCreate" label={p('autoCreate')} description={h('autoCreate')} bare />
                     <SwitchField control={c} name="matchExisting" label={p('matchExisting')} description={h('matchExisting')} bare />
+                    <SwitchField
+                      control={c}
+                      name="matchProvisionedExternalId"
+                      label={p('matchProvisionedExternalId')}
+                      description={h('matchProvisionedExternalId')}
+                      bare
+                      disabled={!form.watch('attrExternalId')}
+                    />
                     <TextField
                       control={c}
                       name="defaultRole"
@@ -654,6 +682,14 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       description={h('syncRolesOnLogin')}
                       bare
                       disabled={mappings.fields.length === 0}
+                    />
+                    <SwitchField
+                      control={c}
+                      name="revokeRolesOnEmptyGroups"
+                      label={p('revokeRolesOnEmptyGroups')}
+                      description={h('revokeRolesOnEmptyGroups')}
+                      bare
+                      disabled={!form.watch('syncRolesOnLogin')}
                     />
                     {mappings.fields.map((mapping, index) => (
                       <div key={mapping.id} className="grid grid-cols-1 gap-3 rounded-md bg-background p-3">

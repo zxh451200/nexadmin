@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -54,10 +55,29 @@ func planRefresh(m *Source, raw string) (entityID string, changed bool, err erro
 	if info.SSOURL == "" || info.CertCount == 0 {
 		return "", false, errors.New("saml: 远程元数据缺少 SSO 端点或签名证书，拒绝替换")
 	}
+	if info.CertExpired {
+		return "", false, errors.New("saml: 远程元数据的 IdP 签名证书已过期，拒绝替换")
+	}
+	current, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
+	if err != nil {
+		return "", false, err
+	}
+	if endpointDowngrade(current.SSOURL, info.SSOURL) || endpointDowngrade(current.SLOURL, info.SLOURL) {
+		return "", false, errors.New("saml: 远程元数据把 HTTPS 端点降级为 HTTP，拒绝替换")
+	}
 	if err := verifyMetadataSignature(raw, m.MetadataSignCert); err != nil {
 		return "", false, err
 	}
 	return info.EntityID, strings.TrimSpace(raw) != strings.TrimSpace(m.IdPMetadata), nil
+}
+
+func endpointDowngrade(current, next string) bool {
+	if current == "" || next == "" {
+		return false
+	}
+	oldURL, oldErr := url.Parse(current)
+	newURL, newErr := url.Parse(next)
+	return oldErr == nil && newErr == nil && oldURL.Scheme == "https" && newURL.Scheme == "http"
 }
 
 // SweepMetadata 刷新所有配置了元数据地址的身份源（含未启用的，便于先同步再启用）。

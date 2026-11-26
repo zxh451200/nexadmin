@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
 	"github.com/gin-gonic/gin"
 
@@ -135,7 +136,16 @@ func (s *Service) login(c *gin.Context) {
 		failDetail(c, err)
 		return
 	}
-	req, err := sp.MakeAuthenticationRequest(sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, saml.HTTPRedirectBinding)
+	info, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
+	if err != nil || info.SSOURL == "" {
+		response.Fail(c, response.BadRequest("saml.sso.operation_failed", "IdP SSO endpoint unavailable"))
+		return
+	}
+	binding := saml.HTTPRedirectBinding
+	if info.SSOBinding == "post" {
+		binding = saml.HTTPPostBinding
+	}
+	req, err := sp.MakeAuthenticationRequest(info.SSOURL, binding, saml.HTTPPostBinding)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -151,6 +161,10 @@ func (s *Service) login(c *gin.Context) {
 			response.Fail(c, err)
 			return
 		}
+	}
+	if binding == saml.HTTPPostBinding {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", req.Post(relay))
+		return
 	}
 	u, err := req.Redirect(relay, sp)
 	if err != nil {
@@ -228,7 +242,7 @@ func (s *Service) acs(c *gin.Context) {
 	if username == "" {
 		username = subject
 	}
-	// 组映射：仅自动建号时授予角色；开了「必须命中组」而一个都没命中时拒绝登录。
+	// 组映射：新账号初始化与登录时角色同步共用；开了「必须命中组」而一个都没命中时拒绝登录。
 	mapped, err := mappedRoleCodes(attrValues(assertion, m.AttrGroups), m.GroupRoleMappings, m.RequireMappedGroup)
 	if err != nil {
 		s.failACS(c, response.Forbidden("saml.acs.err_group"), "")
@@ -236,36 +250,38 @@ func (s *Service) acs(c *gin.Context) {
 	}
 	// ProviderKey 留空：框架只接受 ldap-<数字> 或旧 ldap/cas 键，自定义键会被拒。
 	// 多源隔离靠 Subject 前缀（源 ID），绑定键仍是 (saml, "<源ID>:<NameID>")。
+	completion, _ := json.Marshal(loginCompletion{SourceID: m.ID.String(), NameID: subject, RoleCodes: mapped, DefaultRole: m.DefaultRole})
 	out, err := s.issuer.LoginAs(c.Request.Context(), auth.LoginAsRequest{
 		Identity: auth.ExternalIdentity{
-			Subject:         m.ID.String() + ":" + subject,
-			Username:        username,
-			Email:           attr(assertion, m.AttrEmail),
-			Nickname:        attr(assertion, m.AttrNickname),
-			Phone:           attr(assertion, m.AttrPhone),
-			MatchExisting:   m.MatchExisting,
-			AutoCreate:      m.AutoCreate,
-			DefaultRole:     m.DefaultRole,
-			MappedRoleCodes: mapped,
-			SyncProfile:     true,
+			Subject:                    m.ID.String() + ":" + subject,
+			Username:                   username,
+			Email:                      attr(assertion, m.AttrEmail),
+			Nickname:                   attr(assertion, m.AttrNickname),
+			Phone:                      attr(assertion, m.AttrPhone),
+			MatchExisting:              m.MatchExisting,
+			MatchProvisionedExternalID: m.MatchProvisionedExternalID,
+			ProvisionedExternalID:      attr(assertion, m.AttrExternalID),
+			AutoCreate:                 m.AutoCreate,
+			DefaultRole:                m.DefaultRole,
+			MappedRoleCodes:            mapped,
+			DeferMappedRoles:           true,
+			SyncProfile:                true,
 		},
 		Method:         "saml",
 		IP:             c.ClientIP(),
 		UserAgent:      c.Request.UserAgent(),
 		SessionBinding: samlBinding(m.ID, subject, sessionIndex),
+		Completion:     completion,
 	})
 	if err != nil {
 		s.failACS(c, asResponseError(err), "")
 		return
 	}
-	// 保存 NameID 供 SP 发起登出使用（需二次验证的挑战阶段还没有本地用户，跳过）。
-	if out.User != nil && s.cache != nil && assertion.Subject.NameID.Value != "" {
-		_ = s.cache.Set(c.Request.Context(), sloKey(out.User.TenantID, m.ID, out.User.ID),
-			assertion.Subject.NameID.Value, 7*24*time.Hour)
-	}
-	if out.User != nil {
-		// 角色对账放在会话签发之后：失败只留日志，不回滚这次登录。
-		s.SyncRolesOnLogin(c.Request.Context(), m, out.User, mapped)
+	if out.Challenge != nil && out.CreatedUserID != 0 {
+		if err := s.markRoleInitializationPending(c.Request.Context(), m, out.CreatedUserID); err != nil {
+			s.failACS(c, response.Internal(), "")
+			return
+		}
 	}
 	payload := out.Payload()
 	if redirect != "" {
@@ -379,59 +395,102 @@ func safeRedirect(p string) string {
 	return p
 }
 
-// logout 是 SP 发起的单点登出：吊销本地令牌并 302 到 IdP 的 SLO 端点。
+type logoutPlan struct {
+	redirect   string
+	postURL    string
+	post       *saml.LogoutRequest
+	relayState string
+}
+
+// logout 是 SP 发起的单点登出：吊销本地令牌并按 IdP 元数据选择 Redirect 或 POST。
 func (s *Service) logout(c *gin.Context) {
-	if u, ok := s.logoutURL(c); ok {
-		c.Redirect(http.StatusFound, u)
+	plan, ok := s.buildLogoutPlan(c)
+	if !ok {
+		return
 	}
+	if plan.redirect != "" {
+		c.Redirect(http.StatusFound, plan.redirect)
+		return
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", plan.post.Post(plan.relayState))
 }
 
-// logoutJSON 同 logout，但返回跳转地址（前端带 token 调用后自行跳转）。
+// logoutJSON 返回结构化跳转或 POST 字段，前端无需注入服务端 HTML。
 func (s *Service) logoutJSON(c *gin.Context) {
-	if u, ok := s.logoutURL(c); ok {
-		response.OK(c, gin.H{"redirect": u})
+	plan, ok := s.buildLogoutPlan(c)
+	if !ok {
+		return
 	}
+	if plan.redirect != "" {
+		response.OK(c, gin.H{"binding": "redirect", "redirect": plan.redirect})
+		return
+	}
+	doc := etree.NewDocument()
+	doc.SetRoot(plan.post.Element())
+	raw, err := doc.WriteToBytes()
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{
+		"binding": "post", "url": plan.postURL,
+		"samlRequest": base64.StdEncoding.EncodeToString(raw), "relayState": plan.relayState,
+	})
 }
 
-func (s *Service) logoutURL(c *gin.Context) (string, bool) {
+func (s *Service) buildLogoutPlan(c *gin.Context) (*logoutPlan, bool) {
 	cl := auth.ClaimsFrom(c)
 	if cl == nil {
 		response.Fail(c, response.Unauthorized("error.unauthorized"))
-		return "", false
+		return nil, false
 	}
 	m, ok := s.sourceOrFail(c)
 	if !ok {
-		return "", false
+		return nil, false
 	}
 	if s.cache == nil {
 		response.Fail(c, response.Unavailable("auth.provider_missing"))
-		return "", false
+		return nil, false
 	}
 	key := sloKey(cl.TenantID, m.ID, cl.UserID)
 	nameID, err := s.cache.Get(c.Request.Context(), key)
 	if err != nil || nameID == "" {
 		response.Fail(c, response.BadRequest("saml.sso.not_from_source"))
-		return "", false
+		return nil, false
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
 		failDetail(c, err)
-		return "", false
+		return nil, false
 	}
 	relay := newRelay()
 	if next := safeRedirect(c.Query("next")); next != "" {
 		_ = s.cache.Set(c.Request.Context(), "saml:next:"+relay, next, 10*time.Minute)
 	}
-	u, err := sp.MakeRedirectLogoutRequest(nameID, relay)
-	if err != nil {
-		response.Fail(c, err)
-		return "", false
+	plan := &logoutPlan{relayState: relay}
+	if sloURL := sp.GetSLOBindingLocation(saml.HTTPRedirectBinding); sloURL != "" {
+		u, err := sp.MakeRedirectLogoutRequest(nameID, relay)
+		if err != nil {
+			response.Fail(c, err)
+			return nil, false
+		}
+		plan.redirect = u.String()
+	} else if sloURL := sp.GetSLOBindingLocation(saml.HTTPPostBinding); sloURL != "" {
+		req, err := sp.MakeLogoutRequest(sloURL, nameID)
+		if err != nil {
+			response.Fail(c, err)
+			return nil, false
+		}
+		plan.postURL, plan.post = sloURL, req
+	} else {
+		response.Fail(c, response.BadRequest("saml.sso.slo_unavailable"))
+		return nil, false
 	}
 	_ = s.cache.Del(c.Request.Context(), key)
 	if r, ok := s.issuer.(SessionRevoker); ok {
 		_ = r.RevokeSession(c.Request.Context(), cl)
 	}
-	return u.String(), true
+	return plan, true
 }
 
 // slo 同时处理两个方向：
@@ -675,7 +734,13 @@ func (s *Service) createSource(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
+	start := time.Now()
 	m, err := s.Create(c.Request.Context(), f)
+	sourceID := ""
+	if m != nil {
+		sourceID = m.ID.String()
+	}
+	s.audit(c, "create", sourceID, start, map[string]any{"name": f.Name, "enabled": f.Enabled}, err)
 	if err != nil {
 		failDetail(c, err)
 		return
@@ -693,7 +758,12 @@ func (s *Service) updateSource(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
+	start := time.Now()
 	m, err := s.Update(c.Request.Context(), id, f)
+	s.audit(c, "update", id, start, map[string]any{
+		"name": f.Name, "enabled": f.Enabled, "syncRolesOnLogin": f.SyncRoles,
+		"revokeRolesOnEmptyGroups": f.RevokeEmptyRoles, "matchProvisionedExternalId": f.MatchProvisionedExternalID,
+	}, err)
 	if err != nil {
 		failDetail(c, err)
 		return
@@ -707,11 +777,34 @@ func (s *Service) deleteSource(c *gin.Context) {
 		response.Fail(c, response.NotFound("error.not_found"))
 		return
 	}
-	if err := s.Delete(c.Request.Context(), id); err != nil {
+	start := time.Now()
+	err := s.Delete(c.Request.Context(), id)
+	s.audit(c, "delete", id, start, nil, err)
+	if err != nil {
 		response.Fail(c, err)
 		return
 	}
 	response.OK(c, nil)
+}
+
+func (s *Service) previewRoles(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	var input struct {
+		Groups []string `json:"groups"`
+		UserID string   `json:"userId"`
+	}
+	if !response.BindJSON(c, &input) {
+		return
+	}
+	preview, err := s.PreviewRoles(c.Request.Context(), m, input.Groups, input.UserID)
+	if err != nil {
+		failDetail(c, err)
+		return
+	}
+	response.OK(c, preview)
 }
 
 // sourceURLs 返回 IdP 侧要填的 SP 信息（EntityID / ACS / SLO / 元数据 / 登录入口）。
@@ -743,7 +836,10 @@ func (s *Service) setEnabled(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	if err := s.SetEnabled(c.Request.Context(), id, f.Enabled); err != nil {
+	start := time.Now()
+	err := s.SetEnabled(c.Request.Context(), id, f.Enabled)
+	s.audit(c, "enabled", id, start, map[string]any{"enabled": f.Enabled}, err)
+	if err != nil {
 		failDetail(c, err)
 		return
 	}
@@ -765,7 +861,9 @@ func (s *Service) refreshMetadata(c *gin.Context) {
 	if !ok {
 		return
 	}
+	start := time.Now()
 	changed, err := s.RefreshMetadata(c.Request.Context(), m)
+	s.audit(c, "refresh_metadata", m.ID.String(), start, map[string]any{"changed": changed}, err)
 	if err != nil {
 		failDetail(c, err)
 		return
@@ -819,12 +917,15 @@ func (s *Service) rotateSPCert(c *gin.Context) {
 	if !ok {
 		return
 	}
+	start := time.Now()
 	fresh, err := s.StageSPKey(c.Request.Context(), m.ID.String())
 	if err != nil {
+		s.audit(c, "stage_sp_cert", m.ID.String(), start, nil, err)
 		failDetail(c, err)
 		return
 	}
 	info, err := certInfo(fresh)
+	s.audit(c, "stage_sp_cert", m.ID.String(), start, nil, err)
 	if err != nil {
 		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return
@@ -838,12 +939,15 @@ func (s *Service) promoteSPCert(c *gin.Context) {
 	if !ok {
 		return
 	}
+	start := time.Now()
 	fresh, err := s.PromoteSPKey(c.Request.Context(), m.ID.String())
 	if err != nil {
+		s.audit(c, "promote_sp_cert", m.ID.String(), start, nil, err)
 		failDetail(c, err)
 		return
 	}
 	info, err := certInfo(fresh)
+	s.audit(c, "promote_sp_cert", m.ID.String(), start, nil, err)
 	if err != nil {
 		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return
@@ -864,12 +968,15 @@ func (s *Service) importSPKey(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
+	start := time.Now()
 	fresh, err := s.ImportSPKey(c.Request.Context(), m.ID.String(), f.Cert, f.Key)
 	if err != nil {
+		s.audit(c, "import_sp_key", m.ID.String(), start, nil, err)
 		failDetail(c, err)
 		return
 	}
 	info, err := certInfo(fresh)
+	s.audit(c, "import_sp_key", m.ID.String(), start, nil, err)
 	if err != nil {
 		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return

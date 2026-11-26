@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"nexadmin/core/i18n"
+	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 )
 
@@ -38,8 +40,12 @@ func (s *Service) failACS(c *gin.Context, e *response.Error, detail string) {
 	if msg == "" {
 		msg = i18n.T(ctx, e.Key, e.Args...)
 	}
-	if detail != "" {
-		msg += ": " + detail
+	if s.log != nil {
+		s.log.Warn("saml: ACS rejected",
+			zap.String("source_id", c.Param("id")),
+			zap.String("request_id", c.GetString(middleware.RequestIDKey)),
+			zap.String("error_key", e.Key),
+			zap.String("detail", detail))
 	}
 	if !wantsHTML(c.Request) {
 		response.Fail(c, e.WithMsg(msg))

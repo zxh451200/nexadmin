@@ -41,6 +41,8 @@ type User struct {
 	Platform bool `json:"platform"`
 	// LoginMethod 由 Provider.Login 在凭据通过时填写实际的校验方式（如 "ldap"）；空 = 按请求类型（password / phone）。
 	LoginMethod string `json:"-"`
+	// ExternalCreated 标记本次解析刚由外部身份自动建号；插件据此执行只有新账号才需要的初始化收尾。
+	ExternalCreated bool `json:"-"`
 	// TenantExpireSoon 非空表示所属租户即将到期（由 Service.Decorate 填充，登录与 /auth/me 返回）。
 	TenantExpireSoon *ExpireSoon `json:"tenantExpireSoon,omitempty"`
 }

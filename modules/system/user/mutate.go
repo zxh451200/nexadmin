@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/event"
 	"nexadmin/modules/internal/password"
@@ -125,31 +126,53 @@ func (s *service) checkRoles(ctx context.Context, roles []idgen.ID) error {
 	return nil
 }
 
-// replaceRelations 整体替换用户的角色与岗位。
-func replaceRelations(tx *gorm.DB, uid idgen.ID, roles, posts []idgen.ID) error {
-	if err := tx.Where("user_id = ?", int64(uid)).Delete(&userRole{}).Error; err != nil {
+// replaceRelations 整体替换用户的角色与岗位，并同步失效外部来源已失去的角色记账。
+func replaceRelations(ctx context.Context, tx *gorm.DB, tenantID, uid idgen.ID, roles, posts []idgen.ID) error {
+	var existing []userRole
+	if err := tx.WithContext(ctx).Where("user_id = ?", int64(uid)).Find(&existing).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("user_id = ?", int64(uid)).Delete(&userPost{}).Error; err != nil {
-		return err
+	previous := make([]idgen.ID, 0, len(existing))
+	existingIDs := make(map[idgen.ID]bool, len(existing))
+	for _, row := range existing {
+		previous = append(previous, row.RoleID)
+		existingIDs[row.RoleID] = true
 	}
-	if len(roles) > 0 {
-		rows := make([]userRole, len(roles))
-		for i, r := range roles {
-			rows[i] = userRole{UserID: uid, RoleID: r}
+	selected := make(map[idgen.ID]bool, len(roles))
+	for _, roleID := range roles {
+		selected[roleID] = true
+	}
+	for roleID := range existingIDs {
+		if !selected[roleID] {
+			if err := tx.WithContext(ctx).Where("user_id = ? AND role_id = ?", int64(uid), int64(roleID)).Delete(&userRole{}).Error; err != nil {
+				return err
+			}
 		}
-		if err := tx.Create(&rows).Error; err != nil {
+	}
+	added := make([]userRole, 0, len(roles))
+	for _, roleID := range roles {
+		if !existingIDs[roleID] {
+			added = append(added, userRole{UserID: uid, RoleID: roleID})
+		}
+	}
+	if len(added) > 0 {
+		if err := tx.WithContext(ctx).Create(&added).Error; err != nil {
 			return err
 		}
+	}
+	if err := tx.WithContext(ctx).Where("user_id = ?", int64(uid)).Delete(&userPost{}).Error; err != nil {
+		return err
 	}
 	if len(posts) > 0 {
 		rows := make([]userPost, len(posts))
 		for i, p := range posts {
 			rows[i] = userPost{UserID: uid, PostID: p}
 		}
-		return tx.Create(&rows).Error
+		if err := tx.WithContext(ctx).Create(&rows).Error; err != nil {
+			return err
+		}
 	}
-	return nil
+	return core.NotifyRoleAssignmentsReplaced(ctx, tx, tenantID, uid, previous, roles)
 }
 
 func (s *service) create(ctx context.Context, in userInput, me actor) (*userDTO, error) {
@@ -200,7 +223,7 @@ func (s *service) create(ctx context.Context, in userInput, me actor) (*userDTO,
 		if err := tx.Create(u).Error; err != nil {
 			return err
 		}
-		return replaceRelations(tx, u.ID, p.roles, p.posts)
+		return replaceRelations(ctx, tx, u.TenantID, u.ID, p.roles, p.posts)
 	})
 	if err != nil {
 		return nil, err
@@ -257,7 +280,7 @@ func (s *service) update(ctx context.Context, id idgen.ID, in userInput, me acto
 		if err := tx.Save(u).Error; err != nil {
 			return err
 		}
-		return replaceRelations(tx, id, p.roles, p.posts)
+		return replaceRelations(ctx, tx, u.TenantID, id, p.roles, p.posts)
 	})
 	if err != nil {
 		return nil, err

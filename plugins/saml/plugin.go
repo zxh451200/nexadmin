@@ -31,6 +31,7 @@ func (*module) TenantTables() []tenant.Table {
 	return []tenant.Table{
 		{Name: "plg_saml_source", Column: "tenant_id"},
 		{Name: "plg_saml_role_grant", Column: "tenant_id"},
+		{Name: "plg_saml_role_init", Column: "tenant_id"},
 	}
 }
 
@@ -43,6 +44,24 @@ func (*module) Start(ctx context.Context, d *core.Deps) error {
 	auth.RegisterSessionTracker(func(ctx context.Context, cl *auth.Claims) {
 		recordBindingSession(ctx, d.Cache, cl)
 	})
+	if d.Notify != nil {
+		go func() {
+			sweep := func() {
+				sweepCertAlerts(ctx, d.DB, d.Notify, d.Cache, d.Log, time.Now())
+			}
+			sweep()
+			t := time.NewTicker(6 * time.Hour)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					sweep()
+				}
+			}
+		}()
+	}
 	hours := loadMetadataRefreshHours()
 	if hours <= 0 {
 		if d.Log != nil {
@@ -92,6 +111,10 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 		setAllowPrivateHosts(true)
 	}
 	s := NewService(d.DB, d.Auth, d.Cache).SetLogger(d.Log)
+	core.RegisterRoleAssignmentObserver(s.roleAssignmentsReplaced)
+	if err := s.registerLoginCompletion(d.Auth); err != nil && d.Log != nil {
+		d.Log.Warn("saml: register login completion failed", zap.Error(err))
+	}
 
 	admin := r.Group("/plugins/saml")
 	admin.GET("/sources", core.Perm("saml:list"), s.listSources)
@@ -100,6 +123,7 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	admin.DELETE("/sources/:id", core.Perm("saml:edit"), s.deleteSource)
 	admin.PUT("/sources/:id/enabled", core.Perm("saml:edit"), s.setEnabled)
 	admin.POST("/sources/:id/test", core.Perm("saml:edit"), s.testSource)
+	admin.POST("/sources/:id/role-preview", core.Perm("saml:edit"), s.previewRoles)
 	admin.POST("/sources/:id/refresh", core.Perm("saml:edit"), s.refreshMetadata)
 	admin.POST("/sources/:id/rotate-sp-cert", core.Perm("saml:edit"), s.rotateSPCert)
 	admin.POST("/sources/:id/promote-sp-cert", core.Perm("saml:edit"), s.promoteSPCert)

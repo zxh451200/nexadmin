@@ -115,10 +115,11 @@ func (s *Service) CompleteLogin(ctx context.Context, challengeID string, meta Lo
 	if u == nil || u.ID != uid {
 		return nil, errChallenge()
 	}
+	u.ExternalCreated = rec.Created
 	if err := s.CheckTenant(vctx, u); err != nil {
 		return nil, err
 	}
-	out, err := s.passGates(vctx, u, LoginMeta{Method: rec.Method, IP: meta.IP, UserAgent: meta.UserAgent, SessionBinding: rec.Binding}, idx+1)
+	out, err := s.passGates(vctx, u, LoginMeta{Method: rec.Method, IP: meta.IP, UserAgent: meta.UserAgent, SessionBinding: rec.Binding, Completion: rec.Completion}, idx+1)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +138,8 @@ type LoginAsRequest struct {
 	// SessionBinding 给 SessionTracker 的不透明会话归属（如 "saml:<源ID>:<NameID>"）：
 	// 二次验证后的签发与后续刷新都会带上它，供 IdP 发起的登出吊销本地会话。
 	SessionBinding string
+	// Completion 是插件登录收尾数据，通过挑战原样传递，只能放非敏感信息。
+	Completion json.RawMessage
 }
 
 // LoginAs 为“已验证的外部身份”签发登录态：前置检查 -> 映射 / 创建本地用户（遵守额度）-> 租户校验 -> 二次验证门 -> 令牌，
@@ -160,7 +163,7 @@ func (s *Service) LoginAs(ctx context.Context, req LoginAsRequest) (*LoginOutcom
 	if err != nil {
 		return fail(err)
 	}
-	out, err := s.FinishLogin(ctx, u, LoginMeta{Method: req.Method, IP: req.IP, UserAgent: req.UserAgent, SessionBinding: req.SessionBinding})
+	out, err := s.FinishLogin(ctx, u, LoginMeta{Method: req.Method, IP: req.IP, UserAgent: req.UserAgent, SessionBinding: req.SessionBinding, Completion: req.Completion})
 	if err != nil {
 		return fail(err)
 	}

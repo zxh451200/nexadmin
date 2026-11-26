@@ -85,15 +85,22 @@ func (m *module) ResolveExternalUser(ctx context.Context, method string, ext aut
 			return nil, err
 		}
 	}
+	if u == nil && ext.MatchProvisionedExternalID {
+		if u, err = matchProvisionedExternalID(ctx, d, ext.ProvisionedExternalID, id); err != nil {
+			return nil, err
+		}
+	}
 	if u == nil && ext.MatchExisting {
 		if u, err = matchByUsername(ctx, d, name, id, legacy); err != nil {
 			return nil, err
 		}
 	}
+	created := false
 	if u == nil && ext.AutoCreate {
-		if u, err = createExternal(ctx, d, name, ext.DefaultRole, id, ext.MappedRoleCodes...); err != nil {
+		if u, err = createExternal(ctx, d, name, ext.DefaultRole, id, ext.DeferMappedRoles, ext.MappedRoleCodes...); err != nil {
 			return nil, err
 		}
+		created = u != nil
 	}
 	if u == nil || u.Status != statusOn || u.IsSuper || u.TenantID != tid {
 		d.Log.Info("external login refused", zap.String("method", method))
@@ -114,6 +121,7 @@ func (m *module) ResolveExternalUser(ctx context.Context, method string, ext aut
 		return nil, err
 	}
 	au.LoginMethod = method
+	au.ExternalCreated = created
 	return au, nil
 }
 
@@ -252,7 +260,7 @@ func (m *module) SyncExternalUser(ctx context.Context, ext auth.ExternalIdentity
 		_, err := createExternal(ctx, d, ext.Username, ext.DefaultRole, &oauth.Identity{
 			Provider: ext.ProviderKey, ExternalID: ext.Subject, Name: ext.Nickname,
 			Email: ext.Email, Phone: ext.Phone,
-		}, ext.MappedRoleCodes...)
+		}, false, ext.MappedRoleCodes...)
 		return err == nil, err
 	}
 	err = d.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -355,6 +363,45 @@ func (m *module) DeactivateMissingExternal(ctx context.Context, provider string,
 	return n, nil
 }
 
+// matchProvisionedExternalID 只按供号系统写入的稳定 ID 绑定，不按用户名或邮箱猜账号。
+func matchProvisionedExternalID(ctx context.Context, d *core.Deps, externalID string, id *oauth.Identity) (*User, error) {
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" || len(externalID) > 255 {
+		return nil, errExternalDenied
+	}
+	var rows []User
+	if err := d.DB.WithContext(ctx).Where("tenant_id = ? AND external_id = ?", tenantOf(ctx), externalID).Limit(2).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	if len(rows) != 1 || rows[0].ExternalID != externalID {
+		return nil, errExternalDenied
+	}
+	u := &rows[0]
+	if u.Status != statusOn || u.TenantID != tenantOf(ctx) {
+		return nil, errExternalDenied
+	}
+	if protected, err := isProtectedUser(ctx, d.DB, u); err != nil {
+		return nil, err
+	} else if protected {
+		return nil, errExternalDenied
+	}
+	if has, err := hasIdentity(ctx, d.DB, u.ID, id.Provider); err != nil {
+		return nil, err
+	} else if has {
+		return nil, errExternalDenied
+	}
+	if err := linkIdentity(ctx, d.DB, u.ID, id); err != nil {
+		if errors.Is(err, errOAuthConflict) {
+			return nil, errExternalDenied
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
 // matchByUsername 把外部身份绑到同名的已有账号：超管和持有内置角色的账号永不匹配；该账号在此方式下已有别的绑定也不覆盖。
 func matchByUsername(ctx context.Context, d *core.Deps, name string, id *oauth.Identity, legacy string) (*User, error) {
 	var u User
@@ -394,7 +441,8 @@ func matchByUsername(ctx context.Context, d *core.Deps, name string, id *oauth.I
 }
 
 // createExternal 自动建号：沿用 ensureUserQuota 与事务内建号 + 赋角色 + 绑定；用户名已存在（含并发）按拒绝处理。
-func createExternal(ctx context.Context, d *core.Deps, name, role string, id *oauth.Identity, mappedCodes ...string) (*User, error) {
+// deferRoles 由需要在登录门通过后记录角色来源的插件使用；此时建号不预授任何角色。
+func createExternal(ctx context.Context, d *core.Deps, name, role string, id *oauth.Identity, deferRoles bool, mappedCodes ...string) (*User, error) {
 	tid, ok := tenant.From(ctx)
 	if !ok || tid == 0 || tenant.Skipped(ctx) {
 		return nil, errExternalDenied
@@ -428,9 +476,11 @@ func createExternal(ctx context.Context, d *core.Deps, name, role string, id *oa
 		if err := tx.Create(u).Error; err != nil {
 			return err
 		}
-		for _, roleID := range roleIDs {
-			if err := tx.Create(&userRole{UserID: u.ID, RoleID: roleID}).Error; err != nil {
-				return err
+		if !deferRoles {
+			for _, roleID := range roleIDs {
+				if err := tx.Create(&userRole{UserID: u.ID, RoleID: roleID}).Error; err != nil {
+					return err
+				}
 			}
 		}
 		return linkIdentity(ctx, tx, u.ID, id)

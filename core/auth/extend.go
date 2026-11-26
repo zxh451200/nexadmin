@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -45,6 +46,10 @@ type ExternalIdentity struct {
 
 	// MatchExisting 允许把该身份绑定到“同名且尚未绑定该方式”的已有本地账号（超级管理员永不匹配）。默认 false：不猜。
 	MatchExisting bool
+	// MatchProvisionedExternalID 允许按 sys_user.external_id 精确绑定已供号账号（如 SCIM），
+	// 仅在标识非空、租户内唯一、账号启用且非受保护账号时绑定；空值永不触发匹配。
+	MatchProvisionedExternalID bool
+	ProvisionedExternalID      string
 	// AutoCreate 允许在匹配不上时自动建号：无密码，受租户用户数额度限制。
 	// MappedRoleCodes 非空时替代 DefaultRole，否则使用 DefaultRole（空为 guest）。
 	// 角色仅建号时授予，已有用户保留本地角色；这不是持续角色同步。
@@ -53,6 +58,8 @@ type ExternalIdentity struct {
 	// MappedRoleCodes 是可信插件显式组映射后的本地角色编码，绝不能直接使用外部组名。
 	// Resolver 必须重新校验当前租户、启用状态及非内置/非 super；无效角色拒绝建号。
 	MappedRoleCodes []string
+	// DeferMappedRoles 让插件在登录完成后按来源记账并授角色，避免建号时绕过来源授权表。
+	DeferMappedRoles bool
 }
 
 // ErrExternalRejected 表示外部校验器认为凭据无效或不适用（等同 nil 身份）；继续尝试下一个校验器。
@@ -93,6 +100,10 @@ type LoginEvent struct {
 type LoginRecorder interface {
 	RecordLogin(ctx context.Context, ev LoginEvent)
 }
+
+// LoginCompletionFunc 在所有登录门通过后执行插件自己的登录收尾；data 由 LoginAsRequest.Completion 提供。
+// 回调不得阻断已完成的身份认证，失败由插件自己记录。
+type LoginCompletionFunc func(ctx context.Context, u *User, data json.RawMessage)
 
 // ---- 二次验证门 ----
 
@@ -140,11 +151,12 @@ func reservedMethod(name string) bool {
 }
 
 type extState struct {
-	mu    sync.RWMutex
-	pre   []PreLoginFunc
-	rfsh  []RefreshCheckFunc
-	ext   []ExternalAuthenticator
-	gates []LoginGate
+	mu       sync.RWMutex
+	pre      []PreLoginFunc
+	rfsh     []RefreshCheckFunc
+	ext      []ExternalAuthenticator
+	gates    []LoginGate
+	complete map[string]LoginCompletionFunc
 }
 
 // RegisterPreLogin 注册登录前置检查（按注册顺序执行，任一返回错误即拒绝）。nil 函数忽略。
@@ -214,6 +226,35 @@ func (s *Service) RegisterLoginGate(g LoginGate) error {
 	}
 	s.x.gates = append(append([]LoginGate(nil), s.x.gates...), g)
 	return nil
+}
+
+// RegisterLoginCompletion 注册某外部登录方式的收尾回调；重复注册返回错误。
+func (s *Service) RegisterLoginCompletion(method string, fn LoginCompletionFunc) error {
+	if s == nil || fn == nil {
+		return errors.New("auth: nil service or completion")
+	}
+	if !methodNameRe.MatchString(method) || reservedMethod(method) {
+		return fmt.Errorf("auth: invalid login completion method %q", method)
+	}
+	s.x.mu.Lock()
+	defer s.x.mu.Unlock()
+	if s.x.complete == nil {
+		s.x.complete = make(map[string]LoginCompletionFunc)
+	}
+	if _, ok := s.x.complete[method]; ok {
+		return fmt.Errorf("auth: login completion %q already registered", method)
+	}
+	s.x.complete[method] = fn
+	return nil
+}
+
+func (s *Service) loginCompletion(method string) LoginCompletionFunc {
+	if s == nil {
+		return nil
+	}
+	s.x.mu.RLock()
+	defer s.x.mu.RUnlock()
+	return s.x.complete[method]
 }
 
 func (s *Service) preFuncs() []PreLoginFunc {

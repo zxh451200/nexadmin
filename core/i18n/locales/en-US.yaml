@@ -1120,7 +1120,13 @@ saml:
     not_from_source: "This session was not signed in through that SAML identity source"
     slo_response_invalid: "SLO response validation failed: %s"
     slo_request_invalid: "SLO request validation failed: %s"
+    slo_unavailable: "This identity source has no IdP logout endpoint"
     sp_cert_unavailable: "SP certificate unavailable: %s"
     metadata_required: "Provide the IdP metadata XML or a metadata URL"
     metadata_too_large: "Metadata exceeds 1 MiB"
     operation_failed: "The operation was not completed: %s"
+  cert_alert:
+    title: SAML SP certificate is expiring
+    current: current certificate
+    next: standby certificate
+    content: "Identity source \"%s\": its %s expires on %s (about %d days left). Publish a new certificate using the two-step rollover and update trust at the IdP first."

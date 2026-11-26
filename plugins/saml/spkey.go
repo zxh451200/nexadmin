@@ -26,10 +26,14 @@ func parseSigner(pemText string) (crypto.Signer, error) {
 		return nil, errors.New("saml: 私钥不是 PEM 格式")
 	}
 	if k, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
-		if s, ok := k.(crypto.Signer); ok {
-			return s, nil
+		switch key := k.(type) {
+		case *rsa.PrivateKey:
+			return key, nil
+		case *ecdsa.PrivateKey:
+			return key, nil
+		default:
+			return nil, errors.New("saml: 私钥类型仅支持 RSA 或 ECDSA")
 		}
-		return nil, errors.New("saml: 私钥类型不支持")
 	}
 	if k, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
 		return k, nil
@@ -63,6 +67,8 @@ func checkSPKeyStrength(s crypto.Signer) error {
 		if k.Curve.Params().BitSize < 256 {
 			return errors.New("saml: EC 私钥至少 256 位")
 		}
+	default:
+		return errors.New("saml: 私钥类型仅支持 RSA 或 ECDSA")
 	}
 	return nil
 }
@@ -116,6 +122,15 @@ func (s *Service) ImportSPKey(ctx context.Context, id, certPEM, keyPEM string) (
 	if err != nil {
 		return nil, err
 	}
+	if m.RequireEncryptedAssertion {
+		cert, err := parseSingleCert(certOut)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := cert.PublicKey.(*rsa.PublicKey); !ok {
+			return nil, errors.New("saml: 要求加密断言时只能导入 RSA 证书与私钥")
+		}
+	}
 	updates := map[string]any{
 		"sp_cert":         certOut,
 		"sp_key_enc":      keyEnc,
@@ -133,7 +148,7 @@ func (s *Service) ImportSPKey(ctx context.Context, id, certPEM, keyPEM string) (
 	return s.Get(ctx, id)
 }
 
-// signMetadataXML 用 SP 私钥对已序列化的元数据做 enveloped XML 签名（RSA-SHA256）。
+// signMetadataXML 用 SP 私钥对已序列化的元数据做 enveloped XML 签名。
 func signMetadataXML(raw []byte, certPEM, keyPEM string) ([]byte, error) {
 	cert, err := parseSingleCert(certPEM)
 	if err != nil {

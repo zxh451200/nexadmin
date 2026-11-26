@@ -2,6 +2,8 @@ package saml
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -64,28 +66,31 @@ func (s *Service) SetLogger(l *zap.Logger) *Service {
 }
 
 type SourceForm struct {
-	Name           string             `json:"name"`
-	Enabled        bool               `json:"enabled"`
-	IdPMetadata    string             `json:"idpMetadata"`
-	IdPMetadataURL string             `json:"idpMetadataUrl"`
-	IDPEntityID    string             `json:"idpEntityId"`
-	SPEntityID     string             `json:"spEntityIdOverride"`
-	MetadataCACert string             `json:"metadataCaCert"`
-	MetadataSign   string             `json:"metadataSignCert"`
-	AttrUsername   string             `json:"attrUsername"`
-	AttrEmail      string             `json:"attrEmail"`
-	AttrNickname   string             `json:"attrNickname"`
-	AttrGroups     string             `json:"attrGroups"`
-	AttrPhone      string             `json:"attrPhone"`
-	AutoCreate     bool               `json:"autoCreate"`
-	MatchExisting  bool               `json:"matchExisting"`
-	DefaultRole    string             `json:"defaultRole"`
-	GroupMappings  []GroupRoleMapping `json:"groupRoleMappings"`
-	RequireMapped  bool               `json:"requireMappedGroup"`
-	SyncRoles      bool               `json:"syncRolesOnLogin"`
-	AllowIDPInit   bool               `json:"allowIdpInitiated"`
-	SignRequests   bool               `json:"signAuthnRequest"`
-	NameIDFormat   string             `json:"nameIdFormat"`
+	Name                       string             `json:"name"`
+	Enabled                    bool               `json:"enabled"`
+	IdPMetadata                string             `json:"idpMetadata"`
+	IdPMetadataURL             string             `json:"idpMetadataUrl"`
+	IDPEntityID                string             `json:"idpEntityId"`
+	SPEntityID                 string             `json:"spEntityIdOverride"`
+	MetadataCACert             string             `json:"metadataCaCert"`
+	MetadataSign               string             `json:"metadataSignCert"`
+	AttrUsername               string             `json:"attrUsername"`
+	AttrEmail                  string             `json:"attrEmail"`
+	AttrNickname               string             `json:"attrNickname"`
+	AttrGroups                 string             `json:"attrGroups"`
+	AttrPhone                  string             `json:"attrPhone"`
+	AttrExternalID             string             `json:"attrExternalId"`
+	AutoCreate                 bool               `json:"autoCreate"`
+	MatchExisting              bool               `json:"matchExisting"`
+	MatchProvisionedExternalID bool               `json:"matchProvisionedExternalId"`
+	DefaultRole                string             `json:"defaultRole"`
+	GroupMappings              []GroupRoleMapping `json:"groupRoleMappings"`
+	RequireMapped              bool               `json:"requireMappedGroup"`
+	SyncRoles                  bool               `json:"syncRolesOnLogin"`
+	RevokeEmptyRoles           bool               `json:"revokeRolesOnEmptyGroups"`
+	AllowIDPInit               bool               `json:"allowIdpInitiated"`
+	SignRequests               bool               `json:"signAuthnRequest"`
+	NameIDFormat               string             `json:"nameIdFormat"`
 	// RequireEncrypted 要求断言必须加密（明文断言拒绝登录）。
 	RequireEncrypted bool `json:"requireEncryptedAssertion"`
 	// SignMetadata 对外输出的 SP 元数据带 XML 签名。
@@ -123,26 +128,28 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 	if err != nil {
 		return nil, err
 	}
-	if f.Enabled {
-		// 直接以启用态保存时也要过一遍「真的能登录」，避免绕过快捷启停的检查。
-		if err := (&Source{IdPMetadata: f.IdPMetadata, SPCert: certPEM, MetadataSignCert: f.MetadataSign}).ready(); err != nil {
-			return nil, err
-		}
-	}
 	m := Source{
 		Name: f.Name, Enabled: f.Enabled, IdPMetadata: f.IdPMetadata, IdPMetadataURL: f.IdPMetadataURL,
 		IDPEntityID: f.IDPEntityID, SPEntityID: f.SPEntityID,
 		MetadataCACert: f.MetadataCACert, MetadataSignCert: f.MetadataSign,
 		SPCert: certPEM, SPKeyEnc: keyEnc,
 		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname, AttrGroups: f.AttrGroups, AttrPhone: f.AttrPhone,
-		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
+		AttrExternalID: f.AttrExternalID,
+		AutoCreate:     f.AutoCreate, MatchExisting: f.MatchExisting, MatchProvisionedExternalID: f.MatchProvisionedExternalID, DefaultRole: f.DefaultRole,
 		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped, SyncRolesOnLogin: f.SyncRoles,
-		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
+		RevokeRolesOnEmptyGroups: f.RevokeEmptyRoles,
+		AllowIDPInitiated:        f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
 		RequireEncryptedAssertion: f.RequireEncrypted,
 		SignMetadata:              f.SignMetadata,
 		AllowSHA1:                 f.AllowSHA1,
 		RequireSignedCBC:          f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
 		ForceAuthn: f.ForceAuthn, AuthnContextClassRef: f.AuthnContextClassRef, RequireAuthnContext: f.RequireAuthnContext,
+	}
+	if m.Enabled {
+		// 直接以启用态保存时也要过一遍「真的能登录」，避免绕过快捷启停的检查。
+		if err := m.ready(); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return nil, err
@@ -171,12 +178,15 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.AttrNickname = f.AttrNickname
 	m.AttrGroups = f.AttrGroups
 	m.AttrPhone = f.AttrPhone
+	m.AttrExternalID = f.AttrExternalID
 	m.AutoCreate = f.AutoCreate
 	m.MatchExisting = f.MatchExisting
+	m.MatchProvisionedExternalID = f.MatchProvisionedExternalID
 	m.DefaultRole = f.DefaultRole
 	m.GroupRoleMappings = f.GroupMappings
 	m.RequireMappedGroup = f.RequireMapped
 	m.SyncRolesOnLogin = f.SyncRoles
+	m.RevokeRolesOnEmptyGroups = f.RevokeEmptyRoles
 	m.AllowIDPInitiated = f.AllowIDPInit
 	m.SignAuthnRequest = f.SignRequests
 	m.NameIDFormat = f.NameIDFormat
@@ -276,6 +286,9 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		if err := tx.Where("source_id = ?", id).Delete(&roleGrant{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("source_id = ?", id).Delete(&roleInitialization{}).Error; err != nil {
+			return err
+		}
 		return tx.Where("id = ?", id).Delete(&Source{}).Error
 	})
 }
@@ -332,7 +345,8 @@ func (f *SourceForm) validate() error {
 	f.AttrNickname = defAttr(f.AttrNickname, "displayName")
 	f.AttrGroups = strings.TrimSpace(f.AttrGroups)
 	f.AttrPhone = strings.TrimSpace(f.AttrPhone)
-	for _, name := range []string{f.AttrUsername, f.AttrEmail, f.AttrNickname, f.AttrGroups, f.AttrPhone} {
+	f.AttrExternalID = strings.TrimSpace(f.AttrExternalID)
+	for _, name := range []string{f.AttrUsername, f.AttrEmail, f.AttrNickname, f.AttrGroups, f.AttrPhone, f.AttrExternalID} {
 		if !validAttrName(name) {
 			return fmt.Errorf("saml: 属性名不合法: %q", name)
 		}
@@ -354,6 +368,12 @@ func (f *SourceForm) validate() error {
 	f.DefaultRole = strings.TrimSpace(f.DefaultRole)
 	if f.DefaultRole != "" && !validRoleCode(f.DefaultRole) {
 		return fmt.Errorf("saml: 默认角色编码无效: %q", f.DefaultRole)
+	}
+	if f.MatchProvisionedExternalID && f.AttrExternalID == "" {
+		return errors.New("saml: 开启外部 ID 精确匹配时必须配置外部 ID 属性名")
+	}
+	if f.RevokeEmptyRoles && !f.SyncRoles {
+		return errors.New("saml: 开启空组收权前必须先开启登录时同步角色")
 	}
 	return validateGroupMappings(f.GroupMappings, f.RequireMapped)
 }
@@ -417,8 +437,20 @@ func (m *Source) ready() error {
 	if info.CertExpired {
 		return errors.New("saml: IdP 签名证书已过期，请先更新元数据")
 	}
-	if _, err := spCertNotAfter(m.SPCert); err != nil {
+	notAfter, err := spCertNotAfter(m.SPCert)
+	if err != nil {
 		return err
+	}
+	if time.Now().After(notAfter) {
+		return errors.New("saml: SP 证书已过期，请轮换或导入新证书")
+	}
+	if _, err := parseSPPrivateKey(m.SPKeyEnc); err != nil {
+		return fmt.Errorf("saml: SP 私钥不可用: %w", err)
+	}
+	if m.RequireEncryptedAssertion {
+		if _, err := parseRSADecryptionKey(m.SPKeyEnc); err != nil {
+			return errors.New("saml: 要求加密断言时 SP 证书与私钥必须为 RSA；ECDSA 不能解密 XML 加密断言")
+		}
 	}
 	if err := verifyMetadataSignature(m.IdPMetadata, m.MetadataSignCert); err != nil {
 		return err
@@ -620,25 +652,41 @@ func newSPKeyPair() (certPEM, keyEnc string, err error) {
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), keyEnc, nil
 }
 
-// parseSPPrivateKey 解密并解析 SP 私钥（PKCS#8 PEM）。
-func parseSPPrivateKey(keyEnc string) (*rsa.PrivateKey, error) {
+// parseSPPrivateKey 解密并解析 SP 签名私钥（PKCS#8 PEM）。
+func parseSPPrivateKey(keyEnc string) (crypto.Signer, error) {
 	plain, err := decryptSecret(keyEnc)
 	if err != nil {
 		return nil, err
 	}
-	block, _ := pem.Decode([]byte(plain))
-	if block == nil {
-		return nil, errors.New("SP 私钥格式错误")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	key, err := parseSigner(plain)
 	if err != nil {
 		return nil, err
 	}
-	key, ok := parsed.(*rsa.PrivateKey)
-	if !ok {
-		return nil, errors.New("SP 私钥类型错误")
+	switch key.(type) {
+	case *rsa.PrivateKey, *ecdsa.PrivateKey:
+		return key, nil
+	default:
+		return nil, errors.New("SP 私钥类型仅支持 RSA 或 ECDSA")
 	}
-	return key, nil
+}
+
+func parseRSADecryptionKey(keyEnc string) (*rsa.PrivateKey, error) {
+	key, err := parseSPPrivateKey(keyEnc)
+	if err != nil {
+		return nil, err
+	}
+	rsaKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("SP 解密私钥必须为 RSA")
+	}
+	return rsaKey, nil
+}
+
+func signatureMethodFor(key crypto.Signer) string {
+	if _, ok := key.(*ecdsa.PrivateKey); ok {
+		return dsig.ECDSASHA256SignatureMethod
+	}
+	return dsig.RSASHA256SignatureMethod
 }
 
 func parseSPCertPEM(certPEM string) (*x509.Certificate, error) {
@@ -657,7 +705,7 @@ func (m *Source) decryptionKeys() []*rsa.PrivateKey {
 		if strings.TrimSpace(enc) == "" {
 			return
 		}
-		if k, err := parseSPPrivateKey(enc); err == nil {
+		if k, err := parseRSADecryptionKey(enc); err == nil {
 			out = append(out, k)
 		}
 	}
@@ -687,10 +735,9 @@ func publishedSPCerts(m *Source) []*x509.Certificate {
 	return out
 }
 
-// 未初始化主密钥时退化为明文（与其它插件的测试/本地装配约定一致）。
 func encryptSecret(v string) (string, error) {
 	if secret.Default() == nil {
-		return v, nil
+		return "", errors.New("saml: 尚未初始化主密钥，拒绝明文保存 SP 私钥")
 	}
 	return secret.Encrypt(v)
 }
@@ -726,6 +773,14 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	if err != nil {
 		return nil, err
 	}
+	if time.Now().After(cert.NotAfter) {
+		return nil, errors.New("saml: SP 证书已过期，请轮换或导入新证书")
+	}
+	if m.RequireEncryptedAssertion {
+		if _, ok := key.(*rsa.PrivateKey); !ok {
+			return nil, errors.New("saml: 要求加密断言时 SP 证书与私钥必须为 RSA")
+		}
+	}
 	id := m.ID.String()
 	u := func(p string) url.URL { v, _ := url.Parse(base + p); return *v }
 	entityID := base + "/api/v1/auth/saml/" + id + "/metadata"
@@ -741,7 +796,7 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		LogoutBindings: []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding},
 		// 登出消息（请求与应答）都用 SP 私钥签名，IdP 按元数据里的证书验签；
 		// 与「是否签 AuthnRequest」解耦，否则关闭请求签名会让 LogoutResponse 也变成裸的。
-		LogoutSignatureMethod: dsig.RSASHA256SignatureMethod,
+		LogoutSignatureMethod: signatureMethodFor(key),
 		Key:                   key,
 		Certificate:           cert,
 		// 轮换期间 IdP 可能仍按下一张或上一张证书加密断言，三把私钥都参与解密。
@@ -754,7 +809,7 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	}
 	// 只有显式开启时才签 AuthnRequest；默认与升级前一致（不签）。
 	if m.SignAuthnRequest {
-		sp.SignatureMethod = dsig.RSASHA256SignatureMethod
+		sp.SignatureMethod = signatureMethodFor(key)
 	}
 	sp.RequireSignedResponseForCBC = m.RequireSignedCBC
 	sp.RejectUnknownConditions = m.RejectUnknownConditions

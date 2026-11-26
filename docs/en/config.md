@@ -253,6 +253,8 @@ The following keys are read by their owning modules directly from `config/defaul
 | `saml.clock_skew_seconds` | `plugins/saml` | Defaults to the library value `180`: clock skew tolerated when validating assertions and logout messages; raise it when the IdP clock drifts. Env `NEXADMIN_SAML_CLOCK_SKEW_SECONDS` |
 | `saml.max_issue_delay_seconds` | `plugins/saml` | Defaults to the library value `90`: maximum assertion issue delay; anything older is rejected as expired. Env `NEXADMIN_SAML_MAX_ISSUE_DELAY_SECONDS` |
 
+The SAML SP current and standby certificates are checked every 6 hours, starting 30 days before expiry. In-app alerts go to enabled users with `saml:edit` in the owning tenant and are deduplicated per certificate and day. This is independent of `saml.metadata_refresh_hours`: setting it to `0` disables automatic metadata refresh only, not certificate alerts.
+
 ## 11. Environment-variable-only items
 
 | Variable | Purpose |

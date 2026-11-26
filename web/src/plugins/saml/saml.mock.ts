@@ -1,6 +1,6 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
 import { mockIssueSession } from '@/framework/auth/auth.mock'
-import type { GroupRoleMapping, IdPCandidate, IdPInfo, SamlSource, SourceForm, SPInfo, TestResult } from './api'
+import type { GroupRoleMapping, IdPCandidate, IdPInfo, RolePreview, SamlSource, SourceForm, SPInfo, TestResult } from './api'
 
 /**
  * 登录页的 SAML 入口在真后端是匿名路由（plugins/saml/plugin.go 用 d.Public.Group("/auth/saml")
@@ -116,12 +116,15 @@ const okta: SamlSource = {
   attrNickname: 'displayName',
   attrGroups: 'groups',
   attrPhone: '',
+  attrExternalId: '',
   autoCreate: true,
   matchExisting: false,
+  matchProvisionedExternalId: false,
   defaultRole: 'guest',
   groupRoleMappings: [{ externalGroup: 'cn=ops,ou=groups', roleCodes: ['operator'] }],
   requireMappedGroup: false,
   syncRolesOnLogin: true,
+  revokeRolesOnEmptyGroups: false,
   allowIdpInitiated: true,
   signAuthnRequest: false,
   nameIdFormat: '',
@@ -221,8 +224,36 @@ const CHECKS = (s: SamlSource): TestResult => {
       warning: s.idp.certExpiringSoon,
       detail: s.idp.certNotAfter,
     },
-    { key: 'spKey', ok: true, detail: 'SP 私钥可解密并解析' },
+    { key: 'spKey', ok: true, detail: 'SP 私钥可解密并解析（RSA）' },
+    ...(s.requireEncryptedAssertion
+      ? [{ key: 'assertionEncryption', ok: true, detail: 'RSA 私钥可解密 XML 加密断言' }]
+      : []),
     { key: 'spCert', ok: true, detail: `到期时间 ${s.sp.certNotAfter ?? ''}` },
+    { key: 'sloUrl', ok: !!s.idp.sloUrl, detail: s.idp.sloUrl || 'IdP 未提供单点登出端点，只能本地登出' },
+    {
+      key: 'roleMappings',
+      ok: true,
+      warning: s.syncRolesOnLogin && s.revokeRolesOnEmptyGroups,
+      detail:
+        s.syncRolesOnLogin && s.revokeRolesOnEmptyGroups
+          ? '空组断言会收回本来源授予的角色；IdP 漏发组属性时也会收权'
+          : `已配置 ${s.groupRoleMappings.length} 条精确组映射`,
+    },
+    ...(s.matchProvisionedExternalId
+      ? [{
+          key: 'externalIdMatching',
+          ok: !!s.attrExternalId,
+          detail: s.attrExternalId
+            ? `按稳定属性 ${s.attrExternalId} 精确匹配 SCIM 预配账号`
+            : '已开启外部 ID 精确匹配，但未配置属性名',
+        }]
+      : []),
+    ...(s.metadataSignCert
+      ? [{ key: 'metadataSignature', ok: true, detail: '已保存的元数据由钉住的证书签名' }]
+      : []),
+    ...(s.metadataCaCert
+      ? [{ key: 'metadataCa', ok: true, detail: '拉取元数据时只信任配置的内网 CA' }]
+      : []),
   ]
   if (s.idpMetadataUrl) checks.push({ key: 'metadataUrl', ok: true, detail: '远程元数据与已保存内容一致' })
   if (s.authnContextClassRef)
@@ -308,6 +339,36 @@ defineMock([
     method: 'POST',
     url: '/plugins/saml/sources/:id/test',
     handler: ({ params }) => CHECKS(find(params.id)),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/role-preview',
+    handler: ({ params, body }) => {
+      const source = find(params.id)
+      const groups = Array.isArray(body?.groups) ? body.groups.map(String) : []
+      if (groups.length > 1000) mockError(400, 'saml: 预览组数量不能超过 1000')
+      const matchedGroups = source.groupRoleMappings
+        .map((mapping) => mapping.externalGroup)
+        .filter((group) => groups.includes(group))
+      const desiredRoles = [...new Set(source.groupRoleMappings.flatMap((mapping) =>
+        groups.includes(mapping.externalGroup) ? mapping.roleCodes : [],
+      ))]
+      const allowed = !source.requireMappedGroup || matchedGroups.length > 0
+      const result: RolePreview = {
+        allowed,
+        userScoped: !!body?.userId,
+        syncRolesOnLogin: source.syncRolesOnLogin,
+        revokeRolesOnEmptyGroups: source.revokeRolesOnEmptyGroups,
+        matchedGroups,
+        desiredRoles,
+        previousRoles: [],
+        wouldAdd: source.syncRolesOnLogin && !!body?.userId ? desiredRoles : [],
+        wouldRemove: [],
+        unavailableRoles: [],
+        reason: allowed ? undefined : '当前账号不在允许登录的组内',
+      }
+      return result
+    },
   },
   {
     method: 'GET',

@@ -11,6 +11,8 @@ export interface IdPCandidate {
   entityId: string
   ssoUrl: string
   ssoBinding: string
+  sloUrl?: string
+  sloBinding?: string
   certNotAfter?: string
   certCount: number
   certExpired: boolean
@@ -22,6 +24,7 @@ export interface IdPInfo {
   ssoUrl: string
   ssoBinding: string
   sloUrl: string
+  sloBinding?: string
   certNotAfter?: string
   certCount: number
   certExpired: boolean
@@ -57,12 +60,15 @@ export interface SamlSource {
   attrNickname: string
   attrGroups: string
   attrPhone: string
+  attrExternalId: string
   autoCreate: boolean
   matchExisting: boolean
+  matchProvisionedExternalId: boolean
   defaultRole: string
   groupRoleMappings: GroupRoleMapping[]
   requireMappedGroup: boolean
   syncRolesOnLogin: boolean
+  revokeRolesOnEmptyGroups: boolean
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
@@ -95,12 +101,15 @@ export interface SourceForm {
   attrNickname: string
   attrGroups: string
   attrPhone: string
+  attrExternalId: string
   autoCreate: boolean
   matchExisting: boolean
+  matchProvisionedExternalId: boolean
   defaultRole: string
   groupRoleMappings: GroupRoleMapping[]
   requireMappedGroup: boolean
   syncRolesOnLogin: boolean
+  revokeRolesOnEmptyGroups: boolean
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
@@ -124,6 +133,20 @@ export interface Check {
 export interface TestResult {
   ok: boolean
   checks: Check[]
+}
+
+export interface RolePreview {
+  allowed: boolean
+  userScoped: boolean
+  syncRolesOnLogin: boolean
+  revokeRolesOnEmptyGroups: boolean
+  matchedGroups: string[]
+  desiredRoles: string[]
+  previousRoles: string[]
+  wouldAdd: string[]
+  wouldRemove: string[]
+  unavailableRoles: string[]
+  reason?: string
 }
 
 export interface MetadataPreview {
@@ -187,6 +210,10 @@ export function useTestSource() {
   return useMutation({
     mutationFn: (id: string) => api.post<TestResult>(`${BASE}/sources/${id}/test`, {}, { silent: true }),
   })
+}
+
+export function previewRoles(id: string, input: { groups: string[]; userId?: string }) {
+  return api.post<RolePreview>(`${BASE}/sources/${id}/role-preview`, input, { silent: true })
 }
 
 export function getSPCert(id: string) {

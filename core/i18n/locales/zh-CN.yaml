@@ -1119,7 +1119,13 @@ saml:
     not_from_source: "当前会话不是通过该 SAML 源登录的"
     slo_response_invalid: "SLO 回执校验失败：%s"
     slo_request_invalid: "SLO 请求校验失败：%s"
+    slo_unavailable: "该身份源未配置 IdP 登出端点"
     sp_cert_unavailable: "SP 证书不可用：%s"
     metadata_required: "请提供元数据 XML 或 URL"
     metadata_too_large: "元数据超过 1 MiB"
     operation_failed: "操作未完成：%s"
+  cert_alert:
+    title: SAML SP 证书即将过期
+    current: 当前证书
+    next: 备用证书
+    content: "身份源「%s」的%s将于 %s 到期（剩余约 %d 天）。请按两段式轮换流程发布新证书，并先在 IdP 更新信任。"

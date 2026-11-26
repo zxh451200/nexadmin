@@ -2,12 +2,15 @@ package saml
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -15,6 +18,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -30,8 +34,22 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/config"
+	"nexadmin/core/secret"
 	"nexadmin/pkg/idgen"
 )
+
+func TestMain(m *testing.M) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic(err)
+	}
+	cipher, err := secret.New(key)
+	if err != nil {
+		panic(err)
+	}
+	secret.SetDefault(cipher)
+	os.Exit(m.Run())
+}
 
 func certB64(t *testing.T) string {
 	t.Helper()
@@ -520,6 +538,24 @@ func TestRotateKeyPairProducesNewCert(t *testing.T) {
 	}
 }
 
+func expiredCertB64(t *testing.T) string {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(4), Subject: pkix.Name{CommonName: "expired-idp"},
+		NotBefore: time.Now().Add(-48 * time.Hour), NotAfter: time.Now().Add(-24 * time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(der)
+}
+
 func TestPlanRefresh(t *testing.T) {
 	cert := certB64(t)
 	bundle := bundleXML(cert)
@@ -542,6 +578,9 @@ func TestPlanRefresh(t *testing.T) {
 	// 缺少签名证书的远端内容不替换。
 	if _, _, err := planRefresh(m, metadataXMLFor("https://idp2.example.com", "")); err == nil {
 		t.Fatal("metadata without cert must be rejected")
+	}
+	if _, _, err := planRefresh(m, metadataXMLFor("https://idp2.example.com", expiredCertB64(t))); err == nil {
+		t.Fatal("metadata with expired signing cert must be rejected")
 	}
 }
 
@@ -816,23 +855,83 @@ func TestAppendSessionDedupesRotatedToken(t *testing.T) {
 	}
 }
 
-func TestRoleGrantDiff(t *testing.T) {
+func TestInitialCompletionRoles(t *testing.T) {
 	cases := []struct {
-		name    string
-		desired []string
-		prev    []string
-		add     []string
-		remove  []string
+		name     string
+		mapped   []string
+		fallback string
+		want     []string
 	}{
-		{"first login adds all", []string{"a", "b"}, nil, []string{"a", "b"}, nil},
-		{"group switch swaps roles", []string{"b", "c"}, []string{"a", "b"}, []string{"c"}, []string{"a"}},
-		{"empty assertion leaves roles alone", nil, []string{"a"}, nil, nil},
-		{"no change", []string{"a"}, []string{"a"}, nil, nil},
+		{name: "mapped roles win", mapped: []string{"editor"}, fallback: "guest", want: []string{"editor"}},
+		{name: "configured default", fallback: " member ", want: []string{"member"}},
+		{name: "implicit guest", want: []string{"guest"}},
 	}
 	for _, c := range cases {
-		add, remove := roleGrantDiff(c.desired, c.prev)
-		if !slices.Equal(add, c.add) || !slices.Equal(remove, c.remove) {
-			t.Errorf("%s: add=%v remove=%v, want add=%v remove=%v", c.name, add, remove, c.add, c.remove)
+		if got := initialCompletionRoles(c.mapped, c.fallback); !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestPlanRoleGrantChanges(t *testing.T) {
+	target := func(code string, id int64) roleTarget { return roleTarget{Code: code, ID: id, Available: true} }
+	grant := func(code string, id int64) roleGrant {
+		return roleGrant{RoleCode: code, RoleID: id, OwnsAssignment: true}
+	}
+	cases := []struct {
+		name        string
+		desired     []roleTarget
+		prev        []roleGrant
+		current     map[int64]string
+		assigned    map[int64]bool
+		revokeEmpty bool
+		previous    []string
+		add         []roleTarget
+		remove      []int64
+	}{
+		{name: "first login adds all", desired: []roleTarget{target("a", 1), target("b", 2)}, add: []roleTarget{target("a", 1), target("b", 2)}},
+		{name: "group switch swaps roles", desired: []roleTarget{target("b", 2), target("c", 3)}, prev: []roleGrant{grant("a", 1), grant("b", 2)}, assigned: map[int64]bool{1: true, 2: true}, previous: []string{"a", "b"}, add: []roleTarget{target("c", 3)}, remove: []int64{1}},
+		{name: "empty assertion leaves roles alone", prev: []roleGrant{grant("a", 1)}, previous: []string{"a"}},
+		{name: "no change", desired: []roleTarget{target("a", 1)}, prev: []roleGrant{grant("a", 1)}, assigned: map[int64]bool{1: true}, previous: []string{"a"}},
+		{name: "duplicate desired role adds once", desired: []roleTarget{target("a", 1), target("a", 1)}, add: []roleTarget{target("a", 1)}},
+		{name: "role rename preserves identity", desired: []roleTarget{target("renamed", 1)}, prev: []roleGrant{grant("a", 1)}, current: map[int64]string{1: "renamed"}, assigned: map[int64]bool{1: true}, previous: []string{"renamed"}},
+		{name: "reused code targets new role", desired: []roleTarget{target("a", 2)}, prev: []roleGrant{grant("a", 1)}, current: map[int64]string{1: "renamed"}, previous: []string{"renamed"}, add: []roleTarget{target("a", 2)}, remove: []int64{1}},
+		{name: "reused code replaces deleted role", desired: []roleTarget{target("a", 2)}, prev: []roleGrant{grant("a", 1)}, current: map[int64]string{1: "a"}, previous: []string{"a"}, add: []roleTarget{target("a", 2)}, remove: []int64{1}},
+		{name: "legacy grant is upgraded", desired: []roleTarget{target("a", 1)}, prev: []roleGrant{grant("a", 0)}, assigned: map[int64]bool{1: true}, previous: []string{"a"}, add: []roleTarget{target("a", 1)}},
+		{name: "stale grant repairs missing assignment", desired: []roleTarget{target("a", 1)}, prev: []roleGrant{grant("a", 1)}, previous: []string{"a"}, add: []roleTarget{target("a", 1)}},
+		{name: "missing grant records existing assignment", desired: []roleTarget{target("a", 1)}, assigned: map[int64]bool{1: true}, add: []roleTarget{target("a", 1)}},
+		{name: "empty groups revoke when enabled", prev: []roleGrant{grant("a", 1), grant("b", 2)}, revokeEmpty: true, previous: []string{"a", "b"}, remove: []int64{1, 2}},
+	}
+	for _, c := range cases {
+		previous, removals, additions := planRoleGrantChanges(c.desired, c.prev, c.current, c.assigned, c.revokeEmpty)
+		removedIDs := make([]int64, len(removals))
+		for i := range removals {
+			removedIDs[i] = removals[i].RoleID
+		}
+		if !slices.Equal(previous, c.previous) || !slices.Equal(additions, c.add) || !slices.Equal(removedIDs, c.remove) {
+			t.Errorf("%s: previous=%v add=%v remove=%v", c.name, previous, additions, removedIDs)
+		}
+	}
+}
+
+func TestResolveLegacyRoleID(t *testing.T) {
+	cases := []struct {
+		name      string
+		roleIDs   []int64
+		activeIDs []int64
+		previous  map[int64]bool
+		want      int64
+	}{
+		{name: "unique role", roleIDs: []int64{7}, want: 7},
+		{name: "reused code uses previous assignment", roleIDs: []int64{7, 8}, activeIDs: []int64{8}, previous: map[int64]bool{7: true}, want: 7},
+		{name: "reused code uses unique active role", roleIDs: []int64{7, 8}, activeIDs: []int64{8}, want: 8},
+		{name: "ambiguous previous assignments", roleIDs: []int64{7, 8}, activeIDs: []int64{7, 8}, previous: map[int64]bool{7: true, 8: true}},
+		{name: "ambiguous active roles", roleIDs: []int64{7, 8}, activeIDs: []int64{7, 8}},
+		{name: "missing role"},
+	}
+	for _, c := range cases {
+		if got := resolveLegacyRoleID(c.roleIDs, c.activeIDs, c.previous); got != c.want {
+			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
 		}
 	}
 }
@@ -1198,7 +1297,11 @@ func TestProviderEntityIDOverride(t *testing.T) {
 }
 
 func TestBuildImportedSPKeyPair(t *testing.T) {
-	certPEM, keyPEM, err := newSPKeyPair()
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM, err := decryptSecret(keyEnc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1218,7 +1321,11 @@ func TestBuildImportedSPKeyPair(t *testing.T) {
 	}
 
 	// 换一把私钥：公私钥不匹配必须拒绝。
-	_, otherKey, err := newSPKeyPair()
+	_, otherKeyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherKey, err := decryptSecret(otherKeyEnc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1258,8 +1365,75 @@ func TestBuildImportedSPKeyPair(t *testing.T) {
 	}
 }
 
+func TestSourceJSONOmitsPrivateKeys(t *testing.T) {
+	raw, err := json.Marshal(Source{SPKeyEnc: "current-secret", NextSPKeyEnc: "next-secret", PrevSPKeyEnc: "prev-secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"current-secret", "next-secret", "prev-secret", "spKeyEnc", "nextSpKeyEnc", "prevSpKeyEnc"} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatalf("private key material leaked in JSON: %s", secret)
+		}
+	}
+}
+
+func TestProviderSupportsECDSASigning(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(3), Subject: pkix.Name{CommonName: "ec-sp"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8}))
+	certPEM, keyEnc, err := buildImportedSPKeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Source{IdPMetadata: metadataXML(certB64(t)), IDPEntityID: "https://idp.example.com", SPCert: certPEM, SPKeyEnc: keyEnc, SignAuthnRequest: true}
+	sp, err := NewService(nil, nil, nil).provider(m, "https://sp.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp.SignatureMethod != dsig.ECDSASHA256SignatureMethod || sp.LogoutSignatureMethod != dsig.ECDSASHA256SignatureMethod {
+		t.Fatalf("EC key must select ECDSA-SHA256: %q / %q", sp.SignatureMethod, sp.LogoutSignatureMethod)
+	}
+	m.RequireEncryptedAssertion = true
+	if _, err := NewService(nil, nil, nil).provider(m, "https://sp.example.com"); err == nil {
+		t.Fatal("EC signing key must not be accepted when assertion decryption is required")
+	}
+}
+
+func TestPostOnlyMetadataBindings(t *testing.T) {
+	raw := metadataXML(certB64(t))
+	raw = strings.Replace(raw, `    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso/redirect"/>`+"\n", "", 1)
+	raw = strings.Replace(raw, `    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>`, `    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/slo"/>`, 1)
+	info, err := parseIdP(raw, "https://idp.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.SSOBinding != "post" || info.SLOBinding != "post" {
+		t.Fatalf("POST-only bindings not preserved: %+v", info)
+	}
+}
+
 func TestSignMetadataXML(t *testing.T) {
-	certPEM, keyPEM, err := newSPKeyPair()
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM, err := decryptSecret(keyEnc)
 	if err != nil {
 		t.Fatal(err)
 	}
