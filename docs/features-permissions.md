@@ -314,8 +314,12 @@ summary: 权限码与后端接口的完整对照表，供实现与核对。
 | --- | --- | --- |
 | codegen（插件，路径前缀 `/plugins/codegen`） | `codegen:list` | `GET /plugins/codegen/tables`<br>`GET /plugins/codegen/tables/:name/columns`<br>`GET /plugins/codegen/configs`<br>`POST /plugins/codegen/schema`<br>`POST /plugins/codegen/preview`（`schema` / `preview` 是无状态渲染，不挂平台级闸） |
 | codegen（插件） | `codegen:download` | `POST /plugins/codegen/download`（同上，无状态渲染） |
-| codegen（插件） | `codegen:install`（另要求平台级） | `POST /plugins/codegen/install`（渲染结果写进项目根目录，那份文件不属于任何租户；默认同时把模块空导入写进 `internal/modules/modules.go` 的标记区，可关；非平台调用方 403，即使持 `codegen:install`） |
+| codegen（插件） | `codegen:install`（另要求平台级） | `POST /plugins/codegen/install/plan`<br>`POST /plugins/codegen/install`（`install/plan` 只读预检；`install` 把渲染结果写进项目根目录，那份文件不属于任何租户。默认同时把模块空导入写进 `internal/modules/modules.go` 的标记区，可关；非平台调用方 403，即使持 `codegen:install`） |
 | codegen（插件） | `codegen:edit`（另要求平台级） | `POST /plugins/codegen/configs`<br>`DELETE /plugins/codegen/configs/:id`<br>`DELETE /plugins/codegen/configs`（存到 `plg_codegen_config`，无 `tenant_id`） |
+
+预览与安装计划会返回结构化校验报告：实际执行 Go 编译、TypeScript 类型检查和 SQL 解析，并检查业务迁移是否已执行或与现有文件冲突；下载与安装只在校验通过时继续。编译或类型错误、SQL 错误、迁移冲突会阻止下载和写入；运行环境缺少 Go、Node.js 或前端依赖时对应检查记为警告，报告会明确展示，不冒充已通过。
+
+写入前先展示只读安装计划，按文件标出新增、不变、跳过、覆盖、受保护或模块注册。默认不覆盖已有文件；勾选覆盖后会先备份原文件与清单，写入失败时自动回滚，成功后保留系统临时目录中的备份供人工恢复。计划与写入都会拒绝路径穿越和符号链接，写入前还会复核目标哈希，避免覆盖计划生成后的新改动。已执行或内容不同的业务迁移始终受保护，不能通过覆盖选项改写。
 
 ## cron
 

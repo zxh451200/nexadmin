@@ -245,7 +245,9 @@ func commitInstall(plan *InstallPlan) error {
 				continue
 			}
 			if rec.Action == "new" {
-				errs = append(errs, os.Remove(full))
+				if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					errs = append(errs, err)
+				}
 				continue
 			}
 			old, err := os.ReadFile(filepath.Join(originals, filepath.FromSlash(rec.Path)))
@@ -267,10 +269,10 @@ func commitInstall(plan *InstallPlan) error {
 			return rollback(err)
 		}
 		mode := manifest[i].Mode
+		written = append(written, manifest[i])
 		if err := writeFileAtomic(full, []byte(f.Content), mode); err != nil {
 			return rollback(err)
 		}
-		written = append(written, manifest[i])
 	}
 	plan.BackupDir = backup
 	keep = true

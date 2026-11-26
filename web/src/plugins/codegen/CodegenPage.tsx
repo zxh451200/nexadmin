@@ -588,12 +588,16 @@ export default function CodegenPage() {
         footer={<Button onClick={() => setDoneOpen(false)}>{t('common.confirm')}</Button>}
       >
         <ul className="flex flex-col gap-2 text-sm">
-          {(output?.notes ?? []).map((n) => (
-            <li key={n.code}>
-              {t(`plugin_codegen.notes.${n.code}`)}
-              {n.value ? <code className="ms-2 rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{n.value}</code> : null}
-            </li>
-          ))}
+          {(output?.notes ?? []).map((n) => {
+            const [head, tail] = t(`plugin_codegen.notes.${n.code}`).split('{{value}}')
+            return (
+              <li key={n.code}>
+                {head}
+                {n.value ? <code className="ms-2 rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{n.value}</code> : null}
+                {tail}
+              </li>
+            )
+          })}
         </ul>
       </ResponsiveDialog>
     </PageContainer>
