@@ -2476,8 +2476,6 @@
         var label = pressed ? button.dataset.labelOn : button.dataset.labelOff;
         if (label) {
           button.setAttribute('aria-label', label);
-          var labelEl = button.querySelector('.hp-hotspot-label');
-          if (labelEl) labelEl.textContent = label;
           if (button.classList.contains('hp-demo-quick-btn')) button.textContent = label;
         }
       });

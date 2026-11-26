@@ -48,7 +48,6 @@
               <button id="demo-tab-plugins" type="button" role="tab" aria-selected="false" aria-controls="demo-panel-plugins" data-demo-tab="plugins" data-demo-tab-status="{{.T "home.demo.status.plugins"}}" tabindex="-1">{{.T "home.demo.tab.plugins"}}</button>
             </div>
             <div class="hp-demo-controls">
-              <span class="hp-demo-hint">{{.T "home.demo.hint"}}</span>
               <details class="hp-demo-mode" data-demo-mode>
                 <summary aria-label="{{.T "home.demo.modeAria"}}" aria-haspopup="listbox">{{uiIcon "shield"}}<span data-demo-mode-current>{{.T "home.demo.mode.interactive"}}</span>{{uiIcon "chevron-down"}}</summary>
                 <div class="hp-demo-mode-menu" role="listbox" aria-label="{{.T "home.demo.modeAria"}}">
@@ -65,19 +64,14 @@
             <div class="hp-demo-screen" id="demo-panel-dashboard" role="tabpanel" aria-labelledby="demo-tab-dashboard" data-demo-panel="dashboard">
               <img class="shot-dark" src="{{if .HeroImageDarkURL}}{{.HeroImageDarkURL}}{{else if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}{{end}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
               <img class="shot-light" src="{{if .HeroImageURL}}{{.HeroImageURL}}{{else}}/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}{{end}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async" fetchpriority="high">
-              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:10.8%;--y:36.5%" data-demo-action="users" aria-label="{{.T "home.demo.action.users"}}">{{uiIcon "users"}}</button>
-              <button class="hp-hotspot hp-hotspot--left" type="button" style="--x:91.5%;--y:13.7%" data-demo-action="layout" data-status="{{.T "home.demo.status.layout"}}" aria-label="{{.T "home.demo.action.layout"}}">{{uiIcon "layout"}}</button>
             </div>
             <div class="hp-demo-screen" id="demo-panel-users" role="tabpanel" aria-labelledby="demo-tab-users" data-demo-panel="users" hidden>
               <img class="shot-dark" src="/website-assets/market/user-dark.jpg?v={{assetV "market/user-dark.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
               <img class="shot-light" src="/website-assets/market/user-light.jpg?v={{assetV "market/user-light.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
-              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:22%;--y:26.2%" data-demo-action="create" aria-label="{{.T "home.demo.action.create"}}">{{uiIcon "user-plus"}}</button>
-              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:74.4%;--y:51.2%" data-demo-action="toggle" aria-pressed="false" data-label-on="{{.T "home.demo.action.enable"}}" data-label-off="{{.T "home.demo.action.disable"}}" data-status-on="{{.T "home.demo.status.enabled"}}" data-status-off="{{.T "home.demo.status.disabled"}}" aria-label="{{.T "home.demo.action.disable"}}">{{uiIcon "power"}}</button>
             </div>
             <div class="hp-demo-screen" id="demo-panel-plugins" role="tabpanel" aria-labelledby="demo-tab-plugins" data-demo-panel="plugins" hidden>
               <img class="shot-dark" src="/website-assets/market/pluginmarket-dark.jpg?v={{assetV "market/pluginmarket-dark.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
               <img class="shot-light" src="/website-assets/market/pluginmarket-light.jpg?v={{assetV "market/pluginmarket-light.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
-              <button class="hp-hotspot hp-hotspot--right" type="button" style="--x:16%;--y:40.2%" data-demo-action="license" aria-pressed="false" data-label-on="{{.T "home.demo.action.licensed"}}" data-label-off="{{.T "home.demo.action.license"}}" data-status-on="{{.T "home.demo.status.licensed"}}" aria-label="{{.T "home.demo.action.license"}}">{{uiIcon "plug"}}</button>
             </div>
             <div class="hp-demo-search" id="demo-search" role="search" hidden>
               <label class="hp-demo-search-field">
@@ -444,7 +438,7 @@
       <h2>{{range $i, $line := titleLines (.T "home.cta.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
       <p>{{.T "home.cta.sub"}}</p>
       <div class="hp-cta-actions">
-        <a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.T "home.cta.primary"}}</a>
+        <a class="btn btn-primary" href="#quickstart">{{.T "home.cta.primary"}}</a>
         <a class="btn btn-ghost" href="{{.URL "/docs"}}">{{.T "home.cta.secondary"}}</a>
       </div>
     </div>
