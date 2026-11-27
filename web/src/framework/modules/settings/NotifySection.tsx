@@ -1,19 +1,40 @@
-import { useState } from 'react'
-import { Loader2, Plus, Send, Trash2 } from 'lucide-react'
-import { useFieldArray, type UseFormReturn } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react'
+import { useFieldArray, useForm, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { FormGrid, FormGridFull } from '@/framework/components/FormLayout'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
+import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Form } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Info } from 'lucide-react'
-import { ROBOT_TYPES, useTestSection, type AllSettings } from './api'
-import { SelectField, SwitchField, TextField } from './fields'
+import { ROBOT_TYPES, useTestSection, type AllSettings, type RobotSettings } from './api'
+import { SelectField, SwitchField, TextField, type AnyControl } from './fields'
 import { SectionCard } from './SectionCard'
+
+const robotSchema = z.object({
+  name: z.string().trim().min(1).max(32).regex(/^[A-Za-z0-9_\-\u4e00-\u9fa5]+$/),
+  type: z.enum(ROBOT_TYPES),
+  url: z.string().trim().min(1).max(1000).refine((value) => {
+    try {
+      return new URL(value).protocol === 'https:'
+    } catch {
+      return false
+    }
+  }),
+  secretKey: z.string(),
+  secretKeyRef: z.string().optional(),
+  markdown: z.boolean(),
+})
 
 const notifySchema = z.object({
   mail: z.object({
@@ -25,27 +46,21 @@ const notifySchema = z.object({
     fromName: z.string().trim().max(100),
     fromAddr: z.string().trim().max(255),
   }),
-  robots: z
-    .array(
-      z.object({
-        name: z.string().trim().regex(/^[A-Za-z0-9_\-\u4e00-\u9fa5]{1,32}$/),
-        type: z.enum(ROBOT_TYPES),
-        url: z.string().trim().min(1).max(1000),
-        secretKey: z.string(),
-        markdown: z.boolean(),
-      }),
-    )
-    .max(20),
+  robots: z.array(robotSchema).max(20),
   accountMail: z.boolean(),
 })
 
-/** 「发送测试」：把当前表单值（含未保存的修改）连同渠道一起交给后端真实发送一条 */
+type RobotFormValues = z.infer<typeof robotSchema>
+
+const emptyRobot: RobotFormValues = { name: '', type: 'dingtalk', url: '', secretKey: '', markdown: false }
+
+/** 「发送测试」：把当前表单值（含未保存的修改）连同渠道交给后端真实发送一条 */
 function useSendTest(form: UseFormReturn<any>) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const { t } = useTranslation()
   const test = useTestSection()
-  const run = async (channel: string, to?: string) => {
+  const run = async (channel: string, to?: string, robots?: RobotSettings[]) => {
     try {
-      const r = await test.mutateAsync({ section: 'notify', body: { ...form.getValues(), channel, to } })
+      const r = await test.mutateAsync({ section: 'notify', body: { ...form.getValues(), ...(robots ? { robots } : {}), channel, to } })
       if (r.ok) toast.success(t('settings.test.ok'))
       else toast.error(t('settings.test.failed', { reason: t(`settings.test.reason.${r.reason ?? 'unknown'}`) }))
     } catch {
@@ -75,81 +90,190 @@ function MailTest({ form }: { form: UseFormReturn<any> }) { // eslint-disable-li
   )
 }
 
+interface RobotDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  robot: RobotFormValues | null
+  robots: RobotFormValues[]
+  editingIndex: number | null
+  form: UseFormReturn<any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  onSubmit: (values: RobotFormValues) => void
+}
+
+function RobotFormDialog({ open, onOpenChange, robot, robots, editingIndex, form: notifyForm, onSubmit }: RobotDialogProps) {
+  const { t } = useTranslation()
+  const { run, pending } = useSendTest(notifyForm)
+  const schema = useMemo(
+    () =>
+      robotSchema.refine(
+        (value) => robots.findIndex((item) => item.name === value.name) === -1 || robots.findIndex((item) => item.name === value.name) === editingIndex,
+        t('settings.notify.robotNameDuplicate'),
+      ),
+    [robots, editingIndex, t],
+  )
+  const form = useForm<RobotFormValues>({ resolver: zodResolver(schema), defaultValues: robot ?? emptyRobot })
+  const fieldControl = form.control as unknown as AnyControl
+  const type = form.watch('type')
+
+  useEffect(() => {
+    if (open) form.reset(robot ?? emptyRobot)
+  }, [open, robot, form])
+
+  const submit = form.handleSubmit(onSubmit)
+  const sendTest = async () => {
+    if (!(await form.trigger())) return
+    const values = form.getValues()
+    const nextRobots = robots.map((item, index) => (index === editingIndex ? values : item))
+    if (editingIndex === null) nextRobots.push(values)
+    await run(`robot:${values.name}`, undefined, nextRobots)
+  }
+
+  return (
+    <ResponsiveDialog
+      side="right"
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editingIndex === null ? t('settings.notify.addRobot') : t('settings.notify.editRobot')}
+      description={t('settings.notify.robotDialogHint')}
+      footer={
+        <>
+          <Button type="button" variant="outline" disabled={pending} onClick={() => void sendTest()}>
+            {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
+            {t('settings.notify.sendTest')}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="settings-robot-form">
+            {editingIndex === null ? t('settings.notify.addToRobotList') : t('settings.notify.applyRobot')}
+          </Button>
+        </>
+      }
+    >
+      <Form {...form}>
+        <FormLayout id="settings-robot-form" onSubmit={(event) => { event.stopPropagation(); void submit(event) }}>
+          <FormGrid>
+            <TextField control={fieldControl} name="name" label={t('settings.notify.robotName')} description={t('settings.notify.robotNameHint')} />
+            <SelectField
+              control={fieldControl}
+              name="type"
+              label={t('settings.notify.robotType')}
+              options={ROBOT_TYPES.map((key) => ({ value: key, label: t(`settings.notify.type.${key}`) }))}
+            />
+            <TextField control={fieldControl} name="url" label="Webhook URL" type="url" inputMode="url" placeholder="https://" />
+            {type !== 'wecom' ? (
+              <TextField
+                control={fieldControl}
+                name="secretKey"
+                label={t('settings.notify.robotSecret')}
+                type="password"
+                description={t('settings.notify.robotSecretHint')}
+              />
+            ) : null}
+            <FormGridFull>
+              <SwitchField control={form.control} name="markdown" label={t('settings.notify.markdown')} bare />
+            </FormGridFull>
+          </FormGrid>
+        </FormLayout>
+      </Form>
+    </ResponsiveDialog>
+  )
+}
+
 function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line @typescript-eslint/no-explicit-any
   const { t } = useTranslation()
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: 'robots' })
-  const { run, pending } = useSendTest(form)
+  const { isPlatform } = usePermission()
+  const confirm = useConfirm()
+  const { fields, append, remove, update } = useFieldArray({ control: form.control, name: 'robots' })
+  const robots = (form.watch('robots') ?? []) as RobotFormValues[]
+  const [open, setOpen] = useState(false)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+
+  const openEditor = (index: number | null) => {
+    setEditingIndex(index)
+    setOpen(true)
+  }
+
+  const removeRobot = async (index: number) => {
+    const robot = robots[index]
+    if (!robot) return
+    if (!(await confirm({
+      destructive: true,
+      title: t('settings.notify.removeRobot'),
+      description: t('settings.notify.removeRobotConfirm', { name: robot.name }),
+    }))) return
+    remove(index)
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{t('settings.notify.robots')}</h3>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => append({ name: '', type: 'dingtalk', url: '', secretKey: '', markdown: false })}
-        >
-          <Plus className="me-1 h-4 w-4" aria-hidden="true" />
-          {t('settings.notify.addRobot')}
-        </Button>
-      </div>
-      {fields.length === 0 ? <p className="text-sm text-muted-foreground">{t('settings.notify.noRobots')}</p> : null}
-      {fields.map((f, i) => (
-        <div key={f.id} className="relative flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
-          {/* 删除钉在卡片右上角（绝对定位不占行高）：破坏性操作与底行的开关/发送测试分离 */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute inset-e-2 top-2 size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            aria-label={t('settings.notify.removeRobot')}
-            onClick={() => remove(i)}
-          >
-            <Trash2 className="size-4" aria-hidden="true" />
-          </Button>
-          {/* 这里是设置页卡片（非弹窗），保留 4 字段两行的双列密度；弹窗表单一律走 FormGrid 单列。 */}
-          <FormGrid cols={2}>
-            <TextField control={form.control} name={`robots.${i}.name`} label={t('settings.notify.robotName')} />
-            <SelectField
-              control={form.control}
-              name={`robots.${i}.type`}
-              label={t('settings.notify.robotType')}
-              options={ROBOT_TYPES.map((k) => ({ value: k, label: t(`settings.notify.type.${k}`) }))}
-            />
-            <TextField control={form.control} name={`robots.${i}.url`} label="Webhook URL" type="url" inputMode="url" placeholder="https://" />
-            <TextField
-              control={form.control}
-              name={`robots.${i}.secretKey`}
-              label={t('settings.notify.robotSecret')}
-              type="password"
-              description={t('settings.notify.robotSecretHint')}
-            />
-          </FormGrid>
-          {/* 开关与发送测试同一行：开关靠左、按钮靠右，不再两行右对齐互相错位 */}
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-            <SwitchField control={form.control} name={`robots.${i}.markdown`} label={t('settings.notify.markdown')} bare />
-            <Can perm="settings:update">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={pending}
-                onClick={() => void run(`robot:${form.getValues(`robots.${i}.name`) as string}`)}
-              >
-                <Send aria-hidden="true" />
-                {t('settings.notify.sendTest')}
-              </Button>
-            </Can>
-          </div>
+    <section className="flex flex-col gap-3" aria-labelledby="notify-robots-title">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h3 id="notify-robots-title" className="text-sm font-medium">{t('settings.notify.robots')}</h3>
+          <Badge variant="secondary" className="num">{robots.length}</Badge>
         </div>
-      ))}
-    </div>
+        <Can perm="settings:update">
+          <Button type="button" variant="outline" size="sm" disabled={!isPlatform || robots.length >= 20} onClick={() => openEditor(null)}>
+            <Plus className="me-1 h-4 w-4" aria-hidden="true" />
+            {t('settings.notify.addRobot')}
+          </Button>
+        </Can>
+      </div>
+      <p className="text-xs text-muted-foreground">{t('settings.notify.robotsHint')}</p>
+      {robots.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          {t('settings.notify.noRobots')}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-border">
+          {robots.map((robot, index) => (
+            <div key={fields[index]?.id ?? index} className={`flex items-center gap-3 px-3 py-3 ${index < robots.length - 1 ? 'border-b border-border' : ''}`}>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground" title={robot.name}>{robot.name || t('settings.notify.unnamedRobot')}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="secondary">{t(`settings.notify.type.${robot.type}`)}</Badge>
+                  <span>{robot.markdown ? t('settings.notify.markdownOn') : t('settings.notify.markdownOff')}</span>
+                </div>
+              </div>
+              <Can perm="settings:update">
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button type="button" variant="ghost" size="icon" disabled={!isPlatform} aria-label={t('settings.notify.editRobotNamed', { name: robot.name })} onClick={() => openEditor(index)}>
+                    <Pencil className="size-4" aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" disabled={!isPlatform} aria-label={t('settings.notify.removeRobotNamed', { name: robot.name })} className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => void removeRobot(index)}>
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              </Can>
+            </div>
+          ))}
+        </div>
+      )}
+      <RobotFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        robot={editingIndex === null ? null : robots[editingIndex] ?? null}
+        robots={robots}
+        editingIndex={editingIndex}
+        form={form}
+        onSubmit={(values) => {
+          if (editingIndex === null) append(values)
+          else update(editingIndex, values)
+          setOpen(false)
+        }}
+      />
+    </section>
   )
 }
 
 export function NotifySection({ value }: { value: AllSettings['notify'] }) {
   const { t } = useTranslation()
+  const initialValue = useMemo(
+    () => ({ ...value, robots: value.robots.map((robot) => ({ ...robot, secretKeyRef: robot.secretKeyRef ?? robot.name })) }),
+    [value],
+  )
   return (
-    <SectionCard section="notify" value={value} schema={notifySchema}>
+    <SectionCard section="notify" value={initialValue} schema={notifySchema}>
       {(form) => (
         <>
           <Alert variant="info">

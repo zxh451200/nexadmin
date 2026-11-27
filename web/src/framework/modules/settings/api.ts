@@ -121,6 +121,8 @@ export interface RobotSettings {
   url: string
   /** 钉钉加签 / 飞书签名密钥；企业微信不用。已设置时为 SECRET_MASK */
   secretKey: string
+  /** 仅用于表单保存时定位原密钥；服务端不会持久化 */
+  secretKeyRef?: string
   markdown: boolean
 }
 

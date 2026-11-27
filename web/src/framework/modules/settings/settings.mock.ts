@@ -85,16 +85,21 @@ const persist = () => {
 function keepSecrets(next: unknown, prev: unknown): unknown {
   if (next === MASK) return prev ?? ''
   if (Array.isArray(next)) {
-    // 列表（机器人）按 name 找回旧值，删除 / 重排后不会串号
+    // 列表（机器人）按引用名或 name 找回旧值，删除 / 重排 / 改名后不会串号
     const old = Array.isArray(prev) ? (prev as Record<string, unknown>[]) : []
     return next.map((e) => {
-      const name = e && typeof e === 'object' ? (e as Record<string, unknown>).name : undefined
-      return keepSecrets(e, name === undefined ? undefined : old.find((o) => o.name === name))
+      const item = e && typeof e === 'object' ? (e as Record<string, unknown>) : {}
+      const ref = typeof item.secretKeyRef === 'string' && item.secretKeyRef ? item.secretKeyRef : item.name
+      return keepSecrets(e, ref === undefined ? undefined : old.find((o) => o.name === ref))
     })
   }
   if (next && typeof next === 'object' && !Array.isArray(next)) {
     const p = (prev && typeof prev === 'object' ? prev : {}) as Record<string, unknown>
-    return Object.fromEntries(Object.entries(next).map(([k, v]) => [k, keepSecrets(v, p[k])]))
+    return Object.fromEntries(
+      Object.entries(next)
+        .filter(([k]) => k !== 'secretKeyRef')
+        .map(([k, v]) => [k, keepSecrets(v, p[k])]),
+    )
   }
   return next
 }

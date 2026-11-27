@@ -111,14 +111,18 @@ func keepSecrets(next, prev any) any {
 		}
 		return prev
 	}
-	if ns, ok := next.([]any); ok { // 列表（如机器人）：按元素的 name 找回旧值，删除 / 重排后不会串号
+	if ns, ok := next.([]any); ok { // 列表（如机器人）：按引用名或 name 找回旧值，删除 / 重排 / 改名后不会串号
 		ps, _ := prev.([]any)
 		out := make([]any, len(ns))
 		for i, e := range ns {
 			var old any
 			if em, ok := e.(map[string]any); ok {
+				ref, _ := em["secretKeyRef"].(string)
+				if ref == "" {
+					ref, _ = em["name"].(string)
+				}
 				for _, p := range ps {
-					if pm, ok := p.(map[string]any); ok && em["name"] != nil && pm["name"] == em["name"] {
+					if pm, ok := p.(map[string]any); ok && ref != "" && pm["name"] == ref {
 						old = pm
 						break
 					}

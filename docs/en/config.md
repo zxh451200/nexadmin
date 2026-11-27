@@ -152,6 +152,10 @@ Settings → Sign-in methods stores runtime overrides in `GET/PUT /settings/auth
 - A non-empty outbound proxy overrides `auth.proxy`.
 - Saving validates the merged result: if enabled providers still lack `client_id`, `client_secret` or `redirect_uris` (plus `agent_id` for WeCom, or `issuer` for OIDC), the save is rejected so a successful save never leaves the provider invisible on the login page.
 
+### 3.2 Notification channels (Settings)
+
+System Settings → Storage & integrations → Notification channels stores email (SMTP) and group robot settings in the `notify` section of `sys_setting`. DingTalk, Feishu and WeCom robots are supported, with unique names and a maximum of 20 robots; Webhook URLs must use HTTPS. Robots appear in a compact list, while adding and editing happen in a right-side drawer. Send test in the drawer uses the current unsaved draft. After adding a robot or applying edits, click Save at the bottom of the page to persist the change. Removals also take effect only after the page is saved.
+
 ## 4. upload / storage / message / job / export / setup / ai / disabled_modules
 
 | Key | Type | Default | Purpose | When to change |
