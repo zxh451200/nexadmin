@@ -39,6 +39,8 @@ type tokenDTO struct {
 	ID         idgen.ID   `json:"id"`
 	Name       string     `json:"name"`
 	Scope      string     `json:"scope"`
+	RateLimit  int        `json:"rateLimit"`
+	RateWindow int        `json:"rateWindowSec"`
 	Prefix     string     `json:"prefix"`
 	LastUsedAt *time.Time `json:"lastUsedAt"`
 	ExpiresAt  *time.Time `json:"expiresAt"`
@@ -46,13 +48,15 @@ type tokenDTO struct {
 }
 
 type tokenCreatedDTO struct {
-	ID        idgen.ID   `json:"id"`
-	Name      string     `json:"name"`
-	Scope     string     `json:"scope"`
-	Prefix    string     `json:"prefix"`
-	ExpiresAt *time.Time `json:"expiresAt"`
-	CreatedAt time.Time  `json:"createdAt"`
-	Token     string     `json:"token"` // 明文仅此一次
+	ID         idgen.ID   `json:"id"`
+	Name       string     `json:"name"`
+	Scope      string     `json:"scope"`
+	RateLimit  int        `json:"rateLimit"`
+	RateWindow int        `json:"rateWindowSec"`
+	Prefix     string     `json:"prefix"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	Token      string     `json:"token"` // 明文仅此一次
 }
 
 // self 返回当前登录用户（仅真实登录会话；令牌/应用主体一律拒绝，防止用令牌管理令牌）。
@@ -84,7 +88,7 @@ func (h *handler) tokenList(c *gin.Context) {
 	out := make([]tokenDTO, 0, len(rows))
 	for i := range rows {
 		r := &rows[i]
-		out = append(out, tokenDTO{ID: r.ID, Name: r.Name, Scope: r.Scope, Prefix: r.Prefix, LastUsedAt: r.LastUsedAt, ExpiresAt: r.ExpiresAt, CreatedAt: r.CreatedAt})
+		out = append(out, tokenDTO{ID: r.ID, Name: r.Name, Scope: r.Scope, RateLimit: r.RateLimit, RateWindow: r.RateWindow, Prefix: r.Prefix, LastUsedAt: r.LastUsedAt, ExpiresAt: r.ExpiresAt, CreatedAt: r.CreatedAt})
 	}
 	response.OK(c, out)
 }
@@ -119,9 +123,11 @@ func (h *handler) tokenCreate(c *gin.Context) {
 		return
 	}
 	var f struct {
-		Name      string  `json:"name"`
-		Scope     string  `json:"scope"`
-		ExpiresAt *string `json:"expiresAt"`
+		Name       string  `json:"name"`
+		Scope      string  `json:"scope"`
+		ExpiresAt  *string `json:"expiresAt"`
+		RateLimit  int     `json:"rateLimit"`
+		RateWindow int     `json:"rateWindowSec"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
@@ -133,6 +139,13 @@ func (h *handler) tokenCreate(c *gin.Context) {
 	}
 	if f.Scope != "read" && f.Scope != "write" {
 		response.Fail(c, response.BadRequest("openapi.scope_invalid"))
+		return
+	}
+	if f.RateWindow == 0 {
+		f.RateWindow = coreoa.DefaultRateWindowSec
+	}
+	if e := coreoa.ValidateRateLimit(f.RateLimit, f.RateWindow); e != nil {
+		response.Fail(c, e)
 		return
 	}
 	exp, err := parseExpiry(f.ExpiresAt, time.Now())
@@ -151,12 +164,12 @@ func (h *handler) tokenCreate(c *gin.Context) {
 		return
 	}
 	plain, hash, prefix := coreoa.NewPATToken()
-	rec := coreoa.PAT{UserID: cl.UserID, Name: f.Name, Scope: f.Scope, TokenHash: hash, Prefix: prefix, ExpiresAt: exp}
+	rec := coreoa.PAT{UserID: cl.UserID, Name: f.Name, Scope: f.Scope, RateLimit: f.RateLimit, RateWindow: f.RateWindow, TokenHash: hash, Prefix: prefix, ExpiresAt: exp}
 	if err := h.db.WithContext(ctx).Create(&rec).Error; err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, tokenCreatedDTO{ID: rec.ID, Name: rec.Name, Scope: rec.Scope, Prefix: rec.Prefix, ExpiresAt: rec.ExpiresAt, CreatedAt: rec.CreatedAt, Token: plain})
+	response.OK(c, tokenCreatedDTO{ID: rec.ID, Name: rec.Name, Scope: rec.Scope, RateLimit: rec.RateLimit, RateWindow: rec.RateWindow, Prefix: rec.Prefix, ExpiresAt: rec.ExpiresAt, CreatedAt: rec.CreatedAt, Token: plain})
 }
 
 // DELETE /profile/tokens?ids=1,2,3（只能删自己的，批量版）

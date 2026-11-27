@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"nexadmin/core/datascope"
+	"nexadmin/core/auth"
 	"nexadmin/core/response"
 	"nexadmin/core/roleassign"
 	"nexadmin/pkg/idgen"
@@ -50,7 +50,12 @@ func (s *service) guardRoles(ctx context.Context, me actor, roles []idgen.ID) er
 	if len(loaded) != len(roles) { // 不在本租户的角色按不可分配处理
 		return forbiddenRole(roleDenyKey(roleassign.ReasonNotAssignable))
 	}
-	op, err := roleassign.LoadOperator(ctx, s.db, me.ID, me.Super)
+	var op *roleassign.Operator
+	if me.Principal == auth.PrincipalApp {
+		op, err = roleassign.LoadAppOperator(ctx, s.db, me.TenantID, me.RoleIDs)
+	} else {
+		op, err = roleassign.LoadOperator(ctx, s.db, me.ID, me.Super)
+	}
 	if err != nil {
 		return err
 	}
@@ -100,7 +105,7 @@ func (s *service) guardUserWrite(ctx context.Context, me actor, cur *User, p par
 		if have, err = s.roleIDsOf(ctx, cur.ID); err != nil {
 			return err
 		}
-		if cur.ID == me.ID { // 改自己的资料：部门与角色必须原样
+		if me.Principal != auth.PrincipalApp && cur.ID == me.ID { // 改自己的资料：部门与角色必须原样
 			if p.dept != cur.DeptID || !sameIDs(p.roles, have) {
 				return forbiddenRole("user.self_dept_role_immutable")
 			}
@@ -108,7 +113,7 @@ func (s *service) guardUserWrite(ctx context.Context, me actor, cur *User, p par
 		}
 	}
 	if cur == nil || p.dept != cur.DeptID {
-		sc, err := datascope.Resolve(ctx, s.db, me.ID, me.Super)
+		sc, err := s.resolveActorScope(ctx, me)
 		if err != nil {
 			return err
 		}
@@ -148,7 +153,7 @@ func (s *service) guardTarget(ctx context.Context, me actor, u *User) error {
 	if me.Super && !me.Provision {
 		return nil
 	}
-	if !me.Provision && u.ID == me.ID {
+	if me.Principal != auth.PrincipalApp && !me.Provision && u.ID == me.ID {
 		return nil
 	}
 	deny := forbiddenRole("user.super_operate_forbidden")

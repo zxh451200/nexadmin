@@ -17,6 +17,8 @@ type PAT struct {
 	UserID     idgen.ID   `gorm:"column:user_id;not null"`
 	Name       string     `gorm:"column:name;size:100;not null"`
 	Scope      string     `gorm:"column:scope;size:16;not null"` // read | write
+	RateLimit  int        `gorm:"column:rate_limit;not null;default:0"`
+	RateWindow int        `gorm:"column:rate_window_sec;not null;default:60"`
 	TokenHash  string     `gorm:"column:token_hash;size:64;not null"`
 	Prefix     string     `gorm:"column:prefix;size:16;not null"`
 	LastUsedAt *time.Time `gorm:"column:last_used_at"`
@@ -36,6 +38,8 @@ type App struct {
 	RoleIDs     string     `gorm:"column:role_ids;type:text"` // JSON 数组
 	IPAllow     string     `gorm:"column:ip_allow;type:text"` // JSON 数组；空 = 不限制
 	Enabled     bool       `gorm:"column:enabled"`
+	RateLimit   int        `gorm:"column:rate_limit;not null;default:0"`
+	RateWindow  int        `gorm:"column:rate_window_sec;not null;default:60"`
 	LastUsedAt  *time.Time `gorm:"column:last_used_at"`
 }
 

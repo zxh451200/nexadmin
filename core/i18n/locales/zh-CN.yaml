@@ -5,6 +5,7 @@ error:
   unavailable: 服务暂不可用
   internal: 服务器内部错误
   bad_request: 请求参数不正确
+  request_failed: 请求处理失败
   batch_too_many: "一次最多点名 %d 条，请分批操作"
   unauthorized: 未登录或登录已过期
   forbidden: 没有权限执行此操作
@@ -716,6 +717,12 @@ openapi:
   signature_invalid: "签名不正确"
   ip_not_allowed: "IP 不在允许范围内"
   nonce_reused: "nonce 已使用"
+  rate_limited: 已超过该凭证的调用配额，请稍后重试
+  rate_limit_invalid: 调用配额必须是 0 到 1000000 的整数
+  rate_window_invalid: 限流窗口必须是 1 到 86400 秒
+  audit_type_invalid: 凭证类型只能是 pat 或 app
+  audit_status_invalid: HTTP 状态码必须是 100 到 599 的整数
+  audit_time_invalid: 时间格式不正确，请使用 RFC3339 或 YYYY-MM-DD
 sso:
   name_required: "名称不能为空且不超过 100 个字符"
   redirect_uri_invalid: "回调地址不合法：%s"

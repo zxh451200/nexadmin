@@ -146,10 +146,10 @@ const tokenHex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.
 const inDays = (d: number) => new Date(Date.now() + d * 86400000).toISOString()
 
 let tokens: AccessToken[] = [
-  { id: mkId(21), name: 'CI 流水线', scope: 'write', prefix: 'nxp_9f3a', lastUsedAt: ago(35), expiresAt: inDays(60), createdAt: ago(60 * 24 * 30) },
-  { id: mkId(22), name: '报表脚本', scope: 'read', prefix: 'nxp_c71e', lastUsedAt: ago(60 * 26), expiresAt: inDays(3), createdAt: ago(60 * 24 * 87) },
-  { id: mkId(23), name: '旧的测试令牌', scope: 'read', prefix: 'nxp_02bd', lastUsedAt: null, expiresAt: inDays(-5), createdAt: ago(60 * 24 * 95) },
-  { id: mkId(24), name: '本机调试', scope: 'write', prefix: 'nxp_e8c4', lastUsedAt: ago(60 * 5), expiresAt: null, createdAt: ago(60 * 24 * 12) },
+  { id: mkId(21), name: 'CI 流水线', scope: 'write', prefix: 'nxp_9f3a', rateLimit: 1200, rateWindowSec: 60, lastUsedAt: ago(35), expiresAt: inDays(60), createdAt: ago(60 * 24 * 30) },
+  { id: mkId(22), name: '报表脚本', scope: 'read', prefix: 'nxp_c71e', rateLimit: 60, rateWindowSec: 60, lastUsedAt: ago(60 * 26), expiresAt: inDays(3), createdAt: ago(60 * 24 * 87) },
+  { id: mkId(23), name: '旧的测试令牌', scope: 'read', prefix: 'nxp_02bd', rateLimit: 0, rateWindowSec: 60, lastUsedAt: null, expiresAt: inDays(-5), createdAt: ago(60 * 24 * 95) },
+  { id: mkId(24), name: '本机调试', scope: 'write', prefix: 'nxp_e8c4', rateLimit: 0, rateWindowSec: 60, lastUsedAt: ago(60 * 5), expiresAt: null, createdAt: ago(60 * 24 * 12) },
 ]
 
 defineMock([
@@ -162,12 +162,18 @@ defineMock([
       if (!name) mockError(400, 'name is required')
       if (body?.scope !== 'read' && body?.scope !== 'write') mockError(400, 'Invalid scope')
       if (body.expiresAt && !(new Date(body.expiresAt).getTime() > Date.now())) mockError(400, 'expiresAt must be in the future')
+      const rateLimit = body?.rateLimit ?? 0
+      const rateWindowSec = body?.rateWindowSec ?? 60
+      if (!Number.isInteger(rateLimit) || rateLimit < 0 || rateLimit > 1_000_000) mockError(400, 'Invalid rate limit')
+      if (!Number.isInteger(rateWindowSec) || rateWindowSec < 1 || rateWindowSec > 86400) mockError(400, 'Invalid rate window')
       const raw = `nxp_${tokenHex(40)}`
       const row: AccessToken = {
         id: mkId(100 + tokens.length + Math.floor(Math.random() * 1e6)),
         name,
         scope: body.scope,
         prefix: raw.slice(0, 8),
+        rateLimit,
+        rateWindowSec,
         lastUsedAt: null,
         expiresAt: body.expiresAt ?? null,
         createdAt: new Date().toISOString(),

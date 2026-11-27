@@ -128,8 +128,11 @@ type listQuery struct {
 
 // actor 是当前操作者，用于数据范围和“不能操作自己”的判断。
 type actor struct {
-	ID    idgen.ID
-	Super bool
+	ID        idgen.ID
+	Super     bool
+	Principal string
+	RoleIDs   []string
+	TenantID  idgen.ID
 	// Provision 标记“外部供号通道”（SCIM）：它沿用 Super 的数据范围，但 guardTarget 对超管账号
 	// 与持有内置角色的账号照常拒绝，不享受超管豁免。
 	Provision bool

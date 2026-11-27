@@ -10,6 +10,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/middleware"
+	coreoa "nexadmin/core/openapi"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 )
@@ -24,6 +25,7 @@ func (module) TenantTables() []tenant.Table {
 	return []tenant.Table{
 		{Name: "sys_pat", Column: "tenant_id"},
 		{Name: "sys_openapi_app", Column: "tenant_id"},
+		{Name: "sys_openapi_audit", Column: "tenant_id"},
 		{Name: "sys_webhook", Column: "tenant_id"},
 		{Name: "sys_webhook_delivery", Column: "tenant_id"},
 	}
@@ -39,12 +41,15 @@ var startOnce sync.Once
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{db: d.DB, log: d.Log, snd: newSender()}
 	st := gormStore{db: d.DB}
+	audits := &auditStore{db: d.DB, log: d.Log}
+	coreoa.SetCallAuditSink(audits)
 	h.wk = newWorker(st, h.snd, d.Log)
 
 	startOnce.Do(func() {
 		event.Default().SetLogger(d.Log)
 		event.Subscribe(&dispatcher{st: st, log: d.Log, wake: h.wk.wake, now: time.Now})
 		go h.wk.run(context.Background())
+		go runAuditCleanup(context.Background(), audits, d.Log)
 	})
 
 	patCreate := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "pat_create", middleware.ByUser())
@@ -80,5 +85,6 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/openapi/webhooks/:id/test", core.Perm("openapi:edit"), h.hookTest)
 
 	r.GET("/openapi/deliveries", core.Perm("openapi:list"), h.deliveryList)
+	r.GET("/openapi/audits", core.Perm("openapi:list"), h.auditList)
 	r.POST("/openapi/deliveries/:id/retry", core.Perm("openapi:edit"), d.OperLogMiddleware("openapi", "retry"), h.deliveryRetry)
 }

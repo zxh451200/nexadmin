@@ -31,7 +31,7 @@ func me(c *gin.Context) actor {
 	if cl == nil {
 		return actor{}
 	}
-	return actor{ID: cl.UserID, Super: cl.Super}
+	return actor{ID: cl.UserID, Super: cl.Super, Principal: cl.Principal, RoleIDs: cl.AppRoleIDs, TenantID: cl.TenantID}
 }
 
 func queryOf(c *gin.Context) listQuery {
@@ -44,9 +44,9 @@ func queryOf(c *gin.Context) listQuery {
 	sortField, desc := response.ParseSort(c)
 	return listQuery{
 		Page: page, PageSize: size, Keyword: c.Query("keyword"),
-		Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
-		DeptIDs: response.ParseFilterIDs(deptRaw, response.MaxFilterValues),
-		Gender: response.ParseList(c.Query("gender"), response.MaxFilterValues),
+		Status:      response.ParseList(c.Query("status"), response.MaxFilterValues),
+		DeptIDs:     response.ParseFilterIDs(deptRaw, response.MaxFilterValues),
+		Gender:      response.ParseList(c.Query("gender"), response.MaxFilterValues),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
 		Sort: sortField, Desc: desc,
 	}

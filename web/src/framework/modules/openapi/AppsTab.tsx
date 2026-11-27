@@ -147,6 +147,16 @@ export function AppsTab() {
         ),
     },
     {
+      key: 'rateLimit',
+      title: t('openapi.apps.fields.rateLimit'),
+      render: (a) =>
+        a.rateLimit > 0 ? (
+          <span className="num">{t('openapi.apps.rateQuota', { limit: a.rateLimit, window: a.rateWindowSec })}</span>
+        ) : (
+          <span className="text-muted-foreground">{t('openapi.apps.rateUnlimited')}</span>
+        ),
+    },
+    {
       key: 'lastUsedAt',
       title: t('openapi.apps.fields.lastUsedAt'),
       render: (a) => (a.lastUsedAt ? <span className="num">{fmtDateTime(a.lastUsedAt, i18n.language)}</span> : <span className="text-muted-foreground">{t('openapi.neverUsed')}</span>),
@@ -192,6 +202,7 @@ export function AppsTab() {
                 { header: t('openapi.apps.fields.roles'), value: (a) => a.roleIds.map((id) => roleName.get(id) ?? id).join(' | ') },
                 { header: t('openapi.apps.fields.enabled'), value: (a) => (a.enabled ? t('common.yes') : t('common.no')) },
                 { header: t('openapi.apps.fields.ipAllow'), value: (a) => (a.ipAllow.length ? a.ipAllow.join(' | ') : t('openapi.apps.ipUnlimited')) },
+                { header: t('openapi.apps.fields.rateLimit'), value: (a) => (a.rateLimit > 0 ? t('openapi.apps.rateQuota', { limit: a.rateLimit, window: a.rateWindowSec }) : t('openapi.apps.rateUnlimited')) },
                 { header: t('openapi.apps.fields.lastUsedAt'), value: (a) => (a.lastUsedAt ? fmtDateTime(a.lastUsedAt, i18n.language) : t('openapi.neverUsed')) },
                 { header: t('openapi.apps.fields.createdAt'), value: (a) => fmtDateTime(a.createdAt, i18n.language) },
               ]}

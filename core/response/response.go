@@ -76,6 +76,11 @@ func Fail(c *gin.Context, err error) {
 	if e.RetryAfter > 0 {
 		c.Header("Retry-After", strconv.Itoa(e.RetryAfter))
 	}
+	if e.Key != "" {
+		if _, exists := c.Get("response_failure_key"); !exists {
+			c.Set("response_failure_key", e.Key)
+		}
+	}
 	c.AbortWithStatusJSON(e.Status, Body{
 		Code:    e.Code,
 		Message: e.message(c.Request.Context()),

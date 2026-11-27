@@ -113,16 +113,16 @@ func hasPathPrefix(p, prefix string) bool { return p == prefix || strings.HasPre
 // patForbidden：令牌不能用于登录相关接口，也不能创建/管理令牌自身（防提权）。
 func patForbidden(p string) bool {
 	return hasPathPrefix(p, "/auth") || hasPathPrefix(p, "/profile/tokens") || hasPathPrefix(p, "/oauth/authorize") ||
-		hasPathPrefix(p, "/mcp/confirmations")
+		hasPathPrefix(p, "/mcp/confirmations") || hasPathPrefix(p, "/openapi/audits")
 }
 
 // appForbidden：服务账号没有用户身份，不能碰登录/个人中心/授权确认，也不能管理开放应用本身（防自我提权）。
 func appForbidden(p string) bool {
-	return hasPathPrefix(p, "/auth") || hasPathPrefix(p, "/profile") || hasPathPrefix(p, "/oauth/authorize") ||
+	return hasPathPrefix(p, "/auth") || hasPathPrefix(p, "/profile") || hasPathPrefix(p, "/oauth") || hasPathPrefix(p, "/ws/ticket") ||
 		hasPathPrefix(p, "/openapi/apps") || hasPathPrefix(p, "/mcp/confirmations") ||
 		hasPathPrefix(p, "/sso") || hasPathPrefix(p, "/settings") || hasPathPrefix(p, "/configs") ||
 		hasPathPrefix(p, "/plugins") || hasPathPrefix(p, "/recycle") || hasPathPrefix(p, "/online-users") ||
-		hasPathPrefix(p, "/audit")
+		hasPathPrefix(p, "/audit") || hasPathPrefix(p, "/openapi/audits")
 }
 
 // TokenCallable 报告个人访问令牌能否调用该接口；rel 是去掉 /api/v1 前缀的路径（接口文档与中间件共用同一套规则）。
@@ -163,6 +163,9 @@ func (a *authn) pat(c *gin.Context, token string) {
 		response.Fail(c, err)
 		return
 	}
+	if rec != nil {
+		setCallAuditCredential(c, rec.TenantID, rec.ID, rec.Name, rec.Prefix)
+	}
 	now := a.Now()
 	if rec == nil || (rec.ExpiresAt != nil && !now.Before(*rec.ExpiresAt)) {
 		a.fail(c, "openapi.token_expired")
@@ -187,6 +190,9 @@ func (a *authn) pat(c *gin.Context, token string) {
 	}
 	if patForbidden(relPath(c)) {
 		forbidden(c, "openapi.pat_endpoint_forbidden")
+		return
+	}
+	if !a.quota(c, "pat", int64(rec.ID), int64(rec.TenantID), rec.RateLimit, rec.RateWindow) {
 		return
 	}
 	auth.SetClaims(c, &auth.Claims{
@@ -232,6 +238,9 @@ func (a *authn) app(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	if app != nil {
+		setCallAuditCredential(c, app.TenantID, app.ID, app.Name, app.AppKey)
+	}
 	if app == nil || !app.Enabled {
 		a.fail(c, "openapi.signature_invalid") // 不区分应用不存在/已停用/签名错误，避免枚举
 		return
@@ -276,9 +285,12 @@ func (a *authn) app(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	if !a.quota(c, "app", int64(app.ID), int64(app.TenantID), app.RateLimit, app.RateWindow) {
+		return
+	}
 	auth.SetClaims(c, &auth.Claims{
 		UserID: app.ID, TenantID: app.TenantID, Username: "app:" + app.AppKey, Super: false,
-		Kind: "access", Principal: auth.PrincipalApp, Perms: perms,
+		Kind: "access", Principal: auth.PrincipalApp, Perms: perms, AppRoleIDs: app.RoleList(),
 		RegisteredClaims: jwt.RegisteredClaims{ID: "app:" + app.ID.String(), IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute))},
 	})
 	if a.touch(ctx, "app", app.ID.String()) {

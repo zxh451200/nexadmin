@@ -281,7 +281,7 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	}
 	// JSON 写接口统一封顶请求体（tus 上传路径豁免，multipart 由各 handler 按上传限制自校验）；
 	// 单个巨型字符串字段也能把内存吃满，不能只靠 handler 自觉。
-	api.Use(middleware.NoStore(), middleware.MaxBody(apiBodyLimit, "/files/upload"), middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
+	api.Use(middleware.NoStore(), middleware.ParseToken(svc), openapi.CallAudit(), middleware.MaxBody(apiBodyLimit, "/files/upload"), openapi.Authenticate(openapi.Options{
 		Store: openapi.GormStore{DB: db}, Cache: ch, Log: a.log,
 		Limiter: middleware.NewLimiter(ch, a.log, "openapi-sign", cfg.RateLimit.Rule("openapi_sign").Limit, cfg.RateLimit.Rule("openapi_sign").Window),
 	}), middleware.Tenant(resolver), middleware.RuntimeTenant(), mcp.EnforceDispatchIdentity())

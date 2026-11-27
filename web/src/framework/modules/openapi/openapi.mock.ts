@@ -1,6 +1,6 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
 import type { Page } from '@/framework/request/types'
-import type { ApiRoute, Delivery, DeliveryStatus, OpenApp, OpenAppForm, OpenEvent, Webhook, WebhookForm, WebhookTestResult } from './api'
+import type { ApiRoute, Audit, Delivery, DeliveryStatus, OpenApp, OpenAppForm, OpenEvent, Webhook, WebhookForm, WebhookTestResult } from './api'
 
 const MIN = 60000
 const ago = (m: number) => new Date(Date.now() - m * MIN).toISOString()
@@ -10,22 +10,26 @@ const apps: OpenApp[] = [
   {
     id: '1870000000000000001',
     name: 'HR 同步服务',
-    appKey: 'ak_hr_5d2e8a1c',
+    appKey: 'nxapp_hr_5d2e8a1c',
     description: '定时把组织架构同步到人事系统',
     roleIds: [],
     enabled: true,
     ipAllow: ['203.0.113.10', '10.20.0.0/16'],
+    rateLimit: 6000,
+    rateWindowSec: 60,
     createdAt: ago(60 * 24 * 30),
     lastUsedAt: ago(12),
   },
   {
     id: '1870000000000000002',
     name: '数据看板',
-    appKey: 'ak_bi_9c4f7b30',
+    appKey: 'nxapp_bi_9c4f7b30',
     description: '只读拉取用户与部门统计',
     roleIds: [],
     enabled: false,
     ipAllow: [],
+    rateLimit: 0,
+    rateWindowSec: 60,
     createdAt: ago(60 * 24 * 9),
     lastUsedAt: null,
   },
@@ -102,12 +106,18 @@ function sanitizeApp(body: Partial<OpenAppForm> | undefined) {
   const ipAllow = (body.ipAllow ?? []).map((s) => s.trim()).filter(Boolean)
   const bad = ipAllow.find((s) => !validIp(s))
   if (bad) mockError(400, `invalid ip: ${bad}`)
+  const rateLimit = body.rateLimit ?? 0
+  const rateWindowSec = body.rateWindowSec ?? 60
+  if (!Number.isInteger(rateLimit) || rateLimit < 0 || rateLimit > 1_000_000) mockError(400, 'Invalid rate limit')
+  if (!Number.isInteger(rateWindowSec) || rateWindowSec < 1 || rateWindowSec > 86400) mockError(400, 'Invalid rate window')
   return {
     name: String(body.name).trim(),
     description: body.description ?? '',
     roleIds: (body.roleIds ?? []) as string[],
     enabled: body.enabled ?? true,
     ipAllow,
+    rateLimit,
+    rateWindowSec,
   }
 }
 
@@ -149,6 +159,9 @@ const ROUTE_ROWS: RouteRow[] = [
   ['GET', '/openapi/apps', 'openapi', 'openapi:list', 'l'],
   ['POST', '/openapi/apps', 'openapi', 'openapi:edit', 'l'],
   ['GET', '/openapi/routes', 'openapi', 'openapi:list', 'l'],
+  ['GET', '/openapi/deliveries', 'openapi', 'openapi:list', 'l'],
+  ['GET', '/openapi/audits', 'openapi', 'openapi:list', 'l'],
+  ['GET', '/openapi/events', 'openapi', 'openapi:list', 'l'],
   ['GET', '/openapi.json', 'openapi', 'openapi:list', 'l'],
   ['GET', '/admin/tenants', 'tenant', '', 's'],
   ['POST', '/admin/tenants', 'tenant', '', 's'],
@@ -159,7 +172,7 @@ const startsWith = (p: string, prefix: string) => p === prefix || p.startsWith(`
 // 规则与后端 core/openapi 一致：令牌不能碰 /auth /profile/tokens /oauth/authorize；应用另不能碰 /profile /openapi/apps
 const apiRoutes: ApiRoute[] = ROUTE_ROWS.map(([method, rel, module, perm, kind]) => {
   const auth = kind !== 'p'
-  const tokenCallable = auth && !['/auth', '/profile/tokens', '/oauth/authorize'].some((x) => startsWith(rel, x))
+  const tokenCallable = auth && !['/auth', '/profile/tokens', '/oauth/authorize', '/openapi/audits'].some((x) => startsWith(rel, x))
   const appCallable = tokenCallable && !['/profile', '/openapi/apps'].some((x) => startsWith(rel, x))
   return {
     method,
@@ -183,15 +196,74 @@ function mockSpec() {
   return { openapi: '3.0.3', info: { title: 'NexAdmin API (mock)', version: '1.0.0' }, servers: [{ url: '/api/v1' }], paths }
 }
 
+const audits: Audit[] = Array.from({ length: 46 }, (_, i) => {
+  const isApp = i % 3 !== 0
+  const rejected = i % 7 === 2
+  const method = ['GET', 'GET', 'POST', 'PUT', 'DELETE'][i % 5]
+  const path = ['/api/v1/users', '/api/v1/users/:id', '/api/v1/depts', '/api/v1/roles', '/api/v1/notices'][i % 5]
+  const requestedAt = ago(i * 13 + 1)
+  return {
+    id: (1870000000000000100n + BigInt(i + 1)).toString(),
+    principalType: isApp ? 'app' : 'pat',
+    credentialId: isApp ? (i % 2 ? apps[0].id : apps[1].id) : (i % 2 ? '1860000000000000021' : '1860000000000000022'),
+    credentialName: isApp ? (i % 2 ? apps[0].name : apps[1].name) : (i % 2 ? 'CI 流水线' : '报表脚本'),
+    credentialLabel: isApp ? (i % 2 ? apps[0].appKey : apps[1].appKey) : (i % 2 ? 'nxp_9f3a' : 'nxp_c71e'),
+    userId: isApp ? '0' : '1860000000000000001',
+    username: isApp ? '' : 'admin',
+    authOutcome: rejected ? 'rejected' : 'authenticated',
+    failureKey: rejected ? (i % 2 ? 'error.forbidden' : 'openapi.rate_limited') : '',
+    method,
+    path,
+    statusCode: rejected ? (i % 2 ? 403 : 429) : method === 'POST' ? 201 : 200,
+    durationMs: 18 + ((i * 47) % 480),
+    clientIp: i % 2 ? '203.0.113.10' : '198.51.100.24',
+    userAgent: i % 2 ? 'hr-sync/2.4.1' : 'report-runner/1.8.0',
+    requestId: `req_${rand(16)}`,
+    requestedAt,
+    createdAt: requestedAt,
+  }
+})
+
 defineMock([
   { method: 'GET', url: '/openapi/events', handler: (): OpenEvent[] => events },
+
+  {
+    method: 'GET',
+    url: '/openapi/audits',
+    handler: ({ query }): Page<Audit> => {
+      const page = Math.max(1, Number(query.page) || 1)
+      const pageSize = Math.max(1, Number(query.pageSize) || 10)
+      const keyword = String(query.keyword ?? '').trim().toLowerCase()
+      const start = query.start ? new Date(String(query.start)).getTime() : 0
+      const end = query.end ? new Date(String(query.end)).getTime() : Infinity
+      const rows = audits
+        .filter((a) => !query.principalType || a.principalType === query.principalType)
+        .filter((a) => !query.credentialId || a.credentialId === query.credentialId)
+        .filter((a) => !query.method || a.method === query.method)
+        .filter((a) => !query.authOutcome || a.authOutcome === query.authOutcome)
+        .filter((a) => !query.status || String(a.statusCode) === query.status)
+        .filter((a) => !keyword || [a.credentialName, a.credentialLabel, a.username, a.path, a.requestId].some((v) => v.toLowerCase().includes(keyword)))
+        .filter((a) => {
+          const time = new Date(a.requestedAt).getTime()
+          return time >= start && time <= end
+        })
+        .sort((a, b) => {
+          const field = String(query.sort ?? 'requestedAt')
+          const av = field === 'durationMs' ? a.durationMs : field === 'statusCode' ? a.statusCode : field === 'credentialName' ? a.credentialName : a.requestedAt
+          const bv = field === 'durationMs' ? b.durationMs : field === 'statusCode' ? b.statusCode : field === 'credentialName' ? b.credentialName : b.requestedAt
+          const order = typeof av === 'string' ? av.localeCompare(String(bv)) : Number(av) - Number(bv)
+          return query.desc === false ? order : -order
+        })
+      return { list: rows.slice((page - 1) * pageSize, page * pageSize).map((a) => ({ ...a })), total: rows.length, page, pageSize }
+    },
+  },
 
   { method: 'GET', url: '/openapi/apps', handler: (): OpenApp[] => apps.map((a) => ({ ...a })) },
   {
     method: 'POST',
     url: '/openapi/apps',
     handler: ({ body }) => {
-      const app: OpenApp = { ...sanitizeApp(body), id: genId(), appKey: `ak_${rand(12)}`, createdAt: new Date().toISOString(), lastUsedAt: null }
+      const app: OpenApp = { ...sanitizeApp(body), id: genId(), appKey: `nxapp_${rand(12)}`, createdAt: new Date().toISOString(), lastUsedAt: null }
       apps.push(app)
       return { ...app, appSecret: rand(48) }
     },

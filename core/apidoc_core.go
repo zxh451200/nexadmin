@@ -22,6 +22,6 @@ func coreAPIDocs() []apidoc.Operation {
 		Method:      "POST",
 		Path:        "/ws/ticket",
 		Summary:     "换取 WebSocket 入场票",
-		Description: "需登录。返回一次性 ticket（15 秒有效），用 ws://…/ws?ticket=… 建连；访问令牌不出现在握手 URL。",
+		Description: "需登录。返回一次性 ticket（15 秒有效），用 ws://…/ws?ticket=… 建连；访问令牌不出现在握手 URL。开放应用签名不可调用。",
 	}}
 }

@@ -128,8 +128,8 @@ summary: 权限码与后端接口的完整对照表，供实现与核对。
 | 模块 | 权限要求 | 接口 |
 | --- | --- | --- |
 | openapi | `openapi:edit` | `DELETE /openapi/apps/:id`<br>`DELETE /openapi/webhooks/:id`<br>`POST /openapi/apps`<br>`POST /openapi/apps/:id/reset-secret`<br>`POST /openapi/deliveries/:id/retry`<br>`POST /openapi/webhooks`<br>`POST /openapi/webhooks/:id/reset-secret`<br>`POST /openapi/webhooks/:id/test`<br>`PUT /openapi/apps/:id`<br>`PUT /openapi/apps/:id/enabled`<br>`PUT /openapi/webhooks/:id`<br>`PUT /openapi/webhooks/:id/enabled` |
-| openapi | 登录即可（令牌本身不能调用这三个接口） | `DELETE /profile/tokens/:id`<br>`GET /profile/tokens`<br>`POST /profile/tokens` |
-| openapi | `openapi:list` | `GET /openapi.json`<br>`GET /openapi/apps`<br>`GET /openapi/deliveries`<br>`GET /openapi/events`<br>`GET /openapi/routes`<br>`GET /openapi/webhooks` |
+| openapi | 登录即可（仅真实登录会话，PAT / 应用不可调用这三个接口） | `DELETE /profile/tokens/:id`<br>`GET /profile/tokens`<br>`POST /profile/tokens` |
+| openapi | `openapi:list` | `GET /openapi.json`<br>`GET /openapi/apps`<br>`GET /openapi/audits`<br>`GET /openapi/deliveries`<br>`GET /openapi/events`<br>`GET /openapi/routes`<br>`GET /openapi/webhooks` |
 
 ## plugin
 

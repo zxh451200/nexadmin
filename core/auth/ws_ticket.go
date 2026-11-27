@@ -50,7 +50,7 @@ func validWSTicketID(id string) bool {
 
 // IssueWSTicket 为当前登录会话签发一张一次性入场票，返回票面与剩余可用秒数。
 func (s *Service) IssueWSTicket(ctx context.Context, cl *Claims) (string, int, error) {
-	if cl == nil || cl.UserID == 0 {
+	if cl == nil || cl.UserID == 0 || cl.Principal == PrincipalApp {
 		return "", 0, errors.New("auth: ws ticket requires a logged-in principal")
 	}
 	buf := make([]byte, wsTicketIDLen/2)

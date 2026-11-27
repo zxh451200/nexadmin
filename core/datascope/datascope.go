@@ -41,23 +41,51 @@ func (s *Scope) HasDept(id int64) bool {
 	return false
 }
 
+type roleScope struct {
+	ID        idgen.ID
+	DataScope string
+}
+
 // Resolve 读取操作者的启用角色并合成范围。超管直接返回 All，不产生查询。
 // “本部门及以下”依赖 sys_dept.path 物化路径；取不到时退化为“本部门”。
 func Resolve(ctx context.Context, db *gorm.DB, userID idgen.ID, super bool) (*Scope, error) {
 	if super {
 		return &Scope{All: true, UserID: userID}, nil
 	}
-	db = db.WithContext(ctx)
-	var roles []struct {
-		ID        idgen.ID
-		DataScope string
-	}
-	err := db.Table("sys_user_role AS ur").Select("r.id AS id, r.data_scope AS data_scope").
-		Joins("JOIN sys_role r ON r.id = ur.role_id AND r.status = ?", "1").
+	var roles []roleScope
+	err := db.WithContext(ctx).Table("sys_user_role AS ur").Select("r.id AS id, r.data_scope AS data_scope").
+		Joins("JOIN sys_role r ON r.id = ur.role_id AND r.status = ? AND r.deleted_at IS NULL", "1").
 		Where("ur.user_id = ?", int64(userID)).Scan(&roles).Error
 	if err != nil {
 		return nil, err
 	}
+	return resolve(ctx, db, userID, roles)
+}
+
+// ResolveApp 实时合并开放应用绑定角色的数据范围。应用没有用户或部门，
+// 因此 self / dept / deptAndChild 不会展开出部门；需要部门范围时应绑定 custom 角色。
+func ResolveApp(ctx context.Context, db *gorm.DB, tenantID idgen.ID, roleIDs []string) (*Scope, error) {
+	ids := make([]int64, 0, len(roleIDs))
+	for _, raw := range roleIDs {
+		id, err := idgen.Parse(raw)
+		if err == nil && id != 0 {
+			ids = append(ids, int64(id))
+		}
+	}
+	if len(ids) == 0 {
+		return &Scope{}, nil
+	}
+	var roles []roleScope
+	if err := db.WithContext(ctx).Table("sys_role").Select("id, data_scope").
+		Where("tenant_id = ? AND status = ? AND builtin = ? AND deleted_at IS NULL AND id IN ?", int64(tenantID), "1", false, ids).
+		Scan(&roles).Error; err != nil {
+		return nil, err
+	}
+	return resolve(ctx, db, 0, roles)
+}
+
+func resolve(ctx context.Context, db *gorm.DB, userID idgen.ID, roles []roleScope) (*Scope, error) {
+	db = db.WithContext(ctx)
 	for _, r := range roles {
 		if r.DataScope == "all" {
 			return &Scope{All: true, UserID: userID}, nil
@@ -170,14 +198,14 @@ func Forbidden(ctx context.Context, resource string, n int) *response.Error {
 	return response.Forbidden("datascope.forbidden", noun)
 }
 
-// FromClaims 按令牌解析范围。无令牌 -> 401；开放平台“应用”主体没有用户身份，权限已由其授权的权限点限定，按全部处理；
+// FromClaims 按令牌解析范围。无令牌 -> 401；开放应用按绑定角色的并集实时解析；
 // 个人访问令牌（PAT）按其所属用户解析。
 func FromClaims(ctx context.Context, db *gorm.DB, cl *auth.Claims) (*Scope, error) {
 	if cl == nil {
 		return nil, response.Unauthorized("error.unauthorized")
 	}
 	if cl.Principal == auth.PrincipalApp {
-		return &Scope{All: true}, nil
+		return ResolveApp(ctx, db, cl.TenantID, cl.AppRoleIDs)
 	}
 	return Resolve(ctx, db, cl.UserID, cl.Super)
 }

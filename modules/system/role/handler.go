@@ -50,10 +50,15 @@ func (h *handler) list(c *gin.Context) {
 // 默认返回全部启用角色（公告目标、SSO/开放平台可见角色等下拉用）；scene=assign（用户表单分配角色）时，
 // 非超管只返回他确实能分配的角色（可分配 + 权限子集 + 数据范围不更宽）。
 func (h *handler) options(c *gin.Context) {
-	var op *roleassign.Operator // 开放平台“应用”没有用户身份，按全部处理（nil）
-	if cl := auth.ClaimsFrom(c); cl != nil && cl.Principal != auth.PrincipalApp && c.Query("scene") == "assign" {
+	var op *roleassign.Operator
+	if cl := auth.ClaimsFrom(c); cl != nil && c.Query("scene") == "assign" {
 		var err error
-		if op, err = roleassign.LoadOperator(c.Request.Context(), h.svc.db, cl.UserID, cl.Super); err != nil {
+		if cl.Principal == auth.PrincipalApp {
+			op, err = roleassign.LoadAppOperator(c.Request.Context(), h.svc.db, cl.TenantID, cl.AppRoleIDs)
+		} else {
+			op, err = roleassign.LoadOperator(c.Request.Context(), h.svc.db, cl.UserID, cl.Super)
+		}
+		if err != nil {
 			response.Fail(c, err)
 			return
 		}

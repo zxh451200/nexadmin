@@ -13,6 +13,9 @@ export interface OpenApp {
   enabled: boolean
   /** IP / CIDR 白名单；空 = 不限制 */
   ipAllow: string[]
+  /** 0 = 不限流 */
+  rateLimit: number
+  rateWindowSec: number
   createdAt: string
   lastUsedAt?: string | null
 }
@@ -26,6 +29,8 @@ export interface OpenAppForm {
   roleIds: string[]
   enabled: boolean
   ipAllow: string[]
+  rateLimit: number
+  rateWindowSec: number
 }
 
 export interface Webhook {
@@ -235,6 +240,50 @@ export function useRetryDelivery() {
   })
 }
 
+export interface AuditQuery {
+  page: number
+  pageSize: number
+  keyword?: string
+  principalType?: 'pat' | 'app'
+  credentialId?: string
+  method?: string
+  authOutcome?: 'authenticated' | 'rejected'
+  status?: string
+  start?: string
+  end?: string
+  sort?: string
+  desc?: boolean
+}
+
+export interface Audit {
+  id: string
+  principalType: 'pat' | 'app'
+  credentialId: string
+  credentialName: string
+  credentialLabel: string
+  userId: string
+  username: string
+  authOutcome: 'authenticated' | 'rejected'
+  failureKey: string
+  method: string
+  path: string
+  statusCode: number
+  durationMs: number
+  clientIp: string
+  userAgent: string
+  requestId: string
+  requestedAt: string
+  createdAt: string
+}
+
+export function useAudits(query: AuditQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'audits', query],
+    queryFn: () => api.get<Page<Audit>>('/openapi/audits', { ...query }),
+    placeholderData: keepPreviousData,
+  })
+}
+
 /** 事件名的分组前缀：user.created → user */
 export const eventGroup = (name: string) => name.split('.')[0] ?? name
 
@@ -371,10 +420,10 @@ export function buildSignCurl(origin: string, r: Pick<ApiRoute, 'method' | 'path
   const curl = [`curl -X ${r.method} "${url}"`, `  -H "X-App-Key: $APP_KEY"`, `  -H "X-Timestamp: $TS"`, `  -H "X-Nonce: $NONCE"`, `  -H "X-Signature: $SIGN"`]
   if (hasBody) curl.push(`  -H "Content-Type: application/json"`, `  -d "$BODY"`)
   return [
-    `APP_KEY=ak_xxx`,
+    `APP_KEY=nxapp_xxx`,
     `APP_SECRET=YOUR_APP_SECRET`,
     `BODY='${hasBody ? '{}' : ''}'`,
-    `QUERY='' # 规范化后的查询串（按 key 排序），没有则为空`,
+    `QUERY='' # 规范化后的查询串（key 与同 key 的 value 分别排序并转义），没有则为空`,
     `TS=$(date +%s)`,
     `NONCE=$(openssl rand -hex 16)`,
     `BODY_HASH=$(printf '%s' "$BODY" | openssl dgst -sha256 | sed 's/^.* //')`,

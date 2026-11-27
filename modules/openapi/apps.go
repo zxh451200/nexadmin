@@ -2,7 +2,6 @@ package openapi
 
 import (
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -10,9 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core/auth"
 	"nexadmin/core/database"
 	coreoa "nexadmin/core/openapi"
 	"nexadmin/core/response"
+	"nexadmin/core/roleassign"
 	"nexadmin/core/secret"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -26,6 +27,8 @@ type appDTO struct {
 	RoleIDs     []string   `json:"roleIds"`
 	Enabled     bool       `json:"enabled"`
 	IPAllow     []string   `json:"ipAllow"`
+	RateLimit   int        `json:"rateLimit"`
+	RateWindow  int        `json:"rateWindowSec"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	LastUsedAt  *time.Time `json:"lastUsedAt"`
 	AppSecret   string     `json:"appSecret,omitempty"` // 仅创建/重置时返回一次
@@ -33,7 +36,7 @@ type appDTO struct {
 
 func toAppDTO(a *coreoa.App) appDTO {
 	return appDTO{ID: a.ID, Name: a.Name, AppKey: a.AppKey, Description: a.Description, RoleIDs: a.RoleList(), Enabled: a.Enabled,
-		IPAllow: a.IPList(), CreatedAt: a.CreatedAt, LastUsedAt: a.LastUsedAt}
+		IPAllow: a.IPList(), RateLimit: a.RateLimit, RateWindow: a.RateWindow, CreatedAt: a.CreatedAt, LastUsedAt: a.LastUsedAt}
 }
 
 type appForm struct {
@@ -42,6 +45,20 @@ type appForm struct {
 	RoleIDs     []string `json:"roleIds"`
 	IPAllow     []string `json:"ipAllow"`
 	Enabled     *bool    `json:"enabled"`
+	RateLimit   *int     `json:"rateLimit"`
+	RateWindow  *int     `json:"rateWindowSec"`
+}
+
+func (f *appForm) quota() (int, int) {
+	limit := 0
+	if f.RateLimit != nil {
+		limit = *f.RateLimit
+	}
+	window := coreoa.DefaultRateWindowSec
+	if f.RateWindow != nil && *f.RateWindow != 0 {
+		window = *f.RateWindow
+	}
+	return limit, window
 }
 
 func (f *appForm) normalize() *response.Error {
@@ -87,11 +104,19 @@ func (f *appForm) normalize() *response.Error {
 		return response.BadRequest("openapi.ip_limit")
 	}
 	f.IPAllow = ips
-	return nil
+	limit, window := f.quota()
+	return coreoa.ValidateRateLimit(limit, window)
 }
 
-// checkRoles：角色必须属于当前租户且不是内置角色（内置角色等于超管，服务账号不能绑定）。
+// checkRoles：角色必须属于当前租户，且操作者能按可分配性、权限和数据范围三道规则分配。
 func (h *handler) checkRoles(c *gin.Context, roles []string) *response.Error {
+	cl := auth.ClaimsFrom(c)
+	if cl == nil {
+		return response.Unauthorized("error.unauthorized")
+	}
+	if cl.Principal == auth.PrincipalApp || cl.UserID == 0 {
+		return response.Forbidden("error.forbidden")
+	}
 	if len(roles) == 0 {
 		return nil
 	}
@@ -100,20 +125,47 @@ func (h *handler) checkRoles(c *gin.Context, roles []string) *response.Error {
 	if !ok {
 		return response.BadRequest("tenant.context_required")
 	}
-	ids := make([]int64, 0, len(roles))
+	ids := make([]idgen.ID, 0, len(roles))
 	for _, r := range roles {
-		n, _ := strconv.ParseInt(r, 10, 64)
-		ids = append(ids, n)
+		id, err := idgen.Parse(r)
+		if err != nil || id == 0 {
+			return response.BadRequest("openapi.role_invalid")
+		}
+		ids = append(ids, id)
 	}
-	var n int64
-	err := h.db.WithContext(ctx).Table("sys_role").Where("id IN ? AND tenant_id = ? AND builtin = ?", ids, int64(tid), false).Count(&n).Error
+	loaded, err := roleassign.Load(ctx, h.db, tid, ids)
 	if err != nil {
 		return response.Internal().Wrap(err)
 	}
-	if int(n) != len(ids) {
+	if len(loaded) != len(ids) {
 		return response.BadRequest("openapi.roles_invalid")
 	}
+	op, err := roleassign.LoadOperator(ctx, h.db, cl.UserID, cl.Super)
+	if err != nil {
+		return response.Internal().Wrap(err)
+	}
+	for _, r := range loaded {
+		if r.Builtin {
+			return response.Forbidden("user.role_not_assignable")
+		}
+		if reason := op.Check(r); reason != "" {
+			return response.Forbidden(roleDenyKey(reason))
+		}
+	}
 	return nil
+}
+
+func roleDenyKey(reason string) string {
+	switch reason {
+	case roleassign.ReasonNotAssignable:
+		return "user.role_not_assignable"
+	case roleassign.ReasonPerms:
+		return "user.role_perms_exceeded"
+	case roleassign.ReasonScope:
+		return "user.role_scope_exceeded"
+	default:
+		return "error.forbidden"
+	}
 }
 
 func newAppCredentials() (key, secretPlain string) {
@@ -167,8 +219,10 @@ func (h *handler) appCreate(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	limit, window := f.quota()
 	a := coreoa.App{Name: f.Name, AppKey: key, SecretEnc: enc, Description: f.Description, RoleIDs: coreoa.EncodeList(f.RoleIDs),
-		IPAllow: coreoa.EncodeList(f.IPAllow), Enabled: f.Enabled == nil || *f.Enabled}
+		IPAllow: coreoa.EncodeList(f.IPAllow), Enabled: f.Enabled == nil || *f.Enabled,
+		RateLimit: limit, RateWindow: window}
 	if err := h.db.WithContext(c.Request.Context()).Create(&a).Error; err != nil {
 		response.Fail(c, err)
 		return
@@ -215,6 +269,12 @@ func (h *handler) appUpdate(c *gin.Context) {
 		return
 	}
 	a.Name, a.Description, a.RoleIDs, a.IPAllow = f.Name, f.Description, coreoa.EncodeList(f.RoleIDs), coreoa.EncodeList(f.IPAllow)
+	if f.RateLimit != nil {
+		a.RateLimit = *f.RateLimit
+	}
+	if f.RateWindow != nil {
+		_, a.RateWindow = f.quota()
+	}
 	if f.Enabled != nil {
 		a.Enabled = *f.Enabled
 	}

@@ -100,21 +100,46 @@ func (l *Limiter) Hit(ctx context.Context, k string) (allowed bool, retry time.D
 	return ok, retry
 }
 
+// LimitResult 是动态配额判定的完整结果，用于响应头与审计。
+type LimitResult struct {
+	Allowed    bool
+	Count      int64
+	Limit      int
+	Remaining  int64
+	ResetAfter time.Duration
+	RetryAfter time.Duration
+	Degraded   bool
+}
+
+// HitRule 按本次请求携带的 limit/window 计数；同一 Limiter 可服务不同凭证策略。
+func (l *Limiter) HitRule(ctx context.Context, k string, limit int, window time.Duration) LimitResult {
+	if l == nil || l.cache == nil || limit <= 0 || k == "" {
+		return LimitResult{Allowed: true}
+	}
+	if window <= 0 {
+		window = time.Minute
+	}
+	n, left, err := l.incr(ctx, l.key(k), window)
+	if err != nil {
+		l.degraded(err)
+		return LimitResult{Allowed: !l.failClosed, Limit: limit, ResetAfter: window, RetryAfter: window, Degraded: true}
+	}
+	remaining := max(int64(limit)-n, 0)
+	res := LimitResult{Allowed: n <= int64(limit), Count: n, Limit: limit, Remaining: remaining, ResetAfter: left}
+	if !res.Allowed {
+		res.RetryAfter = left
+	}
+	return res
+}
+
 // HitDegrade 与 Hit 相同，但额外报告这次判定是否因 cache 故障而降级：
 // fail-closed 规则据此把响应写成 503（服务端不可用）而不是 429（客户端超限）。
 func (l *Limiter) HitDegrade(ctx context.Context, k string) (allowed bool, retry time.Duration, degraded bool) {
 	if l == nil || l.max <= 0 || k == "" {
 		return true, 0, false
 	}
-	n, left, err := l.incr(ctx, l.key(k))
-	if err != nil {
-		l.degraded(err)
-		return !l.failClosed, l.window, true
-	}
-	if n > int64(l.max) {
-		return false, left, false
-	}
-	return true, 0, false
+	res := l.HitRule(ctx, k, l.max, l.window)
+	return res.Allowed, res.RetryAfter, res.Degraded
 }
 
 // Fail 记一次失败（不判断是否超限），配合 Blocked 做“失败达到上限后拒绝”。
@@ -122,7 +147,7 @@ func (l *Limiter) Fail(ctx context.Context, k string) {
 	if l == nil || l.max <= 0 || k == "" {
 		return
 	}
-	if _, _, err := l.incr(ctx, l.key(k)); err != nil {
+	if _, _, err := l.incr(ctx, l.key(k), l.window); err != nil {
 		l.degraded(err)
 	}
 }
@@ -144,9 +169,9 @@ func (l *Limiter) Blocked(ctx context.Context, k string) bool {
 	return n >= int64(l.max)
 }
 
-func (l *Limiter) incr(ctx context.Context, key string) (int64, time.Duration, error) {
+func (l *Limiter) incr(ctx context.Context, key string, window time.Duration) (int64, time.Duration, error) {
 	if ctr, ok := l.cache.(cache.Counter); ok {
-		return ctr.Incr(ctx, key, l.window)
+		return ctr.Incr(ctx, key, window)
 	}
 	var n int64
 	v, err := l.cache.Get(ctx, key)
@@ -158,10 +183,10 @@ func (l *Limiter) incr(ctx context.Context, key string) (int64, time.Duration, e
 	}
 	n++
 	// 退化路径无法保留原窗口起点，每次都续满窗口；只用于不支持原子计数的第三方 cache 实现。
-	if err := l.cache.Set(ctx, key, strconv.FormatInt(n, 10), l.window); err != nil {
+	if err := l.cache.Set(ctx, key, strconv.FormatInt(n, 10), window); err != nil {
 		return 0, 0, err
 	}
-	return n, l.window, nil
+	return n, window, nil
 }
 
 // failClosedRules 是安全敏感的限流规则：cache 故障时宁可 503 拒绝也不放行。

@@ -18,7 +18,7 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 		return nil
 	}
 	for _, id := range ids {
-		if id == me.ID {
+		if me.Principal != auth.PrincipalApp && id == me.ID {
 			return bad("user.delete_self_forbidden")
 		}
 	}
@@ -91,7 +91,7 @@ func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me 
 	if err := s.guardTarget(ctx, me, u); err != nil {
 		return err
 	}
-	if status == statusOff && (u.IsSuper || u.ID == me.ID) {
+	if status == statusOff && (u.IsSuper || (me.Principal != auth.PrincipalApp && u.ID == me.ID)) {
 		return bad("user.super_self_cannot_disable")
 	}
 	if status == statusOff {

@@ -111,6 +111,8 @@ type Claims struct {
 	// PrincipalApp 没有对应的用户，权限直接取 Perms（见 middleware.Perm）。
 	Principal string   `json:"-"`
 	Perms     []string `json:"-"`
+	// AppRoleIDs 仅由开放平台中间件按当前应用记录填充，用于实时解析应用的数据范围。
+	AppRoleIDs []string `json:"-"`
 	jwt.RegisteredClaims
 }
 

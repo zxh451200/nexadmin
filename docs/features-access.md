@@ -7,6 +7,7 @@ summary: 开放平台接入、角色与数据范围、租户额度、演示站�
 模块 `openapi`，菜单“开发与安全 → 开放平台”，权限 `openapi:list`（读）/ `openapi:edit`（写）。
 
 - 个人访问令牌（PAT）：登录用户在个人中心自助创建，明文形如 `nxp_<32 位随机>` 只显示一次，库里只存 sha256；用 `Authorization: Bearer nxp_...` 调用，等同令牌所有者；令牌不能调用令牌管理接口本身；创建按用户限流（`ratelimit.pat_create`）。
+- **凭证级调用配额**：PAT 创建时、开放应用新增或编辑时可设置 `rateLimit` 与 `rateWindowSec`。`rateLimit=0` 表示不限流，正整数表示固定窗口内最大请求数（上限 1000000）；窗口为 1..86400 秒，默认 60 秒，PAT 配额创建后不可修改，应用更新时省略配额字段则保持原值。签名、有效期、IP 白名单和禁用路径检查通过后才计数；具体业务接口的权限检查仍在后续路由执行，因此无权限请求也可能消耗凭证配额。超限返回 HTTP 429 与 `Retry-After`，通过配额检查的成功或拒绝响应均带 `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`。计数按租户与凭证隔离，Redis/Valkey 多实例共享，memory 仅进程内有效；缓存故障时放行并告警。
 - **应用签名调用**：开放应用（服务账号）绑定角色集合，可配 IP 白名单；请求头带 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`。
 
   ```text
@@ -18,9 +19,10 @@ summary: 开放平台接入、角色与数据范围、租户额度、演示站�
   - `nonce` 一次性，重放回 `nonce already used`（依赖缓存）；被签名的 body 上限 10MB。
   - query 的键排序、同键的值也排序，键和值都 `url.QueryEscape` 后用 `&` 连接。
 
-  应用密钥可重置，库里存 `core/secret` 加密后的密文；校验失败按 IP 限流（`ratelimit.openapi_sign`）。
+  应用密钥可重置，库里存 `core/secret` 加密后的密文；校验失败按 IP 限流（`ratelimit.openapi_sign`）。应用只能绑定当前租户内操作者可分配的非内置角色，权限与数据范围不得超出操作者；停用或软删除的角色不再授权，前端角色选择器同样只返回可分配角色。应用调用时实时合并所选角色的数据范围；应用没有用户或所属部门，因此 `self` / `dept` / `deptAndChild` 不会展开出部门，需要部门访问时使用 `custom` 范围，`all` 仍表示全部。应用不能访问登录、个人中心、OAuth、WebSocket 入场票、开放应用管理和调用审计等用户身份接口；应用给用户分配角色时也按自身绑定角色的权限与数据范围校验，不因 ID 碰撞获得用户身份。
 - 事件目录：`GET /openapi/events`。当前共 11 个事件：`user.created` `user.updated` `user.deleted`、`dept.created` `dept.updated` `dept.deleted`、`role.created` `role.updated` `role.deleted`、`notice.published`、`job.finished`（`core/job` 任务落终态时发布，导出完成或失败等）。事件载荷只放 id、必要字段和租户 id，不带密码哈希、密钥。进程内事件总线队列容量 1024，队列满则丢弃并告警，不阻塞业务请求。
 - Webhook：配置 URL（做 SSRF 防护）和订阅事件，投递带请求头 `X-Nex-Event`、`X-Nex-Delivery`、`X-Nex-Timestamp`、`X-Nex-Signature`（`hex(HMAC-SHA256(secret, timestamp + "." + body))`），单次超时 5 秒，最多尝试 5 次（失败后依次等待 1 分钟、5 分钟、30 分钟、2 小时），投递记录保留 30 天，可手动重试和测试；Webhook 密钥形如 `whsec_...` 可重置，库里加密存放。
+- 调用审计：`GET /openapi/audits`（权限 `openapi:list`，仅真实登录会话可读，PAT / 应用不可读）记录已识别凭证的认证结果、路由模板、HTTP 状态、耗时、IP、User-Agent 与 Request ID；未知凭证不落库，避免未认证请求刷表。记录保留 90 天、每小时清理，不保存令牌、哈希、密钥、签名、查询参数或请求/响应正文。审计写入失败只告警，不改写已完成的业务响应。
 - 接口文档：`GET /openapi.json`（OpenAPI 3.0.3，原始 JSON，不套统一响应体）和 `GET /openapi/routes`（运行时路由清单），权限 `openapi:list`；停用的模块不出现在文档里。
 - MCP 入口：`POST /mcp`（权限 `mcp:list`），支持 JSON-RPC `initialize`、`ping`、`tools/list`、`tools/call` 和通知；协议版本 `2025-03-26`。GET 工具直接调用，显式注册的写工具走服务端确认流程（当前消息模块注册 `message_mark_read`），不会开放任意写路由或任意 URL。实际调用重新经过原路由登录、权限与租户检查，应用签名不能作为用户 Bearer 凭据复用。`GET /mcp/tools` 保留目录。
 - MCP 会话：初始化返回 `Mcp-Session-Id`，后续携带该头；`DELETE /mcp` 删除会话。元数据与每会话最多 4 个并发请求槽位存在配置缓存，多实例须共享 Redis / Valkey；固定有效期取 15 分钟与初始化凭据剩余寿命的较短者，不随活动或刷新延长，且绑定具体身份与凭据。每实例最多跟踪 1024 会话、64 并发请求；请求最长 30 秒，缓存异常拒绝并取消相关请求上下文。会话 ID 不能替代认证。

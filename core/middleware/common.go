@@ -75,7 +75,7 @@ const (
 	corsAllowMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 	corsAllowHeaders = "Authorization, Content-Type, Accept-Language, X-Tenant-ID, X-Setup-Token, " +
 		"Upload-Offset, Upload-Length, Upload-Metadata, Tus-Resumable, Upload-Defer-Length, Upload-Concat"
-	corsExposeHeaders = "Location, Upload-Offset, Upload-Length, Tus-Resumable, Retry-After"
+	corsExposeHeaders = "Location, Upload-Offset, Upload-Length, Tus-Resumable, Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset"
 )
 
 // CORS 默认同源：生产环境只对 allowed 白名单里的 Origin（精确匹配，忽略通配符 "*"）输出 CORS 头，

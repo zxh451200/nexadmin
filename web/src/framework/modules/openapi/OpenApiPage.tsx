@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { AppsTab } from './AppsTab'
+import { AuditTab } from './AuditTab'
 import { DeliveriesTab } from './DeliveriesTab'
 import { DocsTab } from './DocsTab'
 import { WebhooksTab } from './WebhooksTab'
@@ -10,6 +11,7 @@ const TABS = [
   { key: 'apps', Comp: AppsTab },
   { key: 'webhooks', Comp: WebhooksTab },
   { key: 'deliveries', Comp: DeliveriesTab },
+  { key: 'audits', Comp: AuditTab },
   { key: 'docs', Comp: DocsTab },
 ] as const
 

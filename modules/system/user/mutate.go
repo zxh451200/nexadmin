@@ -248,7 +248,7 @@ func (s *service) update(ctx context.Context, id idgen.ID, in userInput, me acto
 	if err := s.guardTarget(ctx, me, u); err != nil {
 		return nil, err
 	}
-	if in.Status != statusOn && (u.IsSuper || u.ID == me.ID) {
+	if in.Status != statusOn && (u.IsSuper || (me.Principal != auth.PrincipalApp && u.ID == me.ID)) {
 		return nil, bad("user.super_self_cannot_disable")
 	}
 	if in.Username != u.Username {

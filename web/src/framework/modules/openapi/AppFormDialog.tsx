@@ -21,6 +21,8 @@ function buildSchema(t: (k: string, o?: Record<string, unknown>) => string) {
     description: z.string().trim().max(500, t('openapi.apps.form.descTooLong')),
     roleIds: z.array(z.string()),
     enabled: z.boolean(),
+    rateLimit: z.number().int().min(0, t('openapi.apps.form.rateLimitInvalid')).max(1_000_000, t('openapi.apps.form.rateLimitInvalid')),
+    rateWindowSec: z.number().int().min(1, t('openapi.apps.form.rateWindowInvalid')).max(86400, t('openapi.apps.form.rateWindowInvalid')),
     ipAllow: z.string().superRefine((v, ctx) => {
       const lines = splitLines(v)
       const bad = lines.find((l) => !isValidIpOrCidr(l))
@@ -32,11 +34,11 @@ function buildSchema(t: (k: string, o?: Record<string, unknown>) => string) {
 
 type FormValues = z.infer<ReturnType<typeof buildSchema>>
 
-const emptyValues: FormValues = { name: '', description: '', roleIds: [], enabled: true, ipAllow: '' }
+const emptyValues: FormValues = { name: '', description: '', roleIds: [], enabled: true, rateLimit: 0, rateWindowSec: 60, ipAllow: '' }
 
 const toValues = (a?: OpenApp | null): FormValues =>
   a
-    ? { name: a.name, description: a.description ?? '', roleIds: a.roleIds ?? [], enabled: a.enabled, ipAllow: (a.ipAllow ?? []).join('\n') }
+    ? { name: a.name, description: a.description ?? '', roleIds: a.roleIds ?? [], enabled: a.enabled, rateLimit: a.rateLimit ?? 0, rateWindowSec: a.rateWindowSec ?? 60, ipAllow: (a.ipAllow ?? []).join('\n') }
     : emptyValues
 
 interface Props {
@@ -129,6 +131,7 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
                     <FormControl>
                       <RemoteSelect
                         url="/roles/options"
+                        params={{ scene: 'assign' }}
                         multiple
                         value={field.value}
                         onChange={field.onChange}
@@ -136,6 +139,38 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
                       />
                     </FormControl>
                     <FormDescription>{t('openapi.apps.form.rolesHint')}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormGridFull>
+            <FormGridFull>
+              <FormField
+                control={form.control}
+                name="rateLimit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('openapi.apps.fields.rateLimit')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" min={0} max={1_000_000} step={1} onChange={(e) => field.onChange(Number(e.target.value))} />
+                    </FormControl>
+                    <FormDescription>{t('openapi.apps.form.rateLimitHint')}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormGridFull>
+            <FormGridFull>
+              <FormField
+                control={form.control}
+                name="rateWindowSec"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('openapi.apps.fields.rateWindowSec')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" min={1} max={86400} step={1} onChange={(e) => field.onChange(Number(e.target.value))} />
+                    </FormControl>
+                    <FormDescription>{t('openapi.apps.form.rateWindowHint')}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

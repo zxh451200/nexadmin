@@ -26,7 +26,7 @@ var ErrUnsafeRoute = errors.New("database: unsafe isolated route (raw SQL, unkno
 // 框架控制面统一保留平台库，包括带 tenant_id 的认证、组织和运营数据。
 const platformTables = `sys_user sys_user_role sys_user_post sys_role sys_role_menu sys_role_dept
 sys_dept sys_post sys_menu sys_dict_type sys_dict_data sys_config sys_setting
-sys_tenant sys_tenant_pkg sys_user_identity sys_pat sys_openapi_app sys_sso_app sys_sso_refresh
+sys_tenant sys_tenant_pkg sys_user_identity sys_pat sys_openapi_app sys_openapi_audit sys_sso_app sys_sso_refresh
 sys_file sys_file_group sys_notice sys_notice_target sys_notice_read sys_message sys_send_log
 sys_oper_log sys_login_log sys_login_lock sys_client_error sys_recycle sys_job sys_dashboard_layout
 sys_backup sys_backup_setting sys_webhook sys_webhook_delivery sys_migration sys_plugin_migration

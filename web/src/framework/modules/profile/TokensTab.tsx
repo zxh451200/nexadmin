@@ -53,6 +53,8 @@ function CreateDialog({
   const [name, setName] = useState('')
   const [scope, setScope] = useState<TokenScope>('read')
   const [expiry, setExpiry] = useState<Expiry>('30')
+  const [rateLimit, setRateLimit] = useState('0')
+  const [rateWindowSec, setRateWindowSec] = useState('60')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -60,6 +62,8 @@ function CreateDialog({
       setName('')
       setScope('read')
       setExpiry('30')
+      setRateLimit('0')
+      setRateWindowSec('60')
       setError('')
     }
   }, [open])
@@ -69,11 +73,17 @@ function CreateDialog({
     if (!n) return setError(t('common.required'))
     // 与后端同一口径：modules/openapi/tokens.go 用 utf8.RuneCountInString 数码点，这里也用码点数（n.length 会把 emoji 算 2）
     if ([...n].length > 100) return setError(t('profile.tokens.nameTooLong'))
+    const limit = Number(rateLimit)
+    const windowSec = Number(rateWindowSec)
+    if (!Number.isInteger(limit) || limit < 0 || limit > 1_000_000) return setError(t('profile.tokens.rateLimitInvalid'))
+    if (!Number.isInteger(windowSec) || windowSec < 1 || windowSec > 86400) return setError(t('profile.tokens.rateWindowInvalid'))
     try {
       const res = await create.mutateAsync({
         name: n,
         scope,
         expiresAt: expiry === 'never' ? undefined : new Date(Date.now() + Number(expiry) * DAY).toISOString(),
+        rateLimit: limit,
+        rateWindowSec: windowSec,
       })
       onOpenChange(false)
       if (typeof res.token === 'string') onCreated(res)
@@ -125,7 +135,7 @@ function CreateDialog({
             }}
           />
           {error ? (
-            <p id="token-name-err" className="text-sm text-destructive">
+            <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
           ) : null}
@@ -163,6 +173,41 @@ function CreateDialog({
             </p>
           ) : null}
         </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="token-rate-limit">{t('profile.tokens.fields.rateLimit')}</Label>
+            <Input
+              id="token-rate-limit"
+              type="number"
+              min={0}
+              max={1_000_000}
+              step={1}
+              value={rateLimit}
+              aria-invalid={!!error}
+              onChange={(e) => { setRateLimit(e.target.value); setError('') }}
+            />
+            <p className="text-xs text-muted-foreground">{t('profile.tokens.rateLimitHint')}</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="token-rate-window">{t('profile.tokens.fields.rateWindowSec')}</Label>
+            <Input
+              id="token-rate-window"
+              type="number"
+              min={1}
+              max={86400}
+              step={1}
+              value={rateWindowSec}
+              aria-invalid={!!error}
+              onChange={(e) => { setRateWindowSec(e.target.value); setError('') }}
+            />
+            <p className="text-xs text-muted-foreground">{t('profile.tokens.rateWindowHint')}</p>
+          </div>
+        </div>
+        {error ? (
+          <p id="token-create-error" role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
       </form>
     </ResponsiveDialog>
   )
@@ -218,6 +263,11 @@ export function TokensTab() {
       key: 'prefix',
       title: t('profile.tokens.fields.prefix'),
       render: (tk) => <code className="font-mono text-xs">{tk.prefix}…</code>,
+    },
+    {
+      key: 'rateLimit',
+      title: t('profile.tokens.fields.rateLimit'),
+      render: (tk) => tk.rateLimit > 0 ? <span className="num">{t('profile.tokens.rateQuota', { limit: tk.rateLimit, window: tk.rateWindowSec })}</span> : <span className="text-muted-foreground">{t('profile.tokens.rateUnlimited')}</span>,
     },
     {
       key: 'lastUsedAt',
@@ -278,6 +328,7 @@ export function TokensTab() {
                 { header: t('profile.tokens.fields.name'), value: (tk) => tk.name },
                 { header: t('profile.tokens.fields.scope'), value: (tk) => t(`profile.tokens.scope.${tk.scope}`) },
                 { header: t('profile.tokens.fields.prefix'), value: (tk) => tk.prefix },
+                { header: t('profile.tokens.fields.rateLimit'), value: (tk) => tk.rateLimit > 0 ? t('profile.tokens.rateQuota', { limit: tk.rateLimit, window: tk.rateWindowSec }) : t('profile.tokens.rateUnlimited') },
                 { header: t('profile.tokens.fields.lastUsedAt'), value: (tk) => (tk.lastUsedAt ? fmtDateTime(tk.lastUsedAt, i18n.language) : t('profile.tokens.neverUsed')) },
                 { header: t('profile.tokens.fields.expiresAt'), value: (tk) => (tk.expiresAt ? fmtDateTime(tk.expiresAt, i18n.language) : t('profile.tokens.expiry.never')) },
                 { header: t('common.status'), value: (tk) => t(`profile.tokens.state.${tokenState(tk)}`) },

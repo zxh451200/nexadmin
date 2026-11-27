@@ -124,6 +124,9 @@ export interface AccessToken {
   scope: TokenScope
   /** 如 nxp_ab12，仅用于识别 */
   prefix: string
+  /** 窗口内最大请求数；0 = 不限流 */
+  rateLimit: number
+  rateWindowSec: number
   lastUsedAt?: string | null
   /** 空 = 永不过期 */
   expiresAt?: string | null
@@ -137,6 +140,10 @@ export interface AccessTokenInput {
   name: string
   scope: TokenScope
   expiresAt?: string
+  /** 窗口内最大请求数；0 = 不限流 */
+  rateLimit?: number
+  /** 限流窗口（秒），默认 60 */
+  rateWindowSec?: number
 }
 
 export function useAccessTokens() {

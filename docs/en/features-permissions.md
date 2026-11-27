@@ -48,8 +48,8 @@ Generated from source, grouped by module; endpoints sharing a permission code ar
 | online | `online:forceLogout` | `DELETE /online-users/:id` |
 | online | `online:list` | `GET /online-users` |
 | openapi | `openapi:edit` | `DELETE /openapi/apps/:id`<br>`DELETE /openapi/webhooks/:id`<br>`POST /openapi/apps`<br>`POST /openapi/apps/:id/reset-secret`<br>`POST /openapi/deliveries/:id/retry`<br>`POST /openapi/webhooks`<br>`POST /openapi/webhooks/:id/reset-secret`<br>`POST /openapi/webhooks/:id/test`<br>`PUT /openapi/apps/:id`<br>`PUT /openapi/apps/:id/enabled`<br>`PUT /openapi/webhooks/:id`<br>`PUT /openapi/webhooks/:id/enabled` |
-| openapi | Login only (tokens cannot call these three) | `DELETE /profile/tokens/:id`<br>`GET /profile/tokens`<br>`POST /profile/tokens` |
-| openapi | `openapi:list` | `GET /openapi.json`<br>`GET /openapi/apps`<br>`GET /openapi/deliveries`<br>`GET /openapi/events`<br>`GET /openapi/routes`<br>`GET /openapi/webhooks` |
+| openapi | Login only (real login sessions only; PAT/app principals cannot call these three) | `DELETE /profile/tokens/:id`<br>`GET /profile/tokens`<br>`POST /profile/tokens` |
+| openapi | `openapi:list` | `GET /openapi.json`<br>`GET /openapi/apps`<br>`GET /openapi/audits`<br>`GET /openapi/deliveries`<br>`GET /openapi/events`<br>`GET /openapi/routes`<br>`GET /openapi/webhooks` |
 | plugin | `plugin:list` | `GET /plugins` |
 | plugin | `plugin:license` (dynamically registered per installed plugin) | `POST /plugins/<id>/license` |
 | plugin | `plugin:edit` (super admin only; the route stays reserved after disabling, so a plugin disabled at startup can still be re-enabled) | `POST /plugins/<id>/enabled` |

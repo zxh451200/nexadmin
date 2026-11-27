@@ -174,6 +174,66 @@ func (op *Operator) Check(r Role) string {
 	return ""
 }
 
+// LoadAppOperator 实时读取开放应用绑定角色的权限与数据范围；应用没有用户或部门身份。
+func LoadAppOperator(ctx context.Context, db *gorm.DB, tenantID idgen.ID, roleIDs []string) (*Operator, error) {
+	ids := make([]idgen.ID, 0, len(roleIDs))
+	for _, raw := range roleIDs {
+		id, err := idgen.Parse(raw)
+		if err == nil && id != 0 {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return &Operator{}, nil
+	}
+	var active []struct{ ID idgen.ID }
+	if err := db.WithContext(ctx).Table("sys_role").Select("id").
+		Where("tenant_id = ? AND status = ? AND builtin = ? AND deleted_at IS NULL AND id IN ?", int64(tenantID), "1", false, ids).
+		Scan(&active).Error; err != nil {
+		return nil, err
+	}
+	if len(active) == 0 {
+		return &Operator{}, nil
+	}
+	activeIDs := make([]idgen.ID, len(active))
+	for i := range active {
+		activeIDs[i] = active[i].ID
+	}
+	var perms []string
+	if err := db.WithContext(ctx).Table("sys_role_menu AS rm").Select("DISTINCT m.perm").
+		Joins("JOIN sys_menu m ON m.id = rm.menu_id AND m.status = ?", "1").
+		Where("rm.role_id IN ? AND m.perm <> ''", activeIDs).Scan(&perms).Error; err != nil {
+		return nil, err
+	}
+	sc, err := datascope.ResolveApp(ctx, db, tenantID, roleIDs)
+	if err != nil {
+		return nil, err
+	}
+	op := &Operator{Perms: perms, Scope: OperatorScope{All: sc.All, Preset: sc.Preset, Custom: sc.Custom, Depts: sc.Depts}}
+	if !sc.All && sc.Custom {
+		op.Tree, err = loadDeptTree(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return op, nil
+}
+
+func loadDeptTree(ctx context.Context, db *gorm.DB) (map[int64]string, error) {
+	var rows []struct {
+		ID   int64
+		Path string
+	}
+	if err := db.WithContext(ctx).Table("sys_dept").Select("id, path").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	tree := make(map[int64]string, len(rows))
+	for _, r := range rows {
+		tree[r.ID] = r.Path
+	}
+	return tree, nil
+}
+
 // LoadOperator 实时读取操作者的权限与数据范围（不信任令牌里的快照）。
 func LoadOperator(ctx context.Context, db *gorm.DB, userID idgen.ID, super bool) (*Operator, error) {
 	op := &Operator{Super: super}
@@ -191,16 +251,9 @@ func LoadOperator(ctx context.Context, db *gorm.DB, userID idgen.ID, super bool)
 	}
 	op.Scope = OperatorScope{All: sc.All, Preset: sc.Preset, Custom: sc.Custom, Depts: sc.Depts}
 	if !sc.All && sc.Custom {
-		var rows []struct {
-			ID   int64
-			Path string
-		}
-		if err := db.WithContext(ctx).Table("sys_dept").Select("id, path").Scan(&rows).Error; err != nil {
+		op.Tree, err = loadDeptTree(ctx, db)
+		if err != nil {
 			return nil, err
-		}
-		op.Tree = make(map[int64]string, len(rows))
-		for _, r := range rows {
-			op.Tree[r.ID] = r.Path
 		}
 	}
 	return op, nil
@@ -211,7 +264,7 @@ func ownPerms(ctx context.Context, db *gorm.DB, userID idgen.ID) ([]string, erro
 	db = db.WithContext(ctx)
 	var builtin int64
 	if err := db.Table("sys_user_role AS ur").
-		Joins("JOIN sys_role r ON r.id = ur.role_id AND r.status = ? AND r.builtin = ?", "1", true).
+		Joins("JOIN sys_role r ON r.id = ur.role_id AND r.status = ? AND r.builtin = ? AND r.deleted_at IS NULL", "1", true).
 		Where("ur.user_id = ?", int64(userID)).Count(&builtin).Error; err != nil {
 		return nil, err
 	}
@@ -220,7 +273,7 @@ func ownPerms(ctx context.Context, db *gorm.DB, userID idgen.ID) ([]string, erro
 	}
 	var perms []string
 	err := db.Table("sys_user_role AS ur").Select("DISTINCT m.perm").
-		Joins("JOIN sys_role r ON r.id = ur.role_id AND r.status = ?", "1").
+		Joins("JOIN sys_role r ON r.id = ur.role_id AND r.status = ? AND r.deleted_at IS NULL", "1").
 		Joins("JOIN sys_role_menu rm ON rm.role_id = r.id").
 		Joins("JOIN sys_menu m ON m.id = rm.menu_id AND m.status = ?", "1").
 		Where("ur.user_id = ? AND m.perm <> ''", int64(userID)).Scan(&perms).Error
@@ -230,7 +283,7 @@ func ownPerms(ctx context.Context, db *gorm.DB, userID idgen.ID) ([]string, erro
 // Load 读取角色及其权限码（含停用菜单上的，宁严勿松）、自定义范围部门。ids 为空表示当前租户全部启用角色。
 func Load(ctx context.Context, db *gorm.DB, tenantID idgen.ID, ids []idgen.ID) ([]Role, error) {
 	db = db.WithContext(ctx)
-	q := db.Table("sys_role").Select("id, builtin, assignable, data_scope").Where("tenant_id = ?", int64(tenantID))
+	q := db.Table("sys_role").Select("id, builtin, assignable, data_scope").Where("tenant_id = ? AND deleted_at IS NULL", int64(tenantID))
 	if len(ids) > 0 {
 		q = q.Where("id IN ?", ids)
 	} else {

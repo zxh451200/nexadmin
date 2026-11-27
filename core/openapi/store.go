@@ -90,7 +90,7 @@ func (s GormStore) AppPerms(ctx context.Context, app *App) ([]string, error) {
 	err := s.DB.WithContext(tenant.Skip(ctx)).Table("sys_role AS r").Select("DISTINCT m.perm").
 		Joins("JOIN sys_role_menu rm ON rm.role_id = r.id").
 		Joins("JOIN sys_menu m ON m.id = rm.menu_id AND m.status = ?", statusOn).
-		Where("r.id IN ? AND r.tenant_id = ? AND r.status = ? AND r.builtin = ? AND m.perm <> ''", ids, int64(app.TenantID), statusOn, false).
+		Where("r.id IN ? AND r.tenant_id = ? AND r.status = ? AND r.builtin = ? AND r.deleted_at IS NULL AND m.perm <> ''", ids, int64(app.TenantID), statusOn, false).
 		Scan(&out).Error
 	if out == nil {
 		out = []string{}

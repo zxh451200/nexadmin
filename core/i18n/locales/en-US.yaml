@@ -5,6 +5,7 @@ error:
   unavailable: Service temporarily unavailable
   internal: Internal server error
   bad_request: Invalid request parameters
+  request_failed: Request processing failed
   batch_too_many: "At most %d IDs can be named in one request; split the batch."
   unauthorized: Not signed in or session expired
   forbidden: You do not have permission to do this
@@ -717,6 +718,12 @@ openapi:
   signature_invalid: "Invalid signature."
   ip_not_allowed: "IP address not allowed."
   nonce_reused: "Nonce already used."
+  rate_limited: "This credential's call quota has been exceeded. Try again later."
+  rate_limit_invalid: "The call quota must be an integer from 0 to 1000000."
+  rate_window_invalid: "The rate-limit window must be between 1 and 86400 seconds."
+  audit_type_invalid: "Credential type must be pat or app."
+  audit_status_invalid: "HTTP status must be an integer from 100 to 599."
+  audit_time_invalid: "Invalid time format. Use RFC3339 or YYYY-MM-DD."
 sso:
   name_required: "Name is required and must be at most 100 characters."
   redirect_uri_invalid: "Invalid redirect URI: %s."
