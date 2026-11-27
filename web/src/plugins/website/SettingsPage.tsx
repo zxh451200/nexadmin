@@ -94,7 +94,9 @@ type LocalizedKey = 'siteDesc' | 'homeTitle' | 'homeSubtitle' | 'homeCtaLabel' |
 function currencyRatesKeys(raw: string): string[] {
   try {
     const obj = JSON.parse(raw) as Record<string, number>
-    return Object.keys(obj).sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)))
+    const keys = Object.keys(obj)
+    if (keys.length > 0 && !keys.includes('USD')) keys.push('USD')
+    return keys.sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)))
   } catch {
     return []
   }
@@ -123,9 +125,14 @@ function serializeRateRows(rows: RateRow[]): string {
   const out: Record<string, number> = {}
   for (const r of rows) {
     const code = r.code.trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(code)) continue
+    if (code === 'USD') {
+      out.USD = 1
+      continue
+    }
     const rate = Number(r.rate)
-    if (!/^[A-Z]{3}$/.test(code) || !Number.isFinite(rate) || rate <= 0) continue
-    out[code] = code === 'USD' ? 1 : rate
+    if (!Number.isFinite(rate) || rate <= 0) continue
+    out[code] = rate
   }
   return Object.keys(out).length ? JSON.stringify(out) : ''
 }
@@ -195,13 +202,13 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
         {rows.map((r, i) => {
           const isBase = r.code.trim().toUpperCase() === 'USD'
           return (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex flex-wrap items-center gap-2">
               <Input
                 value={r.code}
                 maxLength={3}
                 disabled={disabled || isBase}
                 aria-label={t('plugin_website.rates.codeLabel')}
-                className={cn('w-24 font-mono uppercase', codeInvalid(r) && 'border-destructive')}
+                className={cn('w-24 flex-1 font-mono uppercase sm:flex-none', codeInvalid(r) && 'border-destructive')}
                 onChange={(e) => edit(i, { code: e.target.value.toUpperCase() })}
                 placeholder={t('plugin_website.rates.codePlaceholder')}
               />
@@ -210,7 +217,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
                 disabled={disabled || isBase}
                 inputMode="decimal"
                 aria-label={t('plugin_website.rates.rateLabel')}
-                className={cn('w-32', rateInvalid(r) && 'border-destructive')}
+                className={cn('w-32 flex-1 sm:flex-none', rateInvalid(r) && 'border-destructive')}
                 onChange={(e) => edit(i, { rate: e.target.value })}
                 placeholder={t('plugin_website.rates.ratePlaceholder')}
               />
@@ -221,7 +228,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-8 shrink-0"
+                  className="size-11 shrink-0 md:size-8"
                   disabled={disabled}
                   aria-label={t('common.delete')}
                   onClick={() => commit(rows.filter((_, j) => j !== i))}
@@ -238,7 +245,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
           type="button"
           variant="outline"
           size="sm"
-          className="w-fit"
+          className="h-11 w-fit md:h-9"
           disabled={disabled || fetchRates.isPending || rows.length === 0}
           onClick={handleFetch}
         >
@@ -249,7 +256,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
           type="button"
           variant="outline"
           size="sm"
-          className="w-fit"
+          className="h-11 w-fit md:h-9"
           disabled={disabled || rows.length >= RATES_MAX}
           onClick={() => commit([...rows, { code: '', rate: '' }])}
         >
@@ -266,8 +273,9 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
  * 分区导航：按「谁在什么时候改它」切组，形态与平台「系统设置」一致
  * （左栏分区 + ?tab= 深链，只渲染当前分区）。整份表单仍是一次保存。
  */
-const TABS = ['brand', 'home', 'seo', 'footer', 'features'] as const
+const TABS = ['brand', 'home', 'seo', 'contact', 'footer', 'regional', 'features'] as const
 type TabKey = (typeof TABS)[number]
+const LOCALIZED_TABS: TabKey[] = ['brand', 'home', 'seo', 'footer']
 
 /** 办公地点的可排序行：手柄拖拽 + 键盘（空格拿起、方向键移动）；条目之间只用分隔线，
     不再给每条套卡片框——「外层框 + 分组框 + 条目框」三层嵌套太重。 */
@@ -310,7 +318,7 @@ function SortableOfficeRow({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-9 w-9 shrink-0"
+        className="h-11 w-11 shrink-0 md:h-9 md:w-9"
         disabled={disabled}
         aria-label={t('common.delete')}
         onClick={onRemove}
@@ -335,11 +343,13 @@ function SettingsFormBody({
   const { t } = useTranslation()
   const save = useSaveSettings()
   const lf = useLocaleForm()
-  const { disabled: sharedDisabled } = useSharedField()
+  const { disabled: localeSharedDisabled } = useSharedField()
   // 分区深链：?tab= 与平台「系统设置」同一手法，切分区不重载页面。
   const [params, setParams] = useSearchParams()
   const wanted = params.get('tab')
   const tab: TabKey = TABS.find((k) => k === wanted) ?? 'brand'
+  const showLocaleTools = LOCALIZED_TABS.includes(tab)
+  const sharedDisabled = showLocaleTools && localeSharedDisabled
   const go = (k: TabKey) => setParams({ tab: k }, { replace: true })
   // 语言清单：官网默认语言下拉的候选（与翻译表单同一来源，不再多拉一份）。
   const { data: languages = [] } = useLanguages()
@@ -363,6 +373,17 @@ function SettingsFormBody({
   const friendMaxed = shared.friendLinks.length >= limits.friendMax
 
   const set = (key: SharedTextKey, v: string) => onSharedChange({ ...shared, [key]: v })
+
+  // 汇率增删后旧默认值可能失效；就地修正，避免其他分区保存被隐藏字段拦住。
+  useEffect(() => {
+    const codes = currencyRatesKeys(shared.currencyRates)
+    const current = shared.defaultCurrency.trim().toUpperCase()
+    if (codes.length === 0) {
+      if (current) onSharedChange({ ...shared, defaultCurrency: '' })
+    } else if (current && !codes.includes(current)) {
+      onSharedChange({ ...shared, defaultCurrency: codes[0] })
+    }
+  }, [shared, onSharedChange])
 
   // 当前选中主题（'' = default）：决定是否显示「导入演示内容」按钮。
   const selectedTheme = themesData?.items.find((x) => x.id === (shared.theme || 'default'))
@@ -502,6 +523,7 @@ function SettingsFormBody({
       <Input
         value={shared[key]}
         disabled={sharedDisabled}
+        aria-label={t(`plugin_website.fields.${key}`)}
         aria-invalid={!!error}
         onChange={(e) => set(key, e.target.value)}
         placeholder={t(`plugin_website.placeholder.${key}`, { defaultValue: '' })}
@@ -520,8 +542,7 @@ function SettingsFormBody({
   )
 
   return (
-    <div className="grid gap-6 md:grid-cols-[168px_minmax(0,1fr)]">
-      {/* 窄屏收成下拉、宽屏用左栏分区导航：字段再多也只是导航变长，内容不再一列铺三四屏 */}
+    <div className="grid gap-6 md:grid-cols-[176px_minmax(0,1fr)]">
       <div className="md:hidden">
         <Select value={tab} onValueChange={(v) => go(v as TabKey)}>
           <SelectTrigger aria-label={t('plugin_website.settings.sectionNav')}>
@@ -542,8 +563,7 @@ function SettingsFormBody({
             aria-current={tab === k ? 'page' : undefined}
             onClick={() => go(k)}
             className={cn(
-              'rounded-md px-2 py-1.5 text-start text-sm transition-colors',
-              // 选中态与平台系统设置左导航同一套语言：淡底 + 品牌色字，不填满
+              'rounded-md px-2 py-2 text-start text-sm transition-colors',
               tab === k
                 ? 'bg-primary/10 font-medium text-primary'
                 : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -553,13 +573,14 @@ function SettingsFormBody({
           </button>
         ))}
       </nav>
-      <div className="flex min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <LocaleSwitcher />
-          <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
-        </div>
-        {/* 分区标题就是左栏选中项，卡片里不再重复一遍眉题 */}
-        <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+      <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4">
+        {showLocaleTools ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <LocaleSwitcher />
+            <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
+          </div>
+        ) : null}
+        <section className="flex flex-col gap-4 rounded-lg border bg-card p-4 sm:p-5">
           {tab === 'brand' ? (
             <>
               <SharedFieldShell labelKey="plugin_website.fields.theme" hint={t('plugin_website.hint.theme')}>
@@ -572,7 +593,7 @@ function SettingsFormBody({
                   disabled={sharedDisabled}
                   onValueChange={(v) => set('theme', v === 'default' ? '' : v)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t('plugin_website.fields.theme')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -589,7 +610,7 @@ function SettingsFormBody({
               </SharedFieldShell>
               {selectedTheme?.hasDemo ? (
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" className="w-fit" disabled={seed.isPending} onClick={() => void importDemo()}>
+                  <Button type="button" variant="outline" size="sm" className="h-11 w-fit md:h-9" disabled={seed.isPending} onClick={() => void importDemo()}>
                     {t('plugin_website.settings.demoImport')}
                   </Button>
                   <FieldHint text={t('plugin_website.hint.demoImport')} />
@@ -629,9 +650,11 @@ function SettingsFormBody({
             <>
               {localizedField('homeTitle', t('plugin_website.hint.homeTitle'))}
               {localizedField('homeSubtitle')}
-              {localizedField('homeCtaLabel')}
-              {sharedInput('homeCtaHref')}
-              {/* 首页主视觉覆盖：四套主题都消费 heroImageUrl；默认主题深浅双图可分别指定。 */}
+              <div className="grid gap-4 md:grid-cols-2">
+                {localizedField('homeCtaLabel')}
+                {sharedInput('homeCtaHref')}
+              </div>
+              {/* 所有主题共用默认主视觉；深色模式双图仅默认主题支持，品牌主题下不展示无效字段。 */}
               <SharedFieldShell labelKey="plugin_website.fields.heroImageUrl" hint={t('plugin_website.hint.heroImageUrl', mediaHint)}>
                 <ImageUrlField
                   value={shared.heroImageUrl}
@@ -644,18 +667,20 @@ function SettingsFormBody({
                   aria-label={t('plugin_website.fields.heroImageUrl')}
                 />
               </SharedFieldShell>
-              <SharedFieldShell labelKey="plugin_website.fields.heroImageDarkUrl" hint={t('plugin_website.hint.heroImageDarkUrl', mediaHint)}>
-                <ImageUrlField
-                  value={shared.heroImageDarkUrl}
-                  onChange={(v) => set('heroImageDarkUrl', v)}
-                  title={t('plugin_website.fields.heroImageDarkUrl')}
-                  crop="free"
-                  disabled={sharedDisabled}
-                  placeholder={t('plugin_website.placeholder.heroImageDarkUrl', { defaultValue: '' })}
-                  previewBelow
-                  aria-label={t('plugin_website.fields.heroImageDarkUrl')}
-                />
-              </SharedFieldShell>
+              {!shared.theme ? (
+                <SharedFieldShell labelKey="plugin_website.fields.heroImageDarkUrl" hint={t('plugin_website.hint.heroImageDarkUrl', mediaHint)}>
+                  <ImageUrlField
+                    value={shared.heroImageDarkUrl}
+                    onChange={(v) => set('heroImageDarkUrl', v)}
+                    title={t('plugin_website.fields.heroImageDarkUrl')}
+                    crop="free"
+                    disabled={sharedDisabled}
+                    placeholder={t('plugin_website.placeholder.heroImageDarkUrl', { defaultValue: '' })}
+                    previewBelow
+                    aria-label={t('plugin_website.fields.heroImageDarkUrl')}
+                  />
+                </SharedFieldShell>
+              ) : null}
               {/* 设为首页：把某张自定义单页顶到 / 上；空 = 内置 Hero 页。Radix Select 不收空串值，用哨兵。 */}
               <SharedFieldShell labelKey="plugin_website.fields.homeSlug" hint={t('plugin_website.hint.homeSlug')}>
                 <Select
@@ -663,7 +688,7 @@ function SettingsFormBody({
                   disabled={sharedDisabled}
                   onValueChange={(v) => set('homeSlug', v === '__builtin' ? '' : v)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t('plugin_website.fields.homeSlug')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -682,8 +707,10 @@ function SettingsFormBody({
           {tab === 'seo' ? (
             <>
               {sharedInput('siteOrigin', undefined, t('plugin_website.hint.siteOrigin'))}
-              {localizedField('seoKeywords')}
-              {sharedInput('titleSuffix', undefined, t('plugin_website.hint.titleSuffix'))}
+              <div className="grid gap-4 md:grid-cols-2">
+                {localizedField('seoKeywords')}
+                {sharedInput('titleSuffix', undefined, t('plugin_website.hint.titleSuffix'))}
+              </div>
               <SharedFieldShell labelKey="plugin_website.fields.ogImageUrl" hint={t('plugin_website.hint.ogImageUrl')}>
                 <ImageUrlField
                   value={shared.ogImageUrl}
@@ -703,6 +730,7 @@ function SettingsFormBody({
                   value={shared.headCode}
                   disabled={sharedDisabled}
                   maxLength={5000}
+                  aria-label={t('plugin_website.fields.headCode')}
                   aria-invalid={!!headInvalid}
                   onChange={(e) => set('headCode', e.target.value)}
                   placeholder={t('plugin_website.placeholder.headCode', { defaultValue: '' })}
@@ -723,75 +751,78 @@ function SettingsFormBody({
                   value={shared.robotsTxt}
                   disabled={sharedDisabled}
                   maxLength={5000}
+                  aria-label={t('plugin_website.fields.robotsTxt')}
                   onChange={(e) => set('robotsTxt', e.target.value)}
                   placeholder={t('plugin_website.placeholder.robotsTxt', { defaultValue: '' })}
                 />
               </SharedFieldShell>
-              {/* 官网默认语言：跟随浏览器（auto）或指定语言占根路径；原文语言（平台默认）只作标记不隐藏。
-                  Radix Select 不收空串值，用 auto 哨兵，与 homeSlug 同一手法。 */}
-              <SharedFieldShell labelKey="plugin_website.fields.defaultLang" hint={t('plugin_website.hint.defaultLang')}>
-                <Select
-                  value={shared.defaultLang || 'auto'}
-                  disabled={sharedDisabled}
-                  onValueChange={(v) => set('defaultLang', v === 'auto' ? '' : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">{t('plugin_website.settings.defaultLangAuto')}</SelectItem>
-                    {languages.map((l) => (
-                      <SelectItem key={l.code} value={l.code}>
-                        {l.label}
-                        {l.default ? `（${t('plugin_website.settings.defaultLangSource')}）` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SharedFieldShell>
-              {/* 语言清单已归平台管理（系统设置 → 语言管理），这里只给入口提示，不再复制一份编辑器 */}
-              <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                {t('plugin_website.languages.manageShort')}
-                <FieldHint text={t('plugin_website.languages.manageHint')} />
-              </p>
-              {/* 币种换算（对标阿里右上角「语言-币种」选择器）：汇率表曾是手写 JSON 文本，
-                  极易写错（大小写/引号/非数字），改为结构化行编辑器——USD 恒为基准 1；
-                  表非空时公开站头部出「语言-币种」弹层，价格按访客所选币种换算展示。
-                  默认币种下拉的选项直接取汇率表的键。 */}
-              {capOk('currency') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.capCurrency'))} />}
-              <SharedFieldShell labelKey="plugin_website.fields.currencyRates" hint={t('plugin_website.hint.currencyRates')}>
-                <CurrencyRatesEditor
-                  value={shared.currencyRates}
-                  disabled={sharedDisabled}
-                  onChange={(v) => set('currencyRates', v)}
-                />
-              </SharedFieldShell>
-              {shared.currencyRates.trim() ? (
-                <SharedFieldShell labelKey="plugin_website.fields.defaultCurrency" hint={t('plugin_website.hint.defaultCurrency')}>
-                  {/* Radix Select 不收空串值，用 off 哨兵表示「不启用换算」，与 defaultLang 的 auto 同一手法 */}
+            </>
+          ) : null}
+          {tab === 'regional' ? (
+            <>
+              <div className="flex flex-col gap-3">
+                <SharedFieldShell labelKey="plugin_website.fields.defaultLang" hint={t('plugin_website.hint.defaultLang')}>
                   <Select
-                    value={shared.defaultCurrency || 'off'}
+                    value={shared.defaultLang || 'auto'}
                     disabled={sharedDisabled}
-                    onValueChange={(v) => set('defaultCurrency', v === 'off' ? '' : v)}
+                    onValueChange={(v) => set('defaultLang', v === 'auto' ? '' : v)}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="off">{t('plugin_website.settings.defaultCurrencyOff')}</SelectItem>
-                      {currencyRatesKeys(shared.currencyRates).map((code) => (
-                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                      <SelectItem value="auto">{t('plugin_website.settings.defaultLangAuto')}</SelectItem>
+                      {languages.map((l) => (
+                        <SelectItem key={l.code} value={l.code}>
+                          {l.label}
+                          {l.default ? `（${t('plugin_website.settings.defaultLangSource')}）` : ''}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </SharedFieldShell>
-              ) : null}
+                <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  {t('plugin_website.languages.manageShort')}
+                  <FieldHint text={t('plugin_website.languages.manageHint')} />
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 border-t border-border pt-4">
+                {capOk('currency') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.capCurrency'))} />}
+                <SharedFieldShell labelKey="plugin_website.fields.currencyRates" hint={t('plugin_website.hint.currencyRates')}>
+                  <CurrencyRatesEditor
+                    value={shared.currencyRates}
+                    disabled={sharedDisabled}
+                    onChange={(v) => set('currencyRates', v)}
+                  />
+                </SharedFieldShell>
+                {shared.currencyRates.trim() ? (
+                  <SharedFieldShell labelKey="plugin_website.fields.defaultCurrency" hint={t('plugin_website.hint.defaultCurrency')}>
+                    <Select
+                      value={shared.defaultCurrency || 'off'}
+                      disabled={sharedDisabled}
+                      onValueChange={(v) => set('defaultCurrency', v === 'off' ? '' : v)}
+                    >
+                      <SelectTrigger aria-label={t('plugin_website.fields.defaultCurrency')}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="off">{t('plugin_website.settings.defaultCurrencyOff')}</SelectItem>
+                        {currencyRatesKeys(shared.currencyRates).map((code) => (
+                          <SelectItem key={code} value={code}>{code}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SharedFieldShell>
+                ) : null}
+              </div>
             </>
           ) : null}
-          {tab === 'footer' ? (
+          {tab === 'contact' ? (
             <>
-              {sharedInput('contactEmail', emailInvalid ? t('plugin_website.settings.emailInvalid') : undefined)}
-              {sharedInput('messageRecipientEmail', messageRecipientInvalid ? t('plugin_website.settings.messageRecipientInvalid') : undefined, t('plugin_website.hint.messageRecipientEmail'))}
+              <div className="grid gap-4 md:grid-cols-2">
+                {sharedInput('contactEmail', emailInvalid ? t('plugin_website.settings.emailInvalid') : undefined)}
+                {sharedInput('messageRecipientEmail', messageRecipientInvalid ? t('plugin_website.settings.messageRecipientInvalid') : undefined, t('plugin_website.hint.messageRecipientEmail'))}
+              </div>
               {sharedInput('contactPhone')}
               {/* 供应商实力档案：商详左栏供应商卡的五行数据，对齐阿里的「店铺实力」；
                   全空就不展示那一块，所以这里不设必填 */}
@@ -869,7 +900,7 @@ function SettingsFormBody({
                     条目不再各自套卡片框（三层框太重）：外层一个框，条目间用分隔线；
                     顺序支持拖拽（官网联系页地点卡按数组顺序渲染）。 */}
                 <div className="flex flex-col gap-1 rounded-lg border border-border p-3">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">{t('plugin_website.settings.offices')}</span>
                       <span className="text-xs text-muted-foreground">{t('plugin_website.settings.officesHint')}</span>
@@ -879,6 +910,7 @@ function SettingsFormBody({
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="h-11 w-full shrink-0 sm:h-9 sm:w-auto"
                       disabled={sharedDisabled || shared.offices.length >= 10}
                       onClick={() => onSharedChange({ ...shared, offices: [...shared.offices, { name: '', address: '', lng: 0, lat: 0 }] })}
                     >
@@ -926,6 +958,10 @@ function SettingsFormBody({
                   )}
                 </div>
               </div>
+            </>
+          ) : null}
+          {tab === 'footer' ? (
+            <>
               <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl" hint={t('plugin_website.hint.qrCodeUrl', mediaHint)}>
                 <ImageUrlField
                   value={shared.qrCodeUrl}
@@ -939,8 +975,10 @@ function SettingsFormBody({
                   aria-label={t('plugin_website.fields.qrCodeUrl')}
                 />
               </SharedFieldShell>
-              {sharedInput('qrCodeCaption')}
-              {sharedInput('icp')}
+              <div className="grid gap-4 md:grid-cols-2">
+                {sharedInput('qrCodeCaption')}
+                {sharedInput('icp')}
+              </div>
               {localizedField('footerNote')}
               <div className="flex flex-col gap-2">
                 <span className="inline-flex items-center gap-1.5 text-sm font-medium">
@@ -948,13 +986,13 @@ function SettingsFormBody({
                   <FieldHint text={t('plugin_website.hint.socials', { max: limits.socialMax })} />
                 </span>
                 {shared.socials.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Select
                       value={s.platform}
                       disabled={sharedDisabled}
                       onValueChange={(v) => patchSocial(i, { platform: v as SocialPlatform })}
                     >
-                      <SelectTrigger className="w-32 shrink-0" aria-label={t('plugin_website.settings.socialPlatform')}>
+                      <SelectTrigger className="w-full sm:w-32 sm:shrink-0" aria-label={t('plugin_website.settings.socialPlatform')}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -964,6 +1002,7 @@ function SettingsFormBody({
                       </SelectContent>
                     </Select>
                     <Input
+                      className="w-full sm:flex-1"
                       value={s.url}
                       disabled={sharedDisabled}
                       onChange={(e) => patchSocial(i, { url: e.target.value })}
@@ -974,6 +1013,7 @@ function SettingsFormBody({
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="size-11 self-end sm:size-9 sm:self-auto"
                       disabled={sharedDisabled}
                       aria-label={t('common.delete')}
                       onClick={() => removeSocial(i)}
@@ -982,7 +1022,7 @@ function SettingsFormBody({
                     </Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled || socialMaxed} onClick={addSocial}>
+                <Button type="button" variant="outline" size="sm" className="h-11 w-fit md:h-9" disabled={sharedDisabled || socialMaxed} onClick={addSocial}>
                   <Plus className="size-4" aria-hidden="true" />
                   {t('plugin_website.settings.addSocial')}
                 </Button>
@@ -994,9 +1034,9 @@ function SettingsFormBody({
                 </span>
                 {capOk('friendLinks') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.friendLinks'))} />}
                 {shared.friendLinks.map((l, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Input
-                      className="w-40 shrink-0"
+                      className="w-full sm:w-40 sm:shrink-0"
                       value={l.name}
                       disabled={sharedDisabled}
                       onChange={(e) => patchFriend(i, { name: e.target.value })}
@@ -1004,6 +1044,7 @@ function SettingsFormBody({
                       aria-label={t('plugin_website.settings.friendName')}
                     />
                     <Input
+                      className="w-full sm:flex-1"
                       value={l.url}
                       disabled={sharedDisabled}
                       onChange={(e) => patchFriend(i, { url: e.target.value })}
@@ -1014,6 +1055,7 @@ function SettingsFormBody({
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="size-11 self-end sm:size-9 sm:self-auto"
                       disabled={sharedDisabled}
                       aria-label={t('common.delete')}
                       onClick={() => removeFriend(i)}
@@ -1022,7 +1064,7 @@ function SettingsFormBody({
                     </Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled || friendMaxed} onClick={addFriend}>
+                <Button type="button" variant="outline" size="sm" className="h-11 w-fit md:h-9" disabled={sharedDisabled || friendMaxed} onClick={addFriend}>
                   <Plus className="size-4" aria-hidden="true" />
                   {t('plugin_website.settings.addFriendLink')}
                 </Button>
@@ -1094,11 +1136,9 @@ function SettingsFormBody({
             </div>
           ) : null}
         </section>
-        <LocaleFormActions />
-        {/* 保存条常驻：五个分区共用一份表单，切分区不丢改动，也不该让人以为每个分区各存一次。
-            「有未保存的修改」文案撤掉：保存按钮就在旁边，这行字只会制造噪音（2026-11-20 用户反馈）。 */}
-        <div className="flex items-center gap-3">
-          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || messageRecipientInvalid || consentInvalid || !!headInvalid || estYearInvalid}>{t('common.save')}</Button>
+        {showLocaleTools ? <LocaleFormActions /> : null}
+        <div className="sticky bottom-0 z-20 -mx-3 mt-1 flex justify-end border-t border-border bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-5 sm:px-5 md:-mx-6 md:px-6">
+          <Button className="min-w-20" onClick={() => void submit()} disabled={save.isPending || emailInvalid || messageRecipientInvalid || consentInvalid || !!headInvalid || estYearInvalid}>{t('common.save')}</Button>
         </div>
       </div>
     </div>

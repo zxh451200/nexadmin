@@ -17,13 +17,15 @@
     },
     "settings": {
       "title": "站点设置",
-      "desc": "站点名称、首页文案、联系与页脚信息；保存后官网即时生效",
+      "desc": "管理品牌、首页、搜索、联系与页脚；保存后官网即时生效",
       "sectionNav": "站点设置分区",
       "tab": {
         "brand": "品牌与主题",
         "home": "首页",
         "seo": "SEO 与技术",
-        "footer": "联系与页脚",
+        "contact": "联系与公司",
+        "footer": "页脚与链接",
+        "regional": "区域与币种",
         "features": "功能开关"
       },
       "emailInvalid": "邮箱格式不正确",
@@ -219,7 +221,7 @@
       "categoryTitleRequiredHint": "分类标题必填",
       "categoryI18n": "栏目译文",
       "categoryI18nTitle": "栏目译文：{{name}}",
-      "categoryI18nHint": "只改各语言的展示名；slug 与新闻归属不变。未翻译的语言回退原文。",
+      "categoryI18nHint": "切换语言编辑对应展示名；选择“原文”可修改原始名称。slug 与新闻归属不变，未翻译的语言回退原文。",
       "categoryEdit": "编辑分类",
       "categoryDeleteConfirm": "确认删除分类「{{name}}」？{{count}} 篇新闻将不再属于该栏目。",
       "tags": "标签",
@@ -557,14 +559,14 @@
       "annualRevenue": "年营收",
       "mainMarkets": "主要市场",
       "responseTime": "平均响应",
-      "heroImageUrl": "首页主视觉（浅色）",
-      "heroImageDarkUrl": "首页主视觉（深色）",
+      "heroImageUrl": "首页主视觉（默认图）",
+      "heroImageDarkUrl": "首页主视觉（深色模式，仅默认主题）",
       "robotsTxt": "robots.txt 自定义",
       "messageRecipientEmail": "询盘抄送邮箱"
     },
     "hint": {
       "defaultLang": "跟随浏览器 = 首访按浏览器语言进入对应版本；选具体语言 = 该语言独占根路径、原默认语言挂前缀（如 /zh）。公开站路由在启动期注册，改完需重启生效",
-      "currencyRates": "{\"USD\":1,\"EUR\":0.92,\"CNY\":7.1} 形态的 JSON：USD 恒为基准 1，键集合即公开站头部「语言-币种」弹层的可选币种；清空 = 不启用换算，价格按商品各自币种直出",
+      "currencyRates": "USD 恒为基准 1；这里维护的币种会出现在公开站头部的「语言-币种」弹层中。清空 = 不启用换算，价格按商品各自币种直出",
       "defaultCurrency": "访客未选择币种时（含搜索引擎爬虫）看到的币种，必须在汇率表里",
       "homeTitle": "两行标题请用换行分隔，末行渲染为渐变文字",
       "logoUrl": "建议 ≤240×240 正方形、透明底 PNG/SVG（导航栏展示高约 32–40px；{{types}}，≤{{max}}）；留空使用内置字母标志",
@@ -583,8 +585,8 @@
       "navDesc": "填了说明的子项在二级菜单里显示成「标题 + 说明」卡片；不填就排到右侧的纯链接列。",
       "establishedYear": "商详供应商卡展示；留空则不显示这一行",
       "certifications": "多个用逗号分隔，如 CE, UL 1973, UN38.3；详情页会渲染成认证徽章，识别的认证自动配图标。",
-      "heroImageUrl": "覆盖首页首屏截图（支持上传/文件库）；留空继续用当前主题内置图。品牌主题也会优先使用这张图",
-      "heroImageDarkUrl": "仅默认主题深浅双图布局使用：深色配色时优先这张；留空则回退到「首页主视觉（浅色）」或内置深色图",
+      "heroImageUrl": "所有主题共用的首页首屏图（支持上传/文件库）；留空使用当前主题内置图",
+      "heroImageDarkUrl": "仅默认主题生效：深色配色时优先使用；留空回退到默认图或内置深色图",
       "robotsTxt": "整段替换官网的 robots.txt；留空则用内置规则（已挡后台/API/机器入口并附 Sitemap）。可写 {sitemap} 占位自动填站点地图绝对地址",
       "messageRecipientEmail": "留言邮件抄送到这里；留空则发到「联系邮箱」。适合销售组共用收件箱，站内信不受影响"
     },
@@ -613,8 +615,8 @@
       "responseTime": "如 ≤4h",
       "officeName": "如：深圳总部",
       "officeName2": "如：上海办事处",
-      "heroImageUrl": "留空 = 主题内置主视觉",
-      "heroImageDarkUrl": "留空 = 跟随浅色图或内置深色图",
+      "heroImageUrl": "留空 = 当前主题内置主视觉",
+      "heroImageDarkUrl": "留空 = 默认图或内置深色图",
       "robotsTxt": "User-agent: *\nAllow: /\nSitemap: {sitemap}"
     },
     "market": {

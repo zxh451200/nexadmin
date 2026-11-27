@@ -48,7 +48,7 @@ export function AnnouncementPopup() {
   return (
     <Dialog open={!dismissed} onOpenChange={(o) => !o && setDismissed(true)}>
       <DialogContent className="max-w-lg">
-        <DialogHeader>
+        <DialogHeader className="min-h-7 justify-center pe-12 text-start md:min-h-0 md:justify-start">
           <DialogTitle>{current.title}</DialogTitle>
           <DialogDescription className="sr-only">{t('layout.announcement')}</DialogDescription>
         </DialogHeader>

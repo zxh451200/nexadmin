@@ -17,13 +17,15 @@
     },
     "settings": {
       "title": "Site settings",
-      "desc": "Site name, home copy, contact details and footer; changes go live immediately",
+      "desc": "Manage branding, homepage, search, contact details and footer; changes go live immediately",
       "sectionNav": "Site settings sections",
       "tab": {
         "brand": "Brand & theme",
         "home": "Homepage",
         "seo": "SEO & technical",
-        "footer": "Contact & footer",
+        "contact": "Contact & company",
+        "footer": "Footer & links",
+        "regional": "Region & currency",
         "features": "Feature switches"
       },
       "emailInvalid": "Invalid email address.",
@@ -219,7 +221,7 @@
       "categoryTitleRequiredHint": "Category title is required",
       "categoryI18n": "Category translation",
       "categoryI18nTitle": "Category translation: {{name}}",
-      "categoryI18nHint": "Only the display name changes; the slug and post assignments stay the same. Untranslated languages fall back to the original.",
+      "categoryI18nHint": "Switch languages to edit each display name; choose “Original” to change the source name. The slug and post assignments stay the same, and untranslated languages fall back to the original.",
       "categoryEdit": "Edit category",
       "categoryDeleteConfirm": "Delete category \"{{name}}\"? {{count}} posts will no longer belong to it.",
       "tags": "Tags",
@@ -557,14 +559,14 @@
       "annualRevenue": "Annual revenue",
       "mainMarkets": "Main markets",
       "responseTime": "Response time",
-      "heroImageUrl": "Hero image (light)",
-      "heroImageDarkUrl": "Hero image (dark)",
+      "heroImageUrl": "Homepage hero (default image)",
+      "heroImageDarkUrl": "Homepage hero (dark mode, default theme only)",
       "robotsTxt": "Custom robots.txt",
       "messageRecipientEmail": "Message notification email"
     },
     "hint": {
       "defaultLang": "Follow browser = first visit opens the matching version; pick a language = it owns the root path and the previous default moves under a prefix (e.g. /zh). Public-site routes register at startup, so a restart is required after changing",
-      "currencyRates": "JSON like {\"USD\":1,\"EUR\":0.92,\"CNY\":7.1}: USD is the base (always 1) and the keys are the currencies offered in the public site header's language-and-currency popover; leave empty to disable conversion and show prices in each product's own currency",
+      "currencyRates": "USD is always the base at 1. The currencies maintained here appear in the public site header's language-and-currency popover; leave empty to disable conversion and show prices in each product's own currency",
       "defaultCurrency": "Currency seen by visitors who have not picked one (including search crawlers); must be one of the keys in the rates table",
       "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
       "logoUrl": "≤240×240 square, transparent PNG/SVG recommended (nav shows it ~32–40px tall; {{types}}, ≤{{max}}); leave empty for the built-in letter mark",
@@ -583,8 +585,8 @@
       "navDesc": "Entries with a description show up as title + description cards in the dropdown; the rest fall into a plain link column on the right.",
       "establishedYear": "Shown on the supplier card; leave empty to hide this row",
       "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon.",
-      "heroImageUrl": "Overrides the homepage hero shot (upload or pick from the library). Leave empty to keep the current theme’s built-in image; branded themes also prefer this image",
-      "heroImageDarkUrl": "Only used by the default theme’s light/dark pair: takes precedence in dark scheme. Falls back to the light hero image or the built-in dark image",
+      "heroImageUrl": "Homepage hero image shared by all themes (upload or pick from the library). Leave empty to use the current theme’s built-in image",
+      "heroImageDarkUrl": "Default theme only: takes precedence in dark color scheme. Falls back to the default hero image or the built-in dark image when empty",
       "robotsTxt": "Replaces the site robots.txt wholesale. Leave empty for the built-in rules (admin/API/machine endpoints disallowed, Sitemap included). Use {sitemap} as a placeholder for the absolute sitemap URL",
       "messageRecipientEmail": "Notification copies go here; falls back to the contact email when empty. Useful for a shared sales inbox; in-app notifications are unaffected"
     },
@@ -613,8 +615,8 @@
       "responseTime": "e.g. ≤4h",
       "officeName": "e.g. Shenzhen HQ",
       "officeName2": "e.g. Shanghai office",
-      "heroImageUrl": "Empty = theme default hero",
-      "heroImageDarkUrl": "Empty = light image or built-in dark image",
+      "heroImageUrl": "Empty = current theme’s built-in hero",
+      "heroImageDarkUrl": "Empty = default hero or built-in dark image",
       "robotsTxt": "User-agent: *\nAllow: /\nSitemap: {sitemap}"
     },
     "market": {

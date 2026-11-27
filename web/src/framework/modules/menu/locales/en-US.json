@@ -39,8 +39,8 @@
       "status": "Status"
     },
     "field": {
-      "type": "Type",
-      "typeHint": "Buttons are permission points for role assignment; they are hidden from the menu list unless you filter by type “Button”.",
+      "type": "Node type",
+      "typeHint": "Directories group menus, menus map to pages, and buttons represent action permissions. Buttons are used for role authorization and do not appear in navigation.",
       "parent": "Parent",
       "parentPlaceholder": "Top level (no parent)",
       "title": "Title",

@@ -48,7 +48,7 @@ export function PickFromLibraryButton({
     <Button
       type="button"
       variant="outline"
-      className={cn('h-10 w-36 justify-between text-base font-normal md:h-8 md:text-sm sm:w-44', className)}
+      className={cn('h-11 w-36 justify-between text-base font-normal md:h-8 md:text-sm sm:w-44', className)}
       disabled={disabled}
       onClick={onClick}
     >
@@ -145,7 +145,7 @@ export function FilePickerDialog({ open, onOpenChange, kind, multiple, value = [
           className="shrink-0"
           aria-label={t('common.search')}
         />
-        <div className="min-h-0 flex-1 overflow-y-auto pe-1">
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
           {q.isLoading ? (
             <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
               {Array.from({ length: PAGE_SIZE }, (_, i) => (

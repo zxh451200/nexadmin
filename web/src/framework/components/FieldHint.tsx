@@ -1,13 +1,10 @@
-import { CircleHelp } from 'lucide-react'
+import { CircleAlert, CircleHelp } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 
-/**
- * 字段标签旁的「?」说明：把成段的规格与后果文案收进 Tooltip。
- * 说明整段铺在字段下方时，它和字段标签同为 12px 灰字，一屏读下来分不出主次；
- * 长文案在英文下普遍 100–230 字符，折行两三行更甚。
- */
-export function FieldHint({ text }: { text?: string }) {
+// 字段标签旁的悬浮说明，避免长文案铺满表单。
+export function FieldHint({ text, icon = 'help' }: { text?: string; icon?: 'help' | 'alert' }) {
   if (!text) return null
+  const Icon = icon === 'alert' ? CircleAlert : CircleHelp
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -16,9 +13,9 @@ export function FieldHint({ text }: { text?: string }) {
         <span
           tabIndex={0}
           onClick={(e) => e.preventDefault()}
-          className="inline-flex shrink-0 cursor-help rounded-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative ms-1 inline-flex shrink-0 cursor-help rounded-sm text-muted-foreground outline-none transition-colors before:absolute before:-inset-2.5 before:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <CircleHelp className="size-3.5" aria-hidden="true" />
+          <Icon className={icon === 'alert' ? 'size-3.5 text-warning' : 'size-3.5'} aria-hidden="true" />
           <span className="sr-only">{text}</span>
         </span>
       </TooltipTrigger>

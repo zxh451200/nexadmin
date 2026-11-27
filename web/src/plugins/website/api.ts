@@ -64,7 +64,7 @@ export interface SiteSettings {
   siteOrigin: string
   /** <title> 后缀，替换内页的「 - 站点名」；首页标题用「站点名 — 主标题」的另一套口径，不受它影响 */
   titleSuffix: string
-  /** 首页主视觉覆盖：浅色用 heroImageUrl，深色优先 heroImageDarkUrl；空 = 主题内置图 */
+  /** 首页主视觉覆盖：heroImageUrl 为所有主题默认图；heroImageDarkUrl 仅默认主题深色模式使用；空 = 主题内置图 */
   heroImageUrl: string
   heroImageDarkUrl: string
   /** 整段替换 robots.txt；支持 {sitemap} 占位，空 = 服务端生成默认规则 */

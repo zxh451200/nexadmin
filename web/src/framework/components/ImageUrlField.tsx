@@ -145,7 +145,7 @@ export function ImageUrlField({
       type="button"
       variant="outline"
       size="sm"
-      className="h-9 shrink-0"
+      className="h-11 shrink-0 sm:h-9"
       disabled={disabled || uploading}
       onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
       aria-label={ariaLabel ?? title}
@@ -158,7 +158,7 @@ export function ImageUrlField({
   // 一行吃下所有元素：[预览] [输入框] [清除/上传] [从文件库选择]。
   // 之前「清除」竖排在输入列下方被 flex-col 拉成整行宽的居中大按钮，预览也掉出输入行——一行字段裂成三截。
   const inputEl = (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
       <Input
         value={value}
         disabled={disabled}
@@ -166,15 +166,15 @@ export function ImageUrlField({
         placeholder={placeholder}
         inputMode="url"
         spellCheck={false}
-        className="min-w-0 flex-1"
+        className="w-full min-w-0 flex-none sm:flex-1"
         aria-label={ariaLabel ?? title}
         aria-invalid={ariaInvalid}
       />
-      {/* 上传始终在行内：有值时也要能直接换图（先清除再上传会让预览闪没）。
-          清除不在这里重复：预览卡悬停/聚焦已浮出清除，行内再放一个只是并排多一枚垃圾桶。 */}
-      {uploadBtn}
-      {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
-      <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
+      <div className="flex shrink-0 items-center gap-2">
+        {uploadBtn}
+        {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
+        <PickFromLibraryButton className="w-auto flex-1 sm:w-44 sm:flex-none" disabled={disabled} onClick={() => setPickOpen(true)} />
+      </div>
     </div>
   )
 
