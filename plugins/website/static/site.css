@@ -4609,48 +4609,80 @@ html[data-scheme="light"] .hp-tree { box-shadow: 0 20px 56px -28px rgba(8, 9, 10
 /* ---- 集成生态（并入出厂能力分区） ---- */
 
 .hp-intg-block {
-  display: grid;
-  grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
-  gap: clamp(24px, 4vw, 56px);
-  align-items: start;
-  margin-top: clamp(36px, 4.5vw, 56px);
+  margin-top: clamp(40px, 5vw, 56px);
   padding-top: clamp(28px, 3.5vw, 40px);
   border-top: 1px solid var(--border);
 }
+.hp-intg-intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
 .hp-intg-intro h3 {
-  font-size: 16px;
+  flex: 0 0 auto;
+  font-size: 19px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.4;
+  letter-spacing: -0.012em;
 }
 .hp-intg-intro p {
-  margin-top: 8px;
+  max-width: 46ch;
+  margin: 0;
   font-size: 13.5px;
-  line-height: 1.7;
+  line-height: 1.65;
+  color: var(--text-3);
+  text-align: right;
+}
+.hp-intg-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.hp-intg-group {
+  min-width: 0;
+  padding-inline: 24px;
+  border-inline-start: 1px solid var(--border);
+}
+.hp-intg-group:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+.hp-intg-group:last-child {
+  padding-inline-end: 0;
+}
+.hp-intg-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hp-intg-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-3);
+}
+.hp-intg-icon svg { width: 18px; height: 18px; }
+.hp-intg-group h4 {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.hp-intg-group-desc {
+  min-height: 2.6em;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--text-2);
 }
-.hp-intg {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.hp-intg-names {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
 }
-.hp-intg li {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--wash);
-  transition: border-color 0.2s, background 0.2s;
-}
-.hp-intg li:hover { border-color: var(--border-strong); background: var(--hover); }
-.hp-intg-icon { display: inline-flex; color: var(--text-3); }
-.hp-intg-icon svg { width: 14px; height: 14px; }
-.hp-intg-name { font-size: 13.5px; }
-.hp-intg-kind { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
 
 /* ---- 插件市场 ---- */
 
@@ -4931,8 +4963,11 @@ html[data-scheme="light"] .hp-cta-glow {
   /* 单栏后链接落到标题下方，靠左对齐才和标题、正文同一条轴线 */
   .hp-section-aside--action { align-items: flex-start; }
   .hp-market { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hp-intg-block,
   .hp-faq-block { grid-template-columns: 1fr; gap: 24px; }
+  .hp-intg-intro { display: block; margin-bottom: 24px; }
+  .hp-intg-intro p { max-width: none; margin-top: 8px; text-align: left; }
+  .hp-intg-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 0; }
+  .hp-intg-group:nth-child(odd) { padding-inline-start: 0; border-inline-start: 0; }
   .hp-qs { grid-template-columns: 1fr; align-items: start; }
   .hp-source-in { grid-template-columns: 1fr; gap: 32px; }
 }
@@ -5078,7 +5113,7 @@ html[data-scheme="light"] .hp-cta-glow {
 .hp-h2 { font-size: clamp(30px, 3.35vw, 48px); line-height: 1; }
 .hp-statement-text { font-size: 48px; font-weight: 510; line-height: 1.12; color: var(--text-3); }
 .hp-statement-lead { color: var(--text); }
-.hp-principle h3, .hp-intg-intro h3 { font-size: 20px; line-height: 1.33; letter-spacing: -0.012em; }
+.hp-principle h3 { font-size: 20px; line-height: 1.33; letter-spacing: -0.012em; }
 .hp-cap h3, .hp-plugin-title h3 { font-size: 18px; line-height: 1.4; letter-spacing: -0.012em; }
 .hp-principle p, .hp-cap p, .hp-plugin-desc { font-size: 14px; line-height: 1.5; color: var(--text-3); }
 .footer-desc, .footer-col a, .footer-bottom, .footer-note, .footer-qr figcaption { color: var(--text-3); }
@@ -5090,6 +5125,20 @@ html[data-scheme="light"] .hp-cta-glow {
   .hp-h2 { font-size: clamp(28px, 8vw, 40px); }
   .hp-statement-text { font-size: 34px; }
   .hp-principle h3, .hp-intg-intro h3, .hp-cap h3, .hp-plugin-title h3 { font-size: 18px; }
+}
+@media (max-width: 560px) {
+  .hp-intg-groups { grid-template-columns: 1fr; gap: 0; }
+  .hp-intg-group,
+  .hp-intg-group:first-child,
+  .hp-intg-group:nth-child(odd),
+  .hp-intg-group:last-child {
+    padding: 16px 0;
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
+  }
+  .hp-intg-group:first-child { padding-top: 0; border-top: 0; }
+  .hp-intg-group-desc { min-height: 0; margin-top: 6px; margin-inline-start: 28px; }
+  .hp-intg-names { margin-top: 4px; margin-inline-start: 28px; }
 }
 
 /* ---- 评审收口：文档首页卡片、文档页容器宽度 ---- */

@@ -303,17 +303,40 @@
           <h3>{{.T "home.intg.title"}}</h3>
           <p>{{.T "home.intg.sub"}}</p>
         </div>
-        <ul class="hp-intg">
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "code"}}</span><span class="hp-intg-name">{{.T "home.intg.github"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindOauth"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "users"}}</span><span class="hp-intg-name">{{.T "home.intg.wecom"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindScan"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "bell"}}</span><span class="hp-intg-name">{{.T "home.intg.dingtalk"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindScan"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "zap"}}</span><span class="hp-intg-name">{{.T "home.intg.feishu"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindScan"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "box"}}</span><span class="hp-intg-name">{{.T "home.intg.s3"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindUpload"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "chart"}}</span><span class="hp-intg-name">{{.T "home.intg.prometheus"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindMetrics"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "key"}}</span><span class="hp-intg-name">{{.T "home.intg.oidc"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindIdp"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "plug"}}</span><span class="hp-intg-name">{{.T "home.intg.webhook"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindEvents"}}</span></li>
-          <li><span class="hp-intg-icon" aria-hidden="true">{{icon "terminal"}}</span><span class="hp-intg-name">{{.T "home.intg.mcp"}}</span><span class="hp-intg-kind">{{.T "home.intg.kindTool"}}</span></li>
-        </ul>
+        <div class="hp-intg-groups">
+          <article class="hp-intg-group">
+            <div class="hp-intg-group-head">
+              <span class="hp-intg-icon" aria-hidden="true">{{icon "key"}}</span>
+              <h4>{{.T "home.intg.groupAuth"}}</h4>
+            </div>
+            <p class="hp-intg-group-desc">{{.T "home.intg.groupAuthDesc"}}</p>
+            <p class="hp-intg-names">{{.T "home.intg.authTools"}}</p>
+          </article>
+          <article class="hp-intg-group">
+            <div class="hp-intg-group-head">
+              <span class="hp-intg-icon" aria-hidden="true">{{icon "bell"}}</span>
+              <h4>{{.T "home.intg.groupNotify"}}</h4>
+            </div>
+            <p class="hp-intg-group-desc">{{.T "home.intg.groupNotifyDesc"}}</p>
+            <p class="hp-intg-names">{{.T "home.intg.notifyTools"}}</p>
+          </article>
+          <article class="hp-intg-group">
+            <div class="hp-intg-group-head">
+              <span class="hp-intg-icon" aria-hidden="true">{{icon "chart"}}</span>
+              <h4>{{.T "home.intg.groupStorage"}}</h4>
+            </div>
+            <p class="hp-intg-group-desc">{{.T "home.intg.groupStorageDesc"}}</p>
+            <p class="hp-intg-names">{{.T "home.intg.storageTools"}}</p>
+          </article>
+          <article class="hp-intg-group">
+            <div class="hp-intg-group-head">
+              <span class="hp-intg-icon" aria-hidden="true">{{icon "plug"}}</span>
+              <h4>{{.T "home.intg.groupExt"}}</h4>
+            </div>
+            <p class="hp-intg-group-desc">{{.T "home.intg.groupExtDesc"}}</p>
+            <p class="hp-intg-names">{{.T "home.intg.extTools"}}</p>
+          </article>
+        </div>
       </div>
     </div>
   </section>
