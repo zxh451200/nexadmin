@@ -5,12 +5,14 @@ import type { Page } from '@/framework/request/types'
 export const JOB_STATUSES = ['queued', 'running', 'success', 'failed', 'canceled'] as const
 export type JobStatus = (typeof JOB_STATUSES)[number]
 
-/** 已知任务类型；其它业务模块新增类型时，在 jobs.type.<type> 里补文案即可（缺省显示原始类型名） */
+/** 已知任务类型；新增类型时需同步补 JOB_TYPES 与 jobs.type.<type> 中英文文案。 */
 export const JOB_TYPES = [
   'user.export',
   'website.product-export',
   'website.post-export',
   'website.message-export',
+  'website.order-export',
+  'website.faq-export',
   'formbuilder.export',
   'operlog.export',
   'loginlog.export',
@@ -20,6 +22,7 @@ export const JOB_TYPES = [
   'pay.order-export',
   'post.export',
   'role.export',
+  'identity.directory-sync',
 ] as const
 
 export interface Job {

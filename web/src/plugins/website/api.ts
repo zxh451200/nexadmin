@@ -841,8 +841,9 @@ export function useSavePost() {
   return useMutation({
     mutationFn: ({ id, data }: { id?: string; data: PostForm }) =>
       id ? api.put<SitePost>(`${BASE}/posts/${id}`, data) : api.post<SitePost>(`${BASE}/posts`, data),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+      if (id) void qc.invalidateQueries({ queryKey: [...KEY, 'post-versions', id] })
       invalidateTaxonomies(qc)
     },
   })
@@ -1010,6 +1011,7 @@ export function usePostVersions(postId?: string) {
     queryKey: [...KEY, 'post-versions', postId],
     queryFn: () => api.get<PostVersionRow[]>(`${BASE}/posts/${postId}/versions`),
     enabled: !!postId,
+    refetchOnMount: 'always',
   })
 }
 

@@ -16,6 +16,8 @@
       "website.product-export": "产品导出",
       "website.post-export": "新闻导出",
       "website.message-export": "留言导出",
+      "website.order-export": "订单导出",
+      "website.faq-export": "常见问题导出",
       "website.ali-template-export": "阿里模板导出",
       "formbuilder.export": "表单导出",
       "operlog.export": "操作日志导出",
@@ -25,7 +27,8 @@
       "ticket.export": "工单导出",
       "pay.order-export": "支付订单导出",
       "post.export": "岗位导出",
-      "role.export": "角色导出"
+      "role.export": "角色导出",
+      "identity.directory-sync": "目录同步"
     },
     "keepUntil": "保留至 {{date}}",
     "status": {

@@ -109,8 +109,7 @@ export function AddressField({ value, onChange, level = 3, disabled, className }
   const providers = getMapProviders()
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '')
   const activeProvider = providers.find((p) => p.id === providerId) ?? providers[0]
-  // 自己 emit 出去的值（打字联动时 input 受控内容不能被推导值顶掉）；
-  // 「外部改动」（区划选择、详细地址输入）与「完整地址打字引发的联动」用它区分。
+  // 记录上一次实际渲染的值；emit 时不能提前覆盖，否则 effect 会把自己的联动误判成外部改动。
   const emitted = useRef(value ?? null)
   const fromFull = useRef(false)
 
@@ -134,7 +133,6 @@ export function AddressField({ value, onChange, level = 3, disabled, className }
 
   const emit = (v: AddressValue, fromFullInput = false) => {
     fromFull.current = fromFullInput
-    emitted.current = v
     onChange?.({ region: v.region, address: v.address })
   }
 

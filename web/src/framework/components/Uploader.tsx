@@ -351,7 +351,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
             <p className="text-sm font-medium text-foreground">{avatarLabel ?? t('uploader.avatarTitle')}</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{avatarHint ?? t('uploader.avatarHint')}</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
-              <Button type="button" variant="outline" size="sm" className="h-8" disabled={disabled || !!uploading} onClick={pick}>
+              <Button type="button" variant="outline" size="sm" className="h-10 md:h-8" disabled={disabled || !!uploading} onClick={pick}>
                 <AddIcon className="size-4" aria-hidden="true" />
                 {actionLabel}
               </Button>
@@ -360,7 +360,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
                 <PickFromLibraryButton className="shrink-0" disabled={disabled || !!uploading} onClick={() => setPickOpen(true)} />
               ) : null}
               {cur && !uploading ? (
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2.5 text-destructive hover:text-destructive" onClick={() => onChange([])}>
+                <Button type="button" variant="ghost" size="sm" className="h-10 px-2.5 text-destructive hover:text-destructive md:h-8" onClick={() => onChange([])}>
                   {t('common.remove')}
                 </Button>
               ) : null}

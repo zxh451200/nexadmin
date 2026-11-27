@@ -16,6 +16,8 @@
       "website.product-export": "Product export",
       "website.post-export": "Post export",
       "website.message-export": "Message export",
+      "website.order-export": "Order export",
+      "website.faq-export": "FAQ export",
       "website.ali-template-export": "Alibaba template export",
       "formbuilder.export": "Form export",
       "operlog.export": "Operation log export",
@@ -25,7 +27,8 @@
       "ticket.export": "Ticket export",
       "pay.order-export": "Order export",
       "post.export": "Post export",
-      "role.export": "Role export"
+      "role.export": "Role export",
+      "identity.directory-sync": "Directory sync"
     },
     "keepUntil": "Kept until {{date}}",
     "status": {
