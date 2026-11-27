@@ -538,9 +538,6 @@ type siteView struct {
 	// HeadCode 是站点设置里的自定义 <head> 代码（统计脚本等）：管理员可信输入，经
 	// template.HTML 显式标记后原样注入；空 = 不渲染任何内容。
 	HeadCode template.HTML
-	// BrandCSS 是品牌强调色覆盖样式（浅色 / 深色两套 token）；空 = 主题内置配色。
-	// 仅内置 default 主题的 layout 输出它，独立品牌主题不消费。
-	BrandCSS template.CSS
 	// TitleSuffix 拼在 <title> 的「{标题}」之后；空 = 「 - {站点名}」。由 composeTitle 消费。
 	TitleSuffix string
 	// HeroImageURL / HeroImageDarkURL 是首页主视觉覆盖；空 = 用主题内置图。

@@ -47,8 +47,6 @@
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
 {{if .HeadCode}}{{.HeadCode}}{{end}}
 <link rel="stylesheet" href="/website-assets/site.css?v={{assetV "site.css"}}">
-{{/* 品牌强调色在样式表之后注入，按深浅皮肤分别覆盖 --accent 系列 token；空值时不输出。 */}}
-{{if .BrandCSS}}<style id="nex-brand">{{.BrandCSS}}</style>{{end}}
 {{/* 商详样式单独一个阻塞样式表，只给商品详情路由：原先由 site.js 运行时注入，HTML 先到、样式后到，
      主图会按原图尺寸铺满一屏再跳回格子。三个主题插件的 layout 里也要有同一行（同一个文件，不复制内容）。 */}}
 {{if or (eq .Route "/products") (hasPrefix .Route "/products/") (hasPrefix .Route "/orders/")}}<link rel="stylesheet" href="/website-assets/site-pd.css?v={{assetV "site-pd.css"}}">{{end}}

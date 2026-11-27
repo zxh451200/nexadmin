@@ -20,6 +20,7 @@
     "title": "全局搜索",
     "description": "输入关键字搜索菜单或快捷操作",
     "empty": "没有找到匹配的结果",
+    "clear": "清空搜索",
     "actions": "快捷操作",
     "toggleTheme": "切换主题",
     "toggleLanguage": "切换语言",

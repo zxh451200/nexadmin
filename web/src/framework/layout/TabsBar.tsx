@@ -112,7 +112,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
     if (menu.length === 0 && pathname !== HOME_PATH) return
     open(current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current.path, current.titleKey, open])
+  }, [current.path, current.titleKey, menu.length, open])
 
   // 标签增减或容器变窄时重新量两端是否还有内容
   useEffect(() => {

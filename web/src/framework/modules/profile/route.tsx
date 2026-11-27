@@ -6,5 +6,6 @@ export const routes: ModuleRoute[] = [
     path: 'profile',
     component: lazy(() => import('./ProfilePage')),
     hidden: true,
+    menu: { title: 'profile.menu', icon: 'User', group: 'mine' },
   },
 ]

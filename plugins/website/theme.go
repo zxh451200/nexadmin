@@ -59,16 +59,13 @@ const (
 	ThemeCapMarket      = "market"
 	ThemeCapFeatures    = "features"
 	ThemeCapFAQ         = "faq"
-	// ThemeCapBrandColor 表示主题消费站点设置的品牌强调色（brandColor / brandColorDark）。
-	// 目前只有内置 default 主题把这两个值注入 --accent 系列 token。
-	ThemeCapBrandColor = "brandColor"
 )
 
 // defaultThemeCaps 是内置主题的能力集：它是框架自己的官网，全部设置项都会渲染。
 // 新增设置项且内置主题支持时记得同步加进来，否则管理端会在默认主题下把它灰掉。
 var defaultThemeCaps = []string{
 	ThemeCapFriendLinks, ThemeCapCurrency, ThemeCapOffices,
-	ThemeCapMarket, ThemeCapFeatures, ThemeCapFAQ, ThemeCapBrandColor,
+	ThemeCapMarket, ThemeCapFeatures, ThemeCapFAQ,
 }
 
 var (

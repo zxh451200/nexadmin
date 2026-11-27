@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { SESSION_CLEARED_EVENT } from '@/framework/auth/session-events'
-import { findMenuTrail } from '@/framework/router/discover'
+import { allRoutes, findMenuTrail } from '@/framework/router/discover'
 import type { MenuNode } from '@/framework/router/types'
 
 export interface TabItem {
@@ -26,10 +26,12 @@ interface TabsState {
 /** keep-alive 最多同时缓存的页面数（含当前页） */
 export const MAX_CACHED_PAGES = 20
 
-/** 在菜单里找 pathname 对应的叶子，返回其 path 与标题 key；找不到时退回 pathname 本身 */
+/** 在菜单里找 pathname 对应的叶子，返回其 path 与标题 key；隐藏页面使用路由声明的标题，找不到时退回 pathname 本身 */
 export function resolveTab(menu: MenuNode[], pathname: string): TabItem {
   const hit = findMenuTrail(menu, pathname)[1]
-  return hit?.path ? { path: hit.path, titleKey: hit.title } : { path: pathname, titleKey: pathname }
+  if (hit?.path) return { path: hit.path, titleKey: hit.title }
+  const route = allRoutes.find((r) => `/${r.path}` === pathname)
+  return { path: pathname, titleKey: route?.menu?.title ?? pathname }
 }
 
 const HOME_TAB: TabItem = { path: HOME_PATH, titleKey: 'dashboard.menu' }

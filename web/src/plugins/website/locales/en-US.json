@@ -57,9 +57,7 @@
       "officesEmpty": "No offices yet — use \"Add location\" to create the first one.",
       "capUnsupported": "The current theme “{{theme}}” does not render “{{what}}”, so saving it will not show up on the site.",
       "capCurrency": "Currency conversion",
-      "messageRecipientInvalid": "Invalid message notification email",
-      "brandColorInvalid": "Brand color must be #RGB or #RRGGBB, e.g. #5e6ad2",
-      "capBrandColor": "Brand accent color"
+      "messageRecipientInvalid": "Invalid message notification email"
     },
     "social": {
       "github": "GitHub",
@@ -561,8 +559,6 @@
       "responseTime": "Response time",
       "heroImageUrl": "Hero image (light)",
       "heroImageDarkUrl": "Hero image (dark)",
-      "brandColor": "Brand accent (light)",
-      "brandColorDark": "Brand accent (dark)",
       "robotsTxt": "Custom robots.txt",
       "messageRecipientEmail": "Message notification email"
     },
@@ -589,14 +585,10 @@
       "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon.",
       "heroImageUrl": "Overrides the homepage hero shot (upload or pick from the library). Leave empty to keep the current theme’s built-in image; branded themes also prefer this image",
       "heroImageDarkUrl": "Only used by the default theme’s light/dark pair: takes precedence in dark scheme. Falls back to the light hero image or the built-in dark image",
-      "brandColor": "Built-in site theme only: overrides the accent used by buttons and links. Use #RGB or #RRGGBB; leave empty for the theme’s built-in color",
-      "brandColorDark": "Accent for the dark scheme; leave empty to follow the light accent. Both empty = theme built-in colors",
       "robotsTxt": "Replaces the site robots.txt wholesale. Leave empty for the built-in rules (admin/API/machine endpoints disallowed, Sitemap included). Use {sitemap} as a placeholder for the absolute sitemap URL",
       "messageRecipientEmail": "Notification copies go here; falls back to the contact email when empty. Useful for a shared sales inbox; in-app notifications are unaffected"
     },
     "placeholder": {
-      "brandColor": "#5e6ad2",
-      "brandColorDark": "Empty = follow light accent",
       "siteName": "NexAdmin",
       "siteDesc": "One-line intro used in title and search snippets",
       "homeTitle": "A full-stack framework\nbuilt for production admin systems",

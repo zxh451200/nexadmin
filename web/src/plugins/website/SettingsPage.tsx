@@ -54,7 +54,7 @@ import { ThemeCapNote, useThemeCap } from './ThemeCapNotice'
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
   | 'siteName' | 'siteOrigin' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
-  | 'messageRecipientEmail' | 'heroImageUrl' | 'heroImageDarkUrl' | 'brandColor' | 'brandColorDark' | 'robotsTxt'
+  | 'messageRecipientEmail' | 'heroImageUrl' | 'heroImageDarkUrl' | 'robotsTxt'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme' | 'defaultLang'
   | 'defaultCurrency' | 'currencyRates'
   | 'staffCount' | 'annualRevenue' | 'mainMarkets' | 'responseTime'
@@ -149,49 +149,6 @@ const STAFF_COUNT_OPTIONS = ['1-50', '51-100', '101-500', '501-1000', '1000+']
 const ANNUAL_REVENUE_OPTIONS = ['US$1M-10M', 'US$10M-50M', 'US$50M-100M', 'US$100M+']
 const RESPONSE_TIME_OPTIONS = ['≤1h', '≤4h', '≤8h', '≤24h', '>24h']
 const MAIN_MARKET_OPTIONS = ['欧洲', '北美', '南美', '东南亚', '中东', '非洲', '大洋洲', '东亚', '中亚', '全球']
-
-/** 原生取色器与示例占位必须是具体色值：input[type=color] 的 value 只接受 #rrggbb，
-    不能用 CSS 变量，故此处豁免「颜色用语义 token」规则。 */
-// eslint-disable-next-line no-restricted-syntax
-const BRAND_COLOR_FALLBACK = '#5e6ad2'
-
-/** 品牌色输入：原生取色器 + 文本框并列。原生 input[type=color] 只认 #rrggbb，
-    所以 #rgb 先展开、空值给一个仅供展示的默认色（不写回存储）；真正的取值仍是文本框，
-    留空 = 沿用主题内置色。 */
-function BrandColorField({ value, onChange, disabled, invalid, label, placeholder }: {
-  value: string
-  onChange: (v: string) => void
-  disabled?: boolean
-  invalid?: boolean
-  label: string
-  placeholder: string
-}) {
-  const raw = value.trim()
-  const short = /^#[0-9a-fA-F]{3}$/.test(raw)
-  const full = /^#[0-9a-fA-F]{6}$/.test(raw)
-  const pickerValue = full ? raw : short ? `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}` : BRAND_COLOR_FALLBACK
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={pickerValue}
-        disabled={disabled}
-        aria-label={label}
-        className="size-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-        onChange={(e) => onChange(e.target.value.toLowerCase())}
-      />
-      <Input
-        value={value}
-        disabled={disabled}
-        aria-label={label}
-        aria-invalid={invalid}
-        placeholder={placeholder}
-        className={cn('font-mono', invalid && 'border-destructive')}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  )
-}
 
 /** 汇率表编辑器：替代手写 JSON——USD 是基准（恒 1、不可删改），其余币种行可增删改。
     序列化口径与后端 parseCurrencyRates 一致（^[A-Z]{3}$、rate>0、USD=1、最多 24 个）；
@@ -463,10 +420,6 @@ function SettingsFormBody({
   // 邮箱格式校验：设置侧此前没有（投稿侧有）；留空合法——联系邮箱选填
   const emailInvalid = shared.contactEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.contactEmail.trim())
   const messageRecipientInvalid = shared.messageRecipientEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.messageRecipientEmail.trim())
-  // 品牌色格式与后端 normalizeBrandColor 一致：留空 = 沿用主题内置色；#rgb / #rrggbb 均可。
-  const brandColorFormat = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
-  const brandColorInvalid = (v: string) => v.trim() !== '' && !brandColorFormat.test(v.trim())
-  const brandColorBad = brandColorInvalid(shared.brandColor) || brandColorInvalid(shared.brandColorDark)
   // 留言同意开着时政策地址必填，格式与后端 footerURLValid 同规则：站内路径/锚点或完整 http(s) 地址。
   const consentInvalid = shared.contactConsent && !/^(https?:\/\/[^\s/]+|[#/])/i.test(shared.contactConsentUrl.trim())
   // 自定义 <head> 代码：拦截未闭合的 script/style 与文档级标签（校验规则见 headCodeInvalid）
@@ -510,10 +463,6 @@ function SettingsFormBody({
     }
     if (consentInvalid) {
       toast.error(t('plugin_website.settings.consentUrlInvalid'))
-      return
-    }
-    if (brandColorBad) {
-      toast.error(t('plugin_website.settings.brandColorInvalid'))
       return
     }
     if (headInvalid) {
@@ -637,35 +586,6 @@ function SettingsFormBody({
                     )}
                   </SelectContent>
                 </Select>
-              </SharedFieldShell>
-              {/* 品牌强调色只被内置 default 主题消费（后端 ThemeCapBrandColor）：
-                  切到独立品牌主题时字段照常可填（数据不丢），但要提示填了看不到效果。 */}
-              {capOk('brandColor') ? null : <ThemeCapNote text={capNote(t('plugin_website.settings.capBrandColor'))} />}
-              <SharedFieldShell labelKey="plugin_website.fields.brandColor" hint={t('plugin_website.hint.brandColor')}>
-                <BrandColorField
-                  value={shared.brandColor}
-                  onChange={(v) => set('brandColor', v)}
-                  disabled={sharedDisabled}
-                  invalid={brandColorInvalid(shared.brandColor)}
-                  label={t('plugin_website.fields.brandColor')}
-                  placeholder={t('plugin_website.placeholder.brandColor', { defaultValue: BRAND_COLOR_FALLBACK })}
-                />
-                {brandColorInvalid(shared.brandColor) ? (
-                  <span className="text-xs text-destructive">{t('plugin_website.settings.brandColorInvalid')}</span>
-                ) : null}
-              </SharedFieldShell>
-              <SharedFieldShell labelKey="plugin_website.fields.brandColorDark" hint={t('plugin_website.hint.brandColorDark')}>
-                <BrandColorField
-                  value={shared.brandColorDark}
-                  onChange={(v) => set('brandColorDark', v)}
-                  disabled={sharedDisabled}
-                  invalid={brandColorInvalid(shared.brandColorDark)}
-                  label={t('plugin_website.fields.brandColorDark')}
-                  placeholder={t('plugin_website.placeholder.brandColorDark', { defaultValue: '' })}
-                />
-                {brandColorInvalid(shared.brandColorDark) ? (
-                  <span className="text-xs text-destructive">{t('plugin_website.settings.brandColorInvalid')}</span>
-                ) : null}
               </SharedFieldShell>
               {selectedTheme?.hasDemo ? (
                 <div className="flex items-center gap-2">
@@ -1209,8 +1129,6 @@ export default function SettingsPage() {
         titleSuffix: data.titleSuffix ?? '',
         heroImageUrl: data.heroImageUrl ?? '',
         heroImageDarkUrl: data.heroImageDarkUrl ?? '',
-        brandColor: data.brandColor ?? '',
-        brandColorDark: data.brandColorDark ?? '',
         robotsTxt: data.robotsTxt ?? '',
         homeSlug: data.homeSlug ?? '',
         siteOrigin: data.siteOrigin ?? '',

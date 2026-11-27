@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Languages, LogOut, SunMoon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +22,11 @@ export function CommandMenu({ menu, open, onOpenChange }: CommandMenuProps) {
   const logout = useAuth((s) => s.logout)
   const { resolved, setMode } = useTheme()
   const { languages, current, change } = useLanguages()
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   // Cmd/Ctrl + K 开关
   useEffect(() => {
@@ -50,7 +55,14 @@ export function CommandMenu({ menu, open, onOpenChange }: CommandMenuProps) {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <DialogTitle className="sr-only">{t('cmdk.title')}</DialogTitle>
       <DialogDescription className="sr-only">{t('cmdk.description')}</DialogDescription>
-      <CommandInput placeholder={t('cmdk.placeholder')} aria-label={t('cmdk.inputLabel')} />
+      <CommandInput
+        value={query}
+        onValueChange={setQuery}
+        onClear={() => setQuery('')}
+        showClear={query.length > 0}
+        placeholder={t('cmdk.placeholder')}
+        aria-label={t('cmdk.inputLabel')}
+      />
       <CommandList>
         <CommandEmpty>{t('cmdk.empty')}</CommandEmpty>
         {menu.map((group) => {

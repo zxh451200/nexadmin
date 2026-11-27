@@ -67,12 +67,6 @@ type Setting struct {
 	HeroImageDarkURL string `gorm:"column:hero_image_dark_url;size:500;not null;default:''" json:"heroImageDarkUrl"`
 	// RobotsTxt 非空时覆盖服务端生成的 robots.txt，其中 {sitemap} 替换为站点地图绝对地址；空 = 内置规则。
 	RobotsTxt string `gorm:"column:robots_txt;type:text" json:"robotsTxt"`
-	// BrandColor / BrandColorDark 覆盖内置 default 主题的强调色：前者用于浅色皮肤，
-	// 后者用于深色皮肤（空则跟随前者）；两者都空 = 沿用主题内置 Linear 紫。
-	// 只注入 --accent / --accent-2 / --accent-soft 三个 token，不改版式；
-	// 独立品牌主题不消费这两个字段（见 ThemeCapBrandColor）。
-	BrandColor     string `gorm:"column:brand_color;size:16;not null;default:''" json:"brandColor"`
-	BrandColorDark string `gorm:"column:brand_color_dark;size:16;not null;default:''" json:"brandColorDark"`
 	// HomeSlug 是用作首页的自定义单页 slug：非空时首页渲染该页内容（替换内置 Hero 页）；空 = 内置首页。
 	// 页面本身仍可通过 /p/:slug 访问，不冲突。
 	HomeSlug string `gorm:"column:home_slug;size:64;not null;default:''" json:"homeSlug"`

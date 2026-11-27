@@ -20,6 +20,7 @@
     "title": "Global search",
     "description": "Type to search menus or quick actions",
     "empty": "No results found",
+    "clear": "Clear search",
     "actions": "Quick actions",
     "toggleTheme": "Toggle theme",
     "toggleLanguage": "Switch language",
