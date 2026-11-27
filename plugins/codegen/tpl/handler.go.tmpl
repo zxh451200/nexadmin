@@ -178,6 +178,12 @@ func (h *Handler) save(c *gin.Context, id idgen.ID) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
+[[- if .HasPattern]]
+	if err := f.Validate(); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+[[- end]]
 	v, err := h.svc.Save(c.Request.Context(), id, f)
 	respond(c, v, err)
 }

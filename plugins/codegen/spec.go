@@ -2,7 +2,9 @@ package codegen
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +22,11 @@ type Field struct {
 	Precision, Scale      int64
 	Nullable              bool
 	Required, List, Query bool
+	Label                 string
+	Placeholder           string
+	DefaultValue          string
+	MinLength, MaxLength  int
+	Pattern               string
 	// QueryOp 是查询运算符（like / eq / ne / gt / ge / lt / le / between），只在 Query 为真时有意义。
 	QueryOp string
 	Form    bool
@@ -27,6 +34,9 @@ type Field struct {
 
 // Label 返回中文文案。
 func (f Field) LabelZh() string {
+	if f.Label != "" {
+		return f.Label
+	}
 	if f.Comment != "" {
 		return f.Comment
 	}
@@ -35,6 +45,12 @@ func (f Field) LabelZh() string {
 
 // IsDict 报告这一列是否用字典下拉渲染。
 func (f Field) IsDict() bool { return f.Control == "dict" && f.Dict != "" }
+
+const (
+	ProfileFull     = "full"
+	ProfileBackend  = "backend"
+	ProfileFrontend = "frontend"
+)
 
 // Spec 是一次生成的全部输入（已校验）。
 type Spec struct {
@@ -46,6 +62,7 @@ type Spec struct {
 	Shape      string
 	Tenant     bool
 	SoftDelete bool
+	Profile    string
 	// Tree 表示树形表：有 parent_id 自引用，列表用树形控件、表单用父级下拉，不分页。
 	Tree       bool
 	Fields     []Field // 模型字段：不含 id / tenant_id（以及嵌入基座已有的 created_at / updated_at）
@@ -156,20 +173,53 @@ func tsType(k Kind, nullable bool) string {
 	return "string"
 }
 
+func ValidProfile(profile string) error {
+	switch profile {
+	case "", ProfileFull, ProfileBackend, ProfileFrontend:
+		return nil
+	default:
+		return fmt.Errorf("invalid generation profile %q", profile)
+	}
+}
+
+func normalizeProfile(profile string) string {
+	if profile == "" {
+		return ProfileFull
+	}
+	return profile
+}
+
+func (s *Spec) HasBackend() bool  { return s.Profile == ProfileFull || s.Profile == ProfileBackend }
+func (s *Spec) HasFrontend() bool { return s.Profile == ProfileFull || s.Profile == ProfileFrontend }
+func (s *Spec) HasPattern() bool {
+	for _, f := range s.Fields {
+		if f.Form && f.Pattern != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // buildSpec 校验请求配置并组装 Spec。未出现在 cfg 里的列沿用推荐配置。
-func buildSpec(a *Analysis, goModule, module string, cfg []ColumnConfig) (*Spec, error) {
+func buildSpec(a *Analysis, goModule, module, profile string, cfg []ColumnConfig) (*Spec, error) {
 	if err := ValidModule(module); err != nil {
 		return nil, err
 	}
-	if goModule == "" {
-		m, err := detectGoModule()
-		if err != nil {
+	if err := ValidProfile(profile); err != nil {
+		return nil, err
+	}
+	profile = normalizeProfile(profile)
+	if profile != ProfileFrontend {
+		if goModule == "" {
+			m, err := detectGoModule()
+			if err != nil {
+				return nil, err
+			}
+			goModule = m
+		}
+		if err := ValidGoModule(goModule); err != nil {
 			return nil, err
 		}
-		goModule = m
-	}
-	if err := ValidGoModule(goModule); err != nil {
-		return nil, err
 	}
 	if len(cfg) > 200 {
 		return nil, fmt.Errorf("too many column configs")
@@ -209,7 +259,7 @@ func buildSpec(a *Analysis, goModule, module string, cfg []ColumnConfig) (*Spec,
 	}
 
 	s := &Spec{GoModule: goModule, Module: module, Pascal: Pascal(module), Plural: Plural(module),
-		Table: a.Table, Shape: a.Shape, Tenant: a.Tenant, SoftDelete: a.SoftDelete, Tree: a.Tree}
+		Table: a.Table, Shape: a.Shape, Tenant: a.Tenant, SoftDelete: a.SoftDelete, Tree: a.Tree, Profile: profile}
 	for _, col := range a.Cols {
 		if !col.Supported || col.System {
 			continue
@@ -277,6 +327,63 @@ func validateColumnCfg(col *ColumnInfo, cc ColumnConfig) (ColumnConfig, error) {
 	} else {
 		cc.Dict = ""
 	}
+	cc.Label = strings.TrimSpace(cc.Label)
+	cc.Placeholder = strings.TrimSpace(cc.Placeholder)
+	cc.DefaultValue = strings.TrimSpace(cc.DefaultValue)
+	if (cc.MinLength > 0 || cc.MaxLength > 0 || cc.Pattern != "") && col.Kind != KindString && col.Kind != KindText {
+		return cc, fmt.Errorf("column %q: length and pattern rules are only for string columns", cc.Name)
+	}
+	maxLen := cc.MaxLength
+	if col.Kind == KindString && col.Length > 0 {
+		if maxLen == 0 {
+			maxLen = int(col.Length)
+		} else if maxLen > int(col.Length) {
+			return cc, fmt.Errorf("column %q: maxLength exceeds database length %d", cc.Name, col.Length)
+		}
+	}
+	if cc.MinLength > 0 && maxLen > 0 && cc.MinLength > maxLen {
+		return cc, fmt.Errorf("column %q: minLength cannot exceed maxLength", cc.Name)
+	}
+	if cc.Pattern != "" {
+		if strings.ContainsAny(cc.Pattern, ",`\"\r\n") {
+			return cc, fmt.Errorf("column %q: pattern contains unsupported characters", cc.Name)
+		}
+		if _, err := regexp.Compile(cc.Pattern); err != nil {
+			return cc, fmt.Errorf("column %q: invalid pattern", cc.Name)
+		}
+	}
+	if cc.DefaultValue != "" {
+		if maxLen > 0 && len([]rune(cc.DefaultValue)) > maxLen {
+			return cc, fmt.Errorf("column %q: defaultValue exceeds maxLength", cc.Name)
+		}
+		if cc.MinLength > 0 && len([]rune(cc.DefaultValue)) < cc.MinLength {
+			return cc, fmt.Errorf("column %q: defaultValue is shorter than minLength", cc.Name)
+		}
+		if cc.Pattern != "" {
+			matched, _ := regexp.MatchString(cc.Pattern, cc.DefaultValue)
+			if !matched {
+				return cc, fmt.Errorf("column %q: defaultValue does not match pattern", cc.Name)
+			}
+		}
+		switch col.Kind {
+		case KindBool:
+			if _, err := strconv.ParseBool(cc.DefaultValue); err != nil {
+				return cc, fmt.Errorf("column %q: invalid boolean defaultValue", cc.Name)
+			}
+		case KindInt, KindID:
+			if _, err := strconv.ParseInt(cc.DefaultValue, 10, 64); err != nil {
+				return cc, fmt.Errorf("column %q: invalid integer defaultValue", cc.Name)
+			}
+		case KindFloat:
+			if _, err := strconv.ParseFloat(cc.DefaultValue, 64); err != nil {
+				return cc, fmt.Errorf("column %q: invalid numeric defaultValue", cc.Name)
+			}
+		case KindDecimal:
+			if ok, _ := regexp.MatchString(`^-?\d+(?:\.\d+)?$`, cc.DefaultValue); !ok {
+				return cc, fmt.Errorf("column %q: invalid decimal defaultValue", cc.Name)
+			}
+		}
+	}
 	return cc, nil
 }
 
@@ -288,6 +395,8 @@ func newField(col ColumnInfo, c ColumnConfig) Field {
 		TSType: tsType(col.Kind, col.Nullable), Control: c.Control, Dict: c.Dict, Nullable: col.Nullable,
 		Required: c.Required, List: c.List, Query: c.Query, QueryOp: c.QueryOp, Form: c.Form, MaxLen: 255,
 		Precision: col.Precision, Scale: col.Scale,
+		Label: c.Label, Placeholder: c.Placeholder, DefaultValue: c.DefaultValue,
+		MinLength: c.MinLength, MaxLength: c.MaxLength, Pattern: c.Pattern,
 	}
 	if col.Length > 0 && col.Length <= 4000 {
 		f.MaxLen = int(col.Length)

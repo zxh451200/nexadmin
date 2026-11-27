@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, Info } from 'lucide-react'
+import { ArrowDown, ArrowUp, Info, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FormGrid, FormLayout } from '@/framework/components/FormLayout'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { CONTROLS, QUERYABLE, QUERY_OPS, REQUIRABLE, type ColumnConfig, type ColumnInfo, type Control, type QueryOp, type TableSchema } from './api'
+import { CONTROLS, QUERYABLE, QUERY_OPS, REQUIRABLE, type ColumnConfig, type ColumnInfo, type Control, type GenProfile, type QueryOp, type TableSchema } from './api'
 
 interface Props {
   schema: TableSchema
@@ -20,11 +21,13 @@ interface Props {
   onModuleChange: (v: string) => void
   goModule: string
   onGoModuleChange: (v: string) => void
+  profile: GenProfile
+  onProfileChange: (v: GenProfile) => void
   moduleError?: string
   goModuleError?: string
 }
 
-export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, goModule, onGoModuleChange, moduleError, goModuleError }: Props) {
+export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, goModule, onGoModuleChange, profile, onProfileChange, moduleError, goModuleError }: Props) {
   const { t } = useTranslation()
   const byName = new Map(cfg.map((c) => [c.name, c]))
   const patch = (name: string, p: Partial<ColumnConfig>) =>
@@ -33,6 +36,10 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
   // 系统列（id/tenant_id/时间戳）不可配置、每张表必然存在，默认收起——不收起的话
   // 四行灰行 × 四个禁用空勾选框把真正要配置的业务行淹没在一排排短横线里。
   const [showSystem, setShowSystem] = useState(false)
+  const [metadata, setMetadata] = useState<{ name: string; value: ColumnConfig }>()
+  const metadataColumn = metadata ? schema.columns.find((c) => c.name === metadata.name) : undefined
+  const patchMetadata = (p: Partial<ColumnConfig>) =>
+    setMetadata((cur) => (cur ? { ...cur, value: { ...cur.value, ...p } } : cur))
   // 行顺序跟生成物字段顺序走（sort）：上移 / 下移后表格当场重排，用户能直接看到结果。
   const ordered = [...schema.columns].sort(
     (a, b) => (byName.get(a.name)?.sort ?? 0) - (byName.get(b.name)?.sort ?? 0),
@@ -197,12 +204,49 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
         )
       },
     },
+    {
+      key: 'metadata',
+      title: t('plugin_codegen.col.metadata'),
+      mobile: 'sub',
+      align: 'center',
+      width: 76,
+      render: (c) => {
+        const cur = byName.get(c.name)
+        if (!cur || !c.supported || c.system) return <span className="text-muted-foreground">-</span>
+        return (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label={`${c.name} ${t('plugin_codegen.col.metadata')}`}
+            title={t('plugin_codegen.col.metadata')}
+            onClick={() => setMetadata({ name: c.name, value: { ...cur } })}
+          >
+            <Settings2 aria-hidden="true" className="size-3.5" />
+          </Button>
+        )
+      },
+    },
   ]
 
   return (
     <div className="flex flex-col gap-4">
       <FormLayout onSubmit={(e) => e.preventDefault()}>
         <FormGrid cols={1}>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="codegen-profile">{t('plugin_codegen.config.profile')}</Label>
+            <Select value={profile} onValueChange={(v) => onProfileChange(v as GenProfile)}>
+              <SelectTrigger id="codegen-profile" aria-label={t('plugin_codegen.config.profile')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(['full', 'backend', 'frontend'] as const).map((p) => (
+                  <SelectItem key={p} value={p}>{t(`plugin_codegen.profiles.${p}`)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{t('plugin_codegen.config.profileHint')}</p>
+          </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="codegen-module">
               {t('plugin_codegen.config.module')}
@@ -213,8 +257,8 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="codegen-gomodule">{t('plugin_codegen.config.goModule')}</Label>
-            <Input id="codegen-gomodule" value={goModule} onChange={(e) => onGoModuleChange(e.target.value.trim())} maxLength={100} placeholder="example.com/shop" aria-invalid={!!goModuleError} />
-            <p className={goModuleError ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>{goModuleError ?? t('plugin_codegen.config.goModuleHint')}</p>
+            <Input id="codegen-gomodule" value={goModule} onChange={(e) => onGoModuleChange(e.target.value.trim())} maxLength={100} placeholder="example.com/shop" aria-invalid={!!goModuleError} disabled={profile === 'frontend'} />
+            <p className={goModuleError && profile !== 'frontend' ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>{profile === 'frontend' ? t('plugin_codegen.config.frontendOnlyHint') : goModuleError ?? t('plugin_codegen.config.goModuleHint')}</p>
           </div>
         </FormGrid>
       </FormLayout>
@@ -238,6 +282,75 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
           </>
         }
       />
+      <ResponsiveDialog
+        side="right"
+        open={!!metadata}
+        onOpenChange={(open) => { if (!open) setMetadata(undefined) }}
+        title={t('plugin_codegen.metadata.title', { name: metadata?.name ?? '' })}
+        description={t('plugin_codegen.metadata.hint')}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setMetadata(undefined)}>{t('common.cancel')}</Button>
+            <Button type="submit" form="codegen-field-metadata">{t('common.save')}</Button>
+          </>
+        }
+      >
+        {metadata ? (
+          <FormLayout
+            id="codegen-field-metadata"
+            onSubmit={(e) => {
+              e.preventDefault()
+              patch(metadata.name, metadata.value)
+              setMetadata(undefined)
+            }}
+          >
+            <FormGrid cols={1}>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="codegen-meta-label">{t('plugin_codegen.metadata.label')}</Label>
+                <Input id="codegen-meta-label" value={metadata.value.label ?? ''} onChange={(e) => patchMetadata({ label: e.target.value })} maxLength={120} />
+                <p className="text-xs text-muted-foreground">{t('plugin_codegen.metadata.labelHint')}</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="codegen-meta-placeholder">{t('plugin_codegen.metadata.placeholder')}</Label>
+                <Input id="codegen-meta-placeholder" value={metadata.value.placeholder ?? ''} onChange={(e) => patchMetadata({ placeholder: e.target.value })} maxLength={200} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="codegen-meta-default">{t('plugin_codegen.metadata.defaultValue')}</Label>
+                {metadataColumn?.kind === 'bool' ? (
+                  <Select value={metadata.value.defaultValue || '__empty__'} onValueChange={(v) => patchMetadata({ defaultValue: v === '__empty__' ? '' : v })}>
+                    <SelectTrigger id="codegen-meta-default"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__empty__">{t('plugin_codegen.metadata.noDefault')}</SelectItem>
+                      <SelectItem value="true">{t('common.yes')}</SelectItem>
+                      <SelectItem value="false">{t('common.no')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input id="codegen-meta-default" value={metadata.value.defaultValue ?? ''} onChange={(e) => patchMetadata({ defaultValue: e.target.value })} maxLength={500} />
+                )}
+                <p className="text-xs text-muted-foreground">{t('plugin_codegen.metadata.defaultHint')}</p>
+              </div>
+              {metadataColumn?.kind === 'string' || metadataColumn?.kind === 'text' ? (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="codegen-meta-min">{t('plugin_codegen.metadata.minLength')}</Label>
+                    <Input id="codegen-meta-min" type="number" min={0} max={4000} value={metadata.value.minLength ?? 0} onChange={(e) => patchMetadata({ minLength: Number(e.target.value) })} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="codegen-meta-max">{t('plugin_codegen.metadata.maxLength')}</Label>
+                    <Input id="codegen-meta-max" type="number" min={0} max={metadataColumn.length ?? 4000} value={metadata.value.maxLength ?? 0} onChange={(e) => patchMetadata({ maxLength: Number(e.target.value) })} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="codegen-meta-pattern">{t('plugin_codegen.metadata.pattern')}</Label>
+                    <Input id="codegen-meta-pattern" className="font-mono" value={metadata.value.pattern ?? ''} onChange={(e) => patchMetadata({ pattern: e.target.value })} maxLength={200} placeholder="^[A-Z]{2}[0-9]+$" />
+                    <p className="text-xs text-muted-foreground">{t('plugin_codegen.metadata.patternHint')}</p>
+                  </div>
+                </>
+              ) : null}
+            </FormGrid>
+          </FormLayout>
+        ) : null}
+      </ResponsiveDialog>
     </div>
   )
 }

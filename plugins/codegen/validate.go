@@ -62,46 +62,52 @@ func truncateDiagnostic(s string) string {
 func (s *Service) validateOutput(ctx context.Context, spec *Spec, out *Output, root string) *ValidationReport {
 	report := newValidationReport()
 	out.Validation = report
-	report.check("go_build", "passed", "", "")
-	if err := validateGoOutput(ctx, spec, out.Files, root); err != nil {
-		code, status := "go_build_failed", "failed"
-		if errorsIsUnavailable(err) {
-			code, status = "go_build_skipped", "warning"
-		}
-		report.Checks[len(report.Checks)-1].Status = status
-		report.Issues = append(report.Issues, ValidationIssue{Code: code, Severity: status, Detail: truncateDiagnostic(err.Error())})
-	}
-	if err := validateTypeScriptOutput(ctx, out.Files, root); err != nil {
-		status, code := "failed", "typescript_failed"
-		if errorsIsUnavailable(err) {
-			status, code = "warning", "typescript_skipped"
-		}
-		report.check(code, status, "", err.Error())
-	} else {
-		report.check("typescript", "passed", "", "")
-	}
-	report.check("sql", "passed", "", "")
-	sqlCheck := len(report.Checks) - 1
-	for _, f := range out.Files {
-		if f.Lang != "sql" {
-			continue
-		}
-		engine := ""
-		parts := strings.Split(filepath.ToSlash(f.Path), "/")
-		if len(parts) >= 4 {
-			engine = parts[2]
-		}
-		stmts, err := migrate.SplitForEngine(engine, f.Content)
-		if err != nil || len(stmts) == 0 {
-			report.check("sql_failed", "failed", f.Path, fmt.Sprint(err))
-			report.Checks[sqlCheck].Status = "failed"
+	if spec.HasBackend() {
+		report.check("go_build", "passed", "", "")
+		if err := validateGoOutput(ctx, spec, out.Files, root); err != nil {
+			code, status := "go_build_failed", "failed"
+			if errorsIsUnavailable(err) {
+				code, status = "go_build_skipped", "warning"
+			}
+			report.Checks[len(report.Checks)-1].Status = status
+			report.Issues = append(report.Issues, ValidationIssue{Code: code, Severity: status, Detail: truncateDiagnostic(err.Error())})
 		}
 	}
-	report.check("migrations", "passed", "", "")
-	if issues := s.migrationIssues(out.Files); len(issues) > 0 {
-		report.Checks[len(report.Checks)-1].Status = "failed"
-		for _, issue := range issues {
-			report.check(issue.Code, "failed", issue.Path, issue.Detail)
+	if spec.HasFrontend() {
+		if err := validateTypeScriptOutput(ctx, out.Files, root); err != nil {
+			status, code := "failed", "typescript_failed"
+			if errorsIsUnavailable(err) {
+				status, code = "warning", "typescript_skipped"
+			}
+			report.check(code, status, "", err.Error())
+		} else {
+			report.check("typescript", "passed", "", "")
+		}
+	}
+	if spec.HasBackend() {
+		report.check("sql", "passed", "", "")
+		sqlCheck := len(report.Checks) - 1
+		for _, f := range out.Files {
+			if f.Lang != "sql" {
+				continue
+			}
+			engine := ""
+			parts := strings.Split(filepath.ToSlash(f.Path), "/")
+			if len(parts) >= 4 {
+				engine = parts[2]
+			}
+			stmts, err := migrate.SplitForEngine(engine, f.Content)
+			if err != nil || len(stmts) == 0 {
+				report.check("sql_failed", "failed", f.Path, fmt.Sprint(err))
+				report.Checks[sqlCheck].Status = "failed"
+			}
+		}
+		report.check("migrations", "passed", "", "")
+		if issues := s.migrationIssues(out.Files); len(issues) > 0 {
+			report.Checks[len(report.Checks)-1].Status = "failed"
+			for _, issue := range issues {
+				report.check(issue.Code, "failed", issue.Path, issue.Detail)
+			}
 		}
 	}
 	return report

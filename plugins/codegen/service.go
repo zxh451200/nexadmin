@@ -46,6 +46,7 @@ type GenRequest struct {
 	Table    string         `json:"table" binding:"max=64"`
 	Module   string         `json:"module" binding:"required,max=64"`
 	GoModule string         `json:"goModule" binding:"max=100"`
+	Profile  string         `json:"profile" binding:"max=16"`
 	Columns  []ColumnConfig `json:"columns" binding:"max=200,dive"`
 	Define   *TableDef      `json:"define"`
 	Sub      *SubTableSpec  `json:"sub"`
@@ -165,7 +166,7 @@ func (s *Service) generate(ctx context.Context, req GenRequest) (*Spec, *Output,
 	if err != nil {
 		return nil, nil, err
 	}
-	spec, err := buildSpec(a, req.GoModule, req.Module, req.Columns)
+	spec, err := buildSpec(a, req.GoModule, req.Module, req.Profile, req.Columns)
 	if err != nil {
 		return nil, nil, badReq(err)
 	}
@@ -264,6 +265,7 @@ type ConfigForm struct {
 	Name     string         `json:"name" binding:"required,max=64"`
 	Module   string         `json:"module" binding:"required,max=32"`
 	GoModule string         `json:"goModule" binding:"max=100"`
+	Profile  string         `json:"profile" binding:"max=16"`
 	Table    string         `json:"table" binding:"max=64"`
 	Define   *TableDef      `json:"define"`
 	Columns  []ColumnConfig `json:"columns" binding:"max=200,dive"`
@@ -276,6 +278,7 @@ type SavedConfig struct {
 	Name     string         `json:"name"`
 	Module   string         `json:"module"`
 	GoModule string         `json:"goModule"`
+	Profile  string         `json:"profile"`
 	Table    string         `json:"table"`
 	Define   *TableDef      `json:"define,omitempty"`
 	Columns  []ColumnConfig `json:"columns"`
@@ -315,6 +318,10 @@ func (s *Service) SaveConfig(ctx context.Context, f ConfigForm) (*SavedConfig, e
 			return nil, badReq(err)
 		}
 	}
+	if err := ValidProfile(f.Profile); err != nil {
+		return nil, badReq(err)
+	}
+	f.Profile = normalizeProfile(f.Profile)
 	var n int64
 	if err := s.db.WithContext(ctx).Model(&CodegenConfig{}).Count(&n).Error; err != nil {
 		return nil, err
@@ -350,7 +357,7 @@ func (s *Service) SaveConfig(ctx context.Context, f ConfigForm) (*SavedConfig, e
 	err := s.db.WithContext(ctx).Where("name = ?", f.Name).First(&row).Error
 	switch {
 	case err == nil:
-		row.Module, row.GoModule, row.Table = f.Module, f.GoModule, f.Table
+		row.Module, row.GoModule, row.Profile, row.Table = f.Module, f.GoModule, f.Profile, f.Table
 		row.DefineJSON, row.ColumnsJSON, row.SubJSON = defineJSON, columnsJSON, subJSON
 		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 			return nil, err
@@ -360,7 +367,7 @@ func (s *Service) SaveConfig(ctx context.Context, f ConfigForm) (*SavedConfig, e
 			return nil, response.BadRequest("codegen.config_too_many")
 		}
 		row = CodegenConfig{
-			Name: f.Name, Module: f.Module, GoModule: f.GoModule, Table: f.Table,
+			Name: f.Name, Module: f.Module, GoModule: f.GoModule, Profile: f.Profile, Table: f.Table,
 			DefineJSON: defineJSON, ColumnsJSON: columnsJSON, SubJSON: subJSON,
 		}
 		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
@@ -409,7 +416,7 @@ func isNotFound(err error) bool { return errors.Is(err, gorm.ErrRecordNotFound) 
 
 // view 把存储行还原成可载入的配置；JSON 损坏按缺失处理（配置坏了不该挡住列表）。
 func (r CodegenConfig) view() SavedConfig {
-	v := SavedConfig{ID: r.ID, Name: r.Name, Module: r.Module, GoModule: r.GoModule, Table: r.Table}
+	v := SavedConfig{ID: r.ID, Name: r.Name, Module: r.Module, GoModule: r.GoModule, Profile: normalizeProfile(r.Profile), Table: r.Table}
 	if r.DefineJSON != "" {
 		var d TableDef
 		if json.Unmarshal([]byte(r.DefineJSON), &d) == nil {

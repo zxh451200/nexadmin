@@ -43,7 +43,7 @@ interface FormValues {
 
 const empty: FormValues = {
 [[- range .FormFields]]
-  [[.Camel]]: [[if eq .Kind "bool"]]false[[else]]''[[end]],
+  [[.Camel]]: [[formEmpty .]],
 [[- end]]
 }
 [[- if .Sub]]
@@ -88,7 +88,7 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
     () =>
       z.object({
 [[- range .FormFields]]
-        [[.Camel]]: [[if eq .Kind "string"]]z.string().trim().max([[.MaxLen]])[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "text"]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "int"]]z.string().regex(/^-?\d*$/)[[else if eq .Kind "float"]]z.string().regex(/^-?\d*\.?\d*$/)[[else if eq .Kind "decimal"]]z.string().trim()[[if not .Nullable]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]].refine((v) => v === '' || /[[decimalPattern .]]/.test(v), t('[[$.Module]].validation.[[.Camel]]Invalid'))[[else if eq .Kind "bool"]]z.boolean()[[else if isTime .]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else]]z.string()[[end]],
+        [[.Camel]]: [[if eq .Kind "bool"]]z.boolean()[[else if eq .Kind "decimal"]]z.string().trim()[[if not .Nullable]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]].refine((v) => v === '' || /[[decimalPattern .]]/.test(v), t('[[$.Module]].validation.[[.Camel]]Invalid'))[[else if or (eq .Kind "int") (eq .Kind "float")]]z.string().regex([[if eq .Kind "int"]]/^-?\d*$/[[else]]/^-?\d*\.?\d*$/[[end]])[[else]]z.string()[[if or (eq .Kind "string") (eq .Kind "text")]].trim()[[end]][[if gt (minLength .) 0]].min([[minLength .]], t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[if gt (maxLength .) 0]].max([[maxLength .]], t('[[$.Module]].validation.[[.Camel]]Invalid'))[[end]][[if .Pattern]].regex(new RegExp([[tsStr .Pattern]]), t('[[$.Module]].validation.[[.Camel]]Invalid'))[[end]][[end]],
 [[- end]]
       }),
     [t],
@@ -178,17 +178,17 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
                       </SelectContent>
                     </Select>
 [[- else if eq .Control "date"]]
-                    <DatePicker value={field.value as string} onChange={field.onChange} />
+                    <DatePicker value={field.value as string} onChange={field.onChange} placeholder={[[if .Placeholder]][[tsStr .Placeholder]][[else]]t('[[$.Module]].field.[[.Camel]]')[[end]]} />
 [[- else if eq .Control "datetime"]]
-                    <DateTimePicker value={field.value as string} onChange={field.onChange} />
+                    <DateTimePicker value={field.value as string} onChange={field.onChange} placeholder={[[if .Placeholder]][[tsStr .Placeholder]][[else]]t('[[$.Module]].field.[[.Camel]]')[[end]]} />
 [[- else if eq .Control "dict"]]
-                    <DictSelect dict="[[.Dict]]" value={field.value as string} onChange={(v) => field.onChange(v)} allowClear={[[if .Required]]false[[else]]true[[end]]} />
+                    <DictSelect dict="[[.Dict]]" value={field.value as string} onChange={(v) => field.onChange(v)} allowClear={[[if .Required]]false[[else]]true[[end]]} placeholder={[[if .Placeholder]][[tsStr .Placeholder]][[else]]t('[[$.Module]].field.[[.Camel]]')[[end]]} />
 [[- else if eq .Control "textarea"]]
-                    <Textarea rows={3} {...field} value={field.value as string} />
+                    <Textarea rows={3} {...field} value={field.value as string} placeholder={[[if .Placeholder]][[tsStr .Placeholder]][[else]]t('[[$.Module]].field.[[.Camel]]')[[end]]} />
 [[- else if eq .Control "number"]]
-                    <Input {...field} value={field.value as string} type="number" inputMode="[[if eq .Kind "int"]]numeric[[else]]decimal[[end]]" step={[[if eq .Kind "int"]]1[[else]]'any'[[end]]} />
+                    <Input {...field} value={field.value as string} type="number" inputMode="[[if eq .Kind "int"]]numeric[[else]]decimal[[end]]" step={[[if eq .Kind "int"]]1[[else]]'any'[[end]]} placeholder={[[if .Placeholder]][[tsStr .Placeholder]][[else]]t('[[$.Module]].field.[[.Camel]]')[[end]]} />
 [[- else]]
-                    <Input {...field} value={field.value as string} />
+                    <Input {...field} value={field.value as string} placeholder={[[if .Placeholder]][[tsStr .Placeholder]][[else]]t('[[$.Module]].field.[[.Camel]]')[[end]]} />
 [[- end]]
                   </FormControl>
                   <FormMessage />

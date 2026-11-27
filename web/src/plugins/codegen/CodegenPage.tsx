@@ -35,6 +35,7 @@ import {
   useTables,
   type ColumnConfig,
   type GenOutput,
+  type GenProfile,
   type GenRequest,
   type InstallResult,
   type SavedGenConfig,
@@ -63,12 +64,14 @@ export default function CodegenPage() {
   const [defined, setDefined] = useState<TableSchema>()
   const [module, setModule] = useState('')
   const [goModule, setGoModule] = useState('')
+  const [profile, setProfile] = useState<GenProfile>('full')
   const [cfg, setCfg] = useState<ColumnConfig[]>([])
   const [output, setOutput] = useState<GenOutput | undefined>()
+  const [dirty, setDirty] = useState(false)
   const [doneOpen, setDoneOpen] = useState(false)
   const [defineOpen, setDefineOpen] = useState(false)
   // 载入已保存配置：等 schema 到手后再覆盖推荐配置；nonce 让重复载入同一份也能触发。
-  const [pending, setPending] = useState<{ sig: string; cfg: ColumnConfig[]; module?: string; sub?: SubTableSpec; nonce: number }>()
+  const [pending, setPending] = useState<{ sig: string; cfg: ColumnConfig[]; module?: string; goModule?: string; profile?: GenProfile; sub?: SubTableSpec; nonce: number }>()
   const [sub, setSub] = useState<SubTableSpec>()
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
@@ -100,20 +103,24 @@ export default function CodegenPage() {
     if (pending && pending.sig === sig) {
       setCfg(pending.cfg)
       if (pending.module) setModule(pending.module)
+      if (pending.goModule !== undefined) setGoModule(pending.goModule)
+      if (pending.profile) setProfile(pending.profile)
       setSub(pending.sub)
       setPending(undefined)
       setOutput(undefined)
+      setDirty(false)
       return
     }
     setCfg(loaded.columns.map((c, i) => ({ ...c.config, sort: c.config.sort || i + 1 })))
     setModule(loaded.suggestedModule)
     setSub(undefined)
     setOutput(undefined)
+    setDirty(false)
   }, [loaded, pending, sig])
 
   const moduleError = module && !MODULE_RE.test(module) ? t('plugin_codegen.errors.module') : undefined
   const goModuleError = goModule && !GO_MODULE_RE.test(goModule) ? t('plugin_codegen.errors.goModule') : undefined
-  const canPreview = !!source && !!loaded && !!module && !moduleError && !goModuleError
+  const canPreview = !!source && !!loaded && !!module && !moduleError && (profile === 'frontend' || !goModuleError)
   const registerText = result?.registered
     ? t('plugin_codegen.install.registerDone')
     : result?.registerNote === 'already'
@@ -127,12 +134,17 @@ export default function CodegenPage() {
             : ''
 
   const request = (): GenRequest => {
-    const base = { module, goModule: goModule || undefined, columns: cfg, sub: sub?.foreignKey ? sub : undefined }
+    const base = { module, goModule: goModule || undefined, profile, columns: cfg, sub: sub?.foreignKey ? sub : undefined }
     return source?.kind === 'define'
       ? { ...base, define: source.def }
       : { ...base, table: source?.kind === 'table' ? source.name : '' }
   }
-  const installPlan = useInstallPlan({ ...request(), overwrite, register: autoRegister }, installOpen)
+  const requestKey = JSON.stringify(request())
+  useEffect(() => {
+    setOutput(undefined)
+  }, [requestKey])
+  const discardChanges = async () => !dirty || confirm({ description: t('plugin_codegen.unsavedConfirm') })
+  const installPlan = useInstallPlan({ ...request(), overwrite, register: profile !== 'frontend' && autoRegister }, installOpen)
   const validationOK = output?.validation?.ok !== false
 
   const onPreview = async () => {
@@ -156,7 +168,7 @@ export default function CodegenPage() {
 
   const onInstall = async (ow = overwrite) => {
     try {
-      const res = await install.mutateAsync({ ...request(), overwrite: ow, register: autoRegister })
+      const res = await install.mutateAsync({ ...request(), overwrite: ow, register: profile !== 'frontend' && autoRegister })
       setOverwrite(ow)
       setInstallOpen(false)
       setResult(res)
@@ -167,24 +179,29 @@ export default function CodegenPage() {
   }
 
   const onDefine = async (def: TableDef) => {
+    if (!(await discardChanges())) return
     try {
       const sc = await defineSchema.mutateAsync({ define: def })
       setSource({ kind: 'define', def })
       setDefined(sc)
       setDefineOpen(false)
       setStep('config')
+      setDirty(false)
     } catch {
       // 错误提示由请求层统一弹出
     }
   }
 
-  const pickTable = (name: string) => {
+  const pickTable = async (name: string) => {
+    if (!(await discardChanges())) return
     setSource({ kind: 'table', name })
     setStep('config')
+    setDirty(false)
   }
 
   // 载入已保存配置：先补齐 schema（define 要重新合成一次），schema 到手后 effect 里覆盖配置。
   const loadConfig = async (c: SavedGenConfig) => {
+    if (!(await discardChanges())) return
     try {
       if (c.define) {
         const sc = await defineSchema.mutateAsync({ define: c.define })
@@ -197,10 +214,13 @@ export default function CodegenPage() {
         sig: c.define ? `define:${c.define.name}` : `table:${c.table}`,
         cfg: (c.columns ?? []).map((x, i) => ({ ...x, sort: x.sort || i + 1 })),
         module: c.module,
+        goModule: c.goModule,
+        profile: c.profile,
         sub: c.sub,
         nonce: Date.now(),
       })
       setStep('config')
+      setDirty(false)
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -214,6 +234,7 @@ export default function CodegenPage() {
         name,
         module,
         goModule: goModule || undefined,
+        profile,
         table: source?.kind === 'table' ? source.name : undefined,
         define: source?.kind === 'define' ? source.def : undefined,
         columns: cfg,
@@ -349,68 +370,70 @@ export default function CodegenPage() {
                   </Button>
                 )}
               />
-              {configs.isLoading || configs.isError || savedConfigs.length > 0 ? (
-                <section className="flex flex-col gap-2">
-                  <p className="text-sm font-medium text-muted-foreground">{t('plugin_codegen.saved.title')}</p>
-                  <PlatformNotice />
-                  <DataTable
-                    columns={configColumns}
-                    data={savedConfigs}
-                    rowKey="id"
-                    loading={configs.isLoading}
-                    isError={configs.isError}
-                    onRetry={() => void configs.refetch()}
-                    retrying={configs.isFetching}
-                    pagination={false}
-                    emptyText={t('plugin_codegen.saved.empty')}
-                    selection={{ selected: selectedCfgs, onChange: setSelectedCfgs }}
-                    batchActions={(ids) => (
-                      <Can perm="codegen:edit">
-                        <Button variant="destructive" size="sm" disabled={!isPlatform || removeConfigs.isPending} onClick={() => void onDeleteConfigBatch(ids)}>
-                          <Trash2 aria-hidden="true" />
-                          {t('common.delete')}
-                        </Button>
-                      </Can>
-                    )}
-                    onRowClick={(r) => void loadConfig(r)}
-                    rowActions={(r) => (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => void loadConfig(r)}>
-                          {t('plugin_codegen.saved.load')}
-                        </Button>
-                        <Can perm="codegen:edit">
-                          <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} disabled={!isPlatform} onClick={() => void onDeleteConfig(r)}>
-                            <Trash2 aria-hidden="true" />
-                          </Button>
-                        </Can>
-                      </>
-                    )}
-                  />
-                </section>
-              ) : null}
             </>
           )}
+          {configs.isLoading || configs.isError || savedConfigs.length > 0 ? (
+            <section className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-muted-foreground">{t('plugin_codegen.saved.title')}</p>
+              <PlatformNotice />
+              <DataTable
+                columns={configColumns}
+                data={savedConfigs}
+                rowKey="id"
+                loading={configs.isLoading}
+                isError={configs.isError}
+                onRetry={() => void configs.refetch()}
+                retrying={configs.isFetching}
+                pagination={false}
+                emptyText={t('plugin_codegen.saved.empty')}
+                selection={{ selected: selectedCfgs, onChange: setSelectedCfgs }}
+                batchActions={(ids) => (
+                  <Can perm="codegen:edit">
+                    <Button variant="destructive" size="sm" disabled={!isPlatform || removeConfigs.isPending} onClick={() => void onDeleteConfigBatch(ids)}>
+                      <Trash2 aria-hidden="true" />
+                      {t('common.delete')}
+                    </Button>
+                  </Can>
+                )}
+                onRowClick={(r) => void loadConfig(r)}
+                rowActions={(r) => (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => void loadConfig(r)}>
+                      {t('plugin_codegen.saved.load')}
+                    </Button>
+                    <Can perm="codegen:edit">
+                      <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} disabled={!isPlatform} onClick={() => void onDeleteConfig(r)}>
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </Can>
+                  </>
+                )}
+              />
+            </section>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="config" className="m-0 flex flex-col gap-4">
           {loaded ? (
             <div className="flex flex-col gap-3">
               {source?.kind === 'define' ? (
-                <p className="text-xs text-muted-foreground">{t('plugin_codegen.define.pendingHint', { table: loaded.table })}</p>
+                <p className="text-xs text-muted-foreground">{t(profile === 'frontend' ? 'plugin_codegen.define.frontendPendingHint' : 'plugin_codegen.define.pendingHint', { table: loaded.table })}</p>
               ) : null}
               <ColumnsStep
                 schema={loaded}
                 cfg={cfg}
-                onCfgChange={setCfg}
+                onCfgChange={(next) => { setCfg(next); setDirty(true) }}
                 module={module}
-                onModuleChange={setModule}
+                onModuleChange={(v) => { setModule(v); setDirty(true) }}
                 goModule={goModule}
-                onGoModuleChange={setGoModule}
+                onGoModuleChange={(v) => { setGoModule(v); setDirty(true) }}
+                profile={profile}
+                onProfileChange={(v) => { setProfile(v); setDirty(true) }}
                 moduleError={moduleError}
                 goModuleError={goModuleError}
               />
               {source?.kind === 'table' ? (
-                <SubStep tables={allTables} mainTable={source.name} value={sub} onChange={(v) => { setSub(v); setOutput(undefined) }} />
+                <SubStep tables={allTables} mainTable={source.name} value={sub} onChange={(v) => { setSub(v); setDirty(true); setOutput(undefined) }} />
               ) : null}
             </div>
           ) : (
@@ -512,12 +535,16 @@ export default function CodegenPage() {
             {t('plugin_codegen.install.overwrite')}
           </label>
           <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.overwriteHint')}</p>
-          <label className="flex items-center gap-2">
-            <Checkbox checked={autoRegister} onCheckedChange={(v) => setAutoRegister(v === true)} />
-            {t('plugin_codegen.install.register')}
-          </label>
-          <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.registerHint')}</p>
-          <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.restartHint')}</p>
+          {profile !== 'frontend' ? (
+            <>
+              <label className="flex items-center gap-2">
+                <Checkbox checked={autoRegister} onCheckedChange={(v) => setAutoRegister(v === true)} />
+                {t('plugin_codegen.install.register')}
+              </label>
+              <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.registerHint')}</p>
+            </>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{t(profile === 'frontend' ? 'plugin_codegen.install.frontendRestartHint' : 'plugin_codegen.install.restartHint')}</p>
           {installPlan.isFetching ? <p className="text-xs text-muted-foreground">{t('common.loading')}</p> : null}
           {installPlan.isError ? <p className="text-xs text-destructive">{t('plugin_codegen.install.planFailed')}</p> : null}
           {installPlan.data ? (

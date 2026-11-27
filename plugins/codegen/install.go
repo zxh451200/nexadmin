@@ -99,7 +99,7 @@ func (s *Service) PlanInstall(ctx context.Context, req GenRequest, overwrite, re
 		}
 		plan.Files = append(plan.Files, entry)
 	}
-	if register {
+	if register && spec.HasBackend() {
 		content, changed, note, regErr := moduleRegistration(root, spec.GoModule+"/internal/modules/"+spec.Module)
 		plan.RegisterNote, plan.RegisterError = note, ""
 		if regErr != nil {

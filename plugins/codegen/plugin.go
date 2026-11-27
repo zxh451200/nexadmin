@@ -14,7 +14,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "codegen", Name: "代码生成器", Version: "1.3.0", Edition: plugin.Free,
+		ID: "codegen", Name: "代码生成器", Version: "1.4.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }
@@ -32,11 +32,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/schema", core.Perm("codegen:list"), h.schema)
 	g.POST("/preview", core.Perm("codegen:list"), h.preview)
 	g.POST("/download", core.Perm("codegen:download"), h.download)
-	// install 写进项目根目录、configs 落在 plg_codegen_config（PlatformModel，表里没有 tenant_id）：
-	// 这两类都不属于某个租户，写入口只认平台级调用方。preview/download/schema 是无状态渲染，按权限点即可。
+	// install 写进项目根目录、configs 读写落在 plg_codegen_config（PlatformModel，表里没有 tenant_id）：
+	// 这两类都不属于某个租户，入口只认平台级调用方。preview/download/schema 是无状态渲染，按权限点即可。
 	g.POST("/install/plan", core.Perm("codegen:install"), core.RequirePlatform(), h.installPlan)
 	g.POST("/install", core.Perm("codegen:install"), core.RequirePlatform(), h.install)
-	g.GET("/configs", core.Perm("codegen:list"), h.listConfigs)
+	g.GET("/configs", core.Perm("codegen:list"), core.RequirePlatform(), h.listConfigs)
 	g.POST("/configs", core.Perm("codegen:edit"), core.RequirePlatform(), h.saveConfig)
 	g.DELETE("/configs/:id", core.Perm("codegen:edit"), core.RequirePlatform(), h.deleteConfig)
 	g.DELETE("/configs", core.Perm("codegen:edit"), core.RequirePlatform(), h.deleteConfigs)

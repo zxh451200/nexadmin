@@ -43,6 +43,7 @@
       "submit": "创建并继续",
       "cancel": "取消",
       "pendingHint": "表 {{table}} 尚未建表：下载包里的三份迁移会在重启后创建它。",
+      "frontendPendingHint": "表 {{table}} 尚未建表：仅前端生成不包含迁移，请先通过数据库迁移创建该表。",
       "kinds": {
         "string": "短文本",
         "text": "长文本",
@@ -66,8 +67,12 @@
       "moduleHint": "小写字母开头的字母数字，同时作为 Go 包名、前端目录名和 i18n 命名空间",
       "goModule": "Go 模块路径",
       "goModuleHint": "你的项目 go.mod 里的 module；留空自动读本项目的 go.mod",
+      "profile": "生成范围",
+      "profileHint": "可选择完整代码、仅后端或仅前端；校验与安装只处理所选范围。",
+      "frontendOnlyHint": "仅前端生成不需要 Go 模块路径。",
       "shape": "表形态：{{shape}}"
     },
+    "profiles": { "full": "完整代码", "backend": "仅后端", "frontend": "仅前端" },
     "shape": {
       "tenant": "多租户（嵌入 TenantModel，自动按租户隔离）",
       "platform": "平台级（嵌入 PlatformModel，不带租户条件）",
@@ -87,6 +92,7 @@
       "required": "必填",
       "control": "控件",
       "dictCode": "字典编码",
+      "metadata": "字段设置",
       "system": "系统列",
       "unsupported": "不支持",
       "empty": "这张表没有列",
@@ -94,6 +100,20 @@
       "showSystemHint": "系统列（id、tenant_id、时间戳）自动生成，不需要在这里配置"
     },
     "controls": { "input": "输入框", "textarea": "多行文本", "number": "数字", "switch": "开关", "date": "日期", "datetime": "日期时间", "dict": "字典下拉" },
+    "metadata": {
+      "title": "字段设置：{{name}}",
+      "hint": "这些设置只影响生成代码，不修改数据库结构。",
+      "label": "显示名称",
+      "labelHint": "留空时使用数据库注释或字段名。",
+      "placeholder": "占位提示",
+      "defaultValue": "默认值",
+      "defaultHint": "新增表单的初始值；日期时间请填 ISO 格式。",
+      "noDefault": "不设置",
+      "minLength": "最小长度",
+      "maxLength": "最大长度",
+      "pattern": "正则校验",
+      "patternHint": "使用 JavaScript 正则语法；不能包含逗号、引号或换行。"
+    },
     "queryOps": {
       "like": "包含",
       "eq": "等于",
@@ -172,6 +192,7 @@
       "register": "自动注册模块",
       "registerHint": "在 internal/modules/modules.go 的标记区加一行空导入，重启后路由与菜单才会生效；已注册过则不动。",
       "restartHint": "写入后需要重新编译并重启后端；新建表的迁移文件放进 migrations/business 后重启自动建表。",
+      "frontendRestartHint": "仅前端生成不包含迁移或模块注册；请确保目标表与后端接口已经存在。",
       "resultTitle": "写入回执",
       "resultSummary": "写入 {{written}} 个文件，覆盖 {{overwritten}} 个，跳过 {{skipped}} 个",
       "resultRoot": "写入目录",
@@ -196,6 +217,7 @@
       "treeReject": "树形表不能作为主子表的子表"
     },
     "downloaded": "代码包已下载",
+    "unsavedConfirm": "当前生成配置尚未保存，继续会丢弃这些修改。确定继续吗？",
     "done": { "title": "下一步", "description": "解压到项目根目录后，按下面几步接入：" },
     "errors": {
       "module": "模块名需为小写字母开头的字母数字，最长 31 位",

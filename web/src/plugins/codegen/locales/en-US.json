@@ -43,6 +43,7 @@
       "submit": "Create and continue",
       "cancel": "Cancel",
       "pendingHint": "Table {{table}} does not exist yet: the three migrations in the package create it on restart.",
+      "frontendPendingHint": "Table {{table}} does not exist yet: frontend-only output includes no migration; create the table through your database migration process first.",
       "kinds": {
         "string": "Short text",
         "text": "Long text",
@@ -66,8 +67,12 @@
       "moduleHint": "Lowercase letter first, then letters and digits; used as the Go package, the frontend folder and the i18n namespace",
       "goModule": "Go module path",
       "goModuleHint": "The module in your project's go.mod; leave it empty to read this project's go.mod",
+      "profile": "Generation scope",
+      "profileHint": "Generate the full stack, backend only, or frontend only. Validation and installation cover only the selected scope.",
+      "frontendOnlyHint": "Frontend-only generation does not need a Go module path.",
       "shape": "Table shape: {{shape}}"
     },
+    "profiles": { "full": "Full stack", "backend": "Backend only", "frontend": "Frontend only" },
     "shape": {
       "tenant": "Multi-tenant (embeds TenantModel, tenant-scoped automatically)",
       "platform": "Platform-level (embeds PlatformModel, no tenant condition)",
@@ -87,6 +92,7 @@
       "required": "Required",
       "control": "Control",
       "dictCode": "Dict code",
+      "metadata": "Field settings",
       "system": "System",
       "unsupported": "Unsupported",
       "empty": "This table has no columns",
@@ -94,6 +100,20 @@
       "showSystemHint": "System columns (id, tenant_id, timestamps) are generated automatically and need no configuration here"
     },
     "controls": { "input": "Input", "textarea": "Textarea", "number": "Number", "switch": "Switch", "date": "Date", "datetime": "Date & time", "dict": "Dictionary" },
+    "metadata": {
+      "title": "Field settings: {{name}}",
+      "hint": "These settings affect generated code only; they do not change the database schema.",
+      "label": "Display label",
+      "labelHint": "Leave empty to use the database comment or field name.",
+      "placeholder": "Placeholder",
+      "defaultValue": "Default value",
+      "defaultHint": "Initial value for new records; use ISO format for dates and times.",
+      "noDefault": "Not set",
+      "minLength": "Minimum length",
+      "maxLength": "Maximum length",
+      "pattern": "Pattern validation",
+      "patternHint": "Use JavaScript regex syntax; commas, quotes and line breaks are not supported."
+    },
     "queryOps": {
       "like": "Contains",
       "eq": "Equals",
@@ -172,6 +192,7 @@
       "register": "Register module automatically",
       "registerHint": "Adds one blank import inside the marker block of internal/modules/modules.go so routes and menus take effect after a restart; does nothing if it is already registered.",
       "restartHint": "Rebuild and restart the backend afterwards. Drop new-table migrations into migrations/business and they apply on restart.",
+      "frontendRestartHint": "Frontend-only output includes no migration or module registration; make sure the target table and backend API already exist.",
       "resultTitle": "Write receipt",
       "resultSummary": "Wrote {{written}} files, overwrote {{overwritten}}, skipped {{skipped}}",
       "resultRoot": "Target directory",
@@ -196,6 +217,7 @@
       "treeReject": "A tree table cannot be a detail table"
     },
     "downloaded": "Package downloaded",
+    "unsavedConfirm": "The current generation config has unsaved changes. Continuing will discard them. Continue?",
     "done": { "title": "Next steps", "description": "Unzip into the project root, then:" },
     "errors": {
       "module": "Use lowercase letters and digits, starting with a letter, up to 31 characters",

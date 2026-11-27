@@ -10,6 +10,8 @@ type CodegenConfig struct {
 	Module string `gorm:"size:32;not null" json:"module"`
 	// GoModule 留空表示用所在 Go 项目的模块路径（见 detectGoModule）。
 	GoModule string `gorm:"size:100;not null;default:''" json:"goModule"`
+	// Profile 控制生成范围：full / backend / frontend。
+	Profile string `gorm:"size:16;not null;default:'full'" json:"profile"`
 	// Table 是来源表；新建表模式为空，定义在 DefineJSON 里。
 	Table string `gorm:"column:table_name;size:64;not null;default:''" json:"tableName"`
 	// DefineJSON / ColumnsJSON / SubJSON 是 TableDef / []ColumnConfig / SubTableSpec 的 JSON 文本；空 = 没有对应部分。

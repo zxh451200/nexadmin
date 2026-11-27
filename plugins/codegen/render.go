@@ -10,6 +10,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -72,13 +73,53 @@ func bindTag(f Field) string {
 	if f.Required && f.Kind != KindBool {
 		parts = append(parts, "required")
 	}
-	if f.Kind == KindString {
-		parts = append(parts, fmt.Sprintf("max=%d", f.MaxLen))
+	if f.Kind == KindString || f.Kind == KindText {
+		if min := minLength(f); min > 0 {
+			parts = append(parts, fmt.Sprintf("min=%d", min))
+		}
+		if max := maxLength(f); max > 0 {
+			parts = append(parts, fmt.Sprintf("max=%d", max))
+		}
 	}
 	if len(parts) == 0 {
 		return ""
 	}
 	return ` binding:"` + strings.Join(parts, ",") + `"`
+}
+
+func minLength(f Field) int {
+	if f.MinLength > 0 {
+		return f.MinLength
+	}
+	if f.Required {
+		return 1
+	}
+	return 0
+}
+
+func maxLength(f Field) int {
+	if f.MaxLength > 0 {
+		return f.MaxLength
+	}
+	if f.Kind == KindString && f.MaxLen > 0 {
+		return f.MaxLen
+	}
+	return 0
+}
+
+func formEmpty(f Field) string {
+	if f.DefaultValue != "" {
+		if f.Kind == KindBool {
+			if v, err := strconv.ParseBool(f.DefaultValue); err == nil {
+				return strconv.FormatBool(v)
+			}
+		}
+		return tsStr(f.DefaultValue)
+	}
+	if f.Kind == KindBool {
+		return "false"
+	}
+	return "''"
 }
 
 func queryType(f Field) string {
@@ -191,7 +232,8 @@ func (s *Spec) HasTimeList() bool {
 
 func parseTemplates() (*template.Template, error) {
 	funcs := template.FuncMap{
-		"bind": bindTag, "queryType": queryType, "isTime": isTime, "clause": clauseOp, "jsOp": jsOp,
+		"bind": bindTag, "queryType": queryType, "isTime": isTime, "clause": clauseOp, "jsOp": jsOp, "tsStr": tsStr,
+		"minLength": minLength, "maxLength": maxLength, "formEmpty": formEmpty,
 		"decimalPattern": func(f Field) string {
 			precision, scale := f.Precision, f.Scale
 			if precision <= 0 {
@@ -210,6 +252,16 @@ func parseTemplates() (*template.Template, error) {
 		"mockid": func(i int) string { return fmt.Sprintf("188000000000%07d", i) },
 	}
 	return template.New("").Delims("[[", "]]").Funcs(funcs).ParseFS(tplFS, "tpl/*.tmpl")
+}
+
+func fieldLabel(f Field, zh bool) string {
+	if f.Label != "" {
+		return f.Label
+	}
+	if zh {
+		return f.LabelZh()
+	}
+	return f.Title
 }
 
 // localeJSON 生成 {"<module>": {...}}；所有文案经 json.Marshal 转义。
@@ -234,10 +286,7 @@ func localeJSON(s *Spec, zh bool) string {
 		str(pick("新增 "+title, "Add "+strings.ToLower(title))), str(pick("编辑 "+title, "Edit "+strings.ToLower(title))))
 	b.WriteString("    \"field\": {\n")
 	for i, f := range s.Fields {
-		label := f.Title
-		if zh {
-			label = f.LabelZh()
-		}
+		label := fieldLabel(f, zh)
 		sep := ","
 		if i == len(s.Fields)-1 {
 			sep = ""
@@ -254,10 +303,7 @@ func localeJSON(s *Spec, zh bool) string {
 			str(pick("添加一行", "Add row")),
 			str(pick("还没有明细，点「添加一行」新增。", "No items yet — click \"Add row\".")))
 		for i, f := range s.Sub.Fields {
-			label := f.Title
-			if zh {
-				label = f.LabelZh()
-			}
+			label := fieldLabel(f, zh)
 			sep := ","
 			if i == len(s.Sub.Fields)-1 {
 				sep = ""
@@ -274,15 +320,14 @@ func localeJSON(s *Spec, zh bool) string {
 		if !f.Form {
 			continue
 		}
-		label := f.Title
-		if zh {
-			label = f.LabelZh()
-		}
+		label := fieldLabel(f, zh)
 		if f.Required && f.Kind != KindBool && f.Kind != KindInt && f.Kind != KindFloat && f.Kind != KindID {
 			validations = append(validations, validationEntry{f.Camel + "Required", label + "不能为空", label + " is required"})
 		}
 		if f.Kind == KindDecimal {
 			validations = append(validations, validationEntry{f.Camel + "Invalid", label + "格式或小数位数不正确", label + " has an invalid format or scale"})
+		} else if f.MinLength > 0 || maxLength(f) > 0 || f.Pattern != "" {
+			validations = append(validations, validationEntry{f.Camel + "Invalid", label + "格式不正确", label + " is invalid"})
 		}
 	}
 	if len(validations) > 0 {
@@ -314,17 +359,24 @@ func Render(s *Spec) (*Output, error) {
 	type item struct{ rel, tmpl, lang string }
 	be := path.Join("internal", "modules", s.Module)
 	fe := path.Join("web", "src", "pages", s.Module)
-	items := []item{
-		{path.Join(be, "model.go"), "model.go.tmpl", "go"},
-		{path.Join(be, "service.go"), "service.go.tmpl", "go"},
-		{path.Join(be, "handler.go"), "handler.go.tmpl", "go"},
-		{path.Join(be, "module.go"), "module.go.tmpl", "go"},
-		{path.Join(be, "seed.go"), "seed.go.tmpl", "go"},
-		{path.Join(fe, "route.tsx"), "route.tsx.tmpl", "tsx"},
-		{path.Join(fe, "api.ts"), "api.ts.tmpl", "ts"},
-		{path.Join(fe, s.Module+".mock.ts"), "mock.ts.tmpl", "ts"},
-		{path.Join(fe, pascal+"Page.tsx"), "page.tsx.tmpl", "tsx"},
-		{path.Join(fe, pascal+"FormDialog.tsx"), "form.tsx.tmpl", "tsx"},
+	var items []item
+	if s.HasBackend() {
+		items = append(items,
+			item{path.Join(be, "model.go"), "model.go.tmpl", "go"},
+			item{path.Join(be, "service.go"), "service.go.tmpl", "go"},
+			item{path.Join(be, "handler.go"), "handler.go.tmpl", "go"},
+			item{path.Join(be, "module.go"), "module.go.tmpl", "go"},
+			item{path.Join(be, "seed.go"), "seed.go.tmpl", "go"},
+		)
+	}
+	if s.HasFrontend() {
+		items = append(items,
+			item{path.Join(fe, "route.tsx"), "route.tsx.tmpl", "tsx"},
+			item{path.Join(fe, "api.ts"), "api.ts.tmpl", "ts"},
+			item{path.Join(fe, s.Module+".mock.ts"), "mock.ts.tmpl", "ts"},
+			item{path.Join(fe, pascal+"Page.tsx"), "page.tsx.tmpl", "tsx"},
+			item{path.Join(fe, pascal+"FormDialog.tsx"), "form.tsx.tmpl", "tsx"},
+		)
 	}
 	out := &Output{}
 	total := 0
@@ -356,32 +408,39 @@ func Render(s *Spec) (*Output, error) {
 			return nil, err
 		}
 	}
-	for _, l := range []struct {
-		name string
-		zh   bool
-	}{{"zh-CN", true}, {"en-US", false}} {
-		raw := localeJSON(s, l.zh)
-		if !json.Valid([]byte(raw)) {
-			return nil, fmt.Errorf("generated locale %s is not valid JSON", l.name)
-		}
-		if err := add(path.Join(fe, "locales", l.name+".json"), "json", []byte(raw)); err != nil {
-			return nil, err
+	if s.HasFrontend() {
+		for _, l := range []struct {
+			name string
+			zh   bool
+		}{{"zh-CN", true}, {"en-US", false}} {
+			raw := localeJSON(s, l.zh)
+			if !json.Valid([]byte(raw)) {
+				return nil, fmt.Errorf("generated locale %s is not valid JSON", l.name)
+			}
+			if err := add(path.Join(fe, "locales", l.name+".json"), "json", []byte(raw)); err != nil {
+				return nil, err
+			}
 		}
 	}
-	for _, m := range s.Migrations {
-		if err := add(m.Path, m.Lang, []byte(m.Content)); err != nil {
-			return nil, err
+	if s.HasBackend() {
+		for _, m := range s.Migrations {
+			if err := add(m.Path, m.Lang, []byte(m.Content)); err != nil {
+				return nil, err
+			}
 		}
 	}
 	sort.Slice(out.Files, func(i, j int) bool { return out.Files[i].Path < out.Files[j].Path })
-	out.Notes = []Note{
-		{Code: "import_line", Value: fmt.Sprintf("_ \"%s/internal/modules/%s\"", s.GoModule, s.Module)},
-		{Code: "api_prefix", Value: "/api/v1/" + s.Plural},
+	out.Notes = []Note{}
+	if s.HasBackend() {
+		out.Notes = append(out.Notes, Note{Code: "import_line", Value: fmt.Sprintf("_ \"%s/internal/modules/%s\"", s.GoModule, s.Module)})
 	}
-	if len(s.Migrations) > 0 {
-		out.Notes = append(out.Notes, Note{Code: "migration", Value: s.Migrations[0].Path})
-	} else {
-		out.Notes = append(out.Notes, Note{Code: "null_zero"})
+	out.Notes = append(out.Notes, Note{Code: "api_prefix", Value: "/api/v1/" + s.Plural})
+	if s.HasBackend() {
+		if len(s.Migrations) > 0 {
+			out.Notes = append(out.Notes, Note{Code: "migration", Value: s.Migrations[0].Path})
+		} else {
+			out.Notes = append(out.Notes, Note{Code: "null_zero"})
+		}
 	}
 	return out, nil
 }

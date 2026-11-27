@@ -44,6 +44,13 @@ type ColumnConfig struct {
 	// Dict 是字典编码（control = dict 时必填）：列表渲染 DictTag，表单 / 筛选渲染
 	// DictSelect，选项在运行时从 /dicts/:code/items 按请求语言取。
 	Dict string `json:"dict" binding:"max=48"`
+	// Label / Placeholder / DefaultValue 是生成表单与列表使用的展示元数据。
+	Label        string `json:"label" binding:"max=120"`
+	Placeholder  string `json:"placeholder" binding:"max=200"`
+	DefaultValue string `json:"defaultValue" binding:"max=500"`
+	MinLength    int    `json:"minLength" binding:"min=0,max=4000"`
+	MaxLength    int    `json:"maxLength" binding:"min=0,max=4000"`
+	Pattern      string `json:"pattern" binding:"max=200"`
 }
 
 // ColumnInfo 是 GET /tables/:name/columns 返回的一列。

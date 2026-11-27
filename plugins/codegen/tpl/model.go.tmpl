@@ -3,6 +3,10 @@
 package [[.Module]]
 
 import (
+[[- if .HasPattern]]
+	"errors"
+	"regexp"
+[[end]]
 [[- if .UsesTimeModel]]
 	"time"
 [[end]]
@@ -62,6 +66,20 @@ type Form struct {
 	Children [][[.Sub.Pascal]]Form `json:"[[.Sub.JSONPlural]]"`
 [[- end]]
 }
+[[- if .HasPattern]]
+
+[[- range .Fields]][[- if and .Form .Pattern]]
+var [[$.Module]][[.Pascal]]Pattern = regexp.MustCompile(`[[.Pattern]]`)
+[[- end]][[- end]]
+func (f Form) Validate() error {
+[[- range .Fields]][[- if and .Form .Pattern]]
+	if f.[[.Pascal]] != "" && ![[$.Module]][[.Pascal]]Pattern.MatchString(f.[[.Pascal]]) {
+		return errors.New("invalid [[.Name]]")
+	}
+[[- end]][[- end]]
+	return nil
+}
+[[- end]]
 
 // ListQuery 是列表查询条件；零值 / nil 表示不筛选。
 type ListQuery struct {

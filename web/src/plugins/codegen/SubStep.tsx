@@ -35,10 +35,8 @@ export function SubStep({ tables, mainTable, value, onChange }: Props) {
       setSc(undefined)
       return
     }
-    if (table === value?.table) {
-      return // 载入已保存配置时不再重复拉取
-    }
     let stale = false
+    setSc(undefined)
     schema
       .mutateAsync({ table })
       .then((loaded) => {
@@ -49,13 +47,16 @@ export function SubStep({ tables, mainTable, value, onChange }: Props) {
           onChange(undefined)
           return
         }
+        setSc(loaded)
+        if (table === value?.table) {
+          return
+        }
         const fk = loaded.columns.find((c) => c.kind === 'id' && !c.system && c.name !== 'tenant_id')
         const spec: SubTableSpec = {
           table,
           foreignKey: fk?.name ?? '',
           columns: loaded.columns.map((c) => c.config),
         }
-        setSc(loaded)
         onChange(spec)
       })
       .catch(() => {

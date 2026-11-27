@@ -5,6 +5,7 @@ export type Kind = 'string' | 'text' | 'int' | 'float' | 'decimal' | 'bool' | 'd
 export type Control = 'input' | 'textarea' | 'number' | 'switch' | 'date' | 'datetime' | 'dict'
 export type QueryOp = 'like' | 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le' | 'between'
 export type FieldKind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime'
+export type GenProfile = 'full' | 'backend' | 'frontend'
 
 export interface TableInfo {
   name: string
@@ -23,6 +24,12 @@ export interface ColumnConfig {
   sort?: number
   /** 字典编码（control = dict 时必填）：选项在运行时从 /dicts/:code/items 按语言取 */
   dict?: string
+  label?: string
+  placeholder?: string
+  defaultValue?: string
+  minLength?: number
+  maxLength?: number
+  pattern?: string
 }
 
 export interface ColumnInfo {
@@ -64,6 +71,7 @@ export interface GenRequest {
   table?: string
   module: string
   goModule?: string
+  profile: GenProfile
   columns: ColumnConfig[]
   define?: TableDef
   sub?: SubTableSpec
@@ -243,6 +251,7 @@ export interface SavedGenConfig {
   name: string
   module: string
   goModule: string
+  profile?: GenProfile
   table: string
   define?: TableDef
   columns?: ColumnConfig[]
@@ -260,6 +269,7 @@ export interface SaveConfigReq {
   name: string
   module: string
   goModule?: string
+  profile: GenProfile
   table?: string
   define?: TableDef
   columns?: ColumnConfig[]

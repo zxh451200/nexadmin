@@ -217,6 +217,10 @@ function generate(req: GenRequest): GenOutput {
     sc = schemaOf(table)
   }
   if (!MODULE.test(req.module) || RESERVED_MODULES.has(req.module)) mockError(400, 'invalid module name')
+  const profile = req.profile ?? 'full'
+  if (!['full', 'backend', 'frontend'].includes(profile)) mockError(400, 'invalid generation profile')
+  const hasBackend = profile !== 'frontend'
+  const hasFrontend = profile !== 'backend'
   const cfgBy = new Map(req.columns.map((c) => [c.name, c]))
   for (const n of cfgBy.keys()) if (!sc.columns.some((c) => c.name === n)) mockError(400, `column ${n} does not exist`)
   const cols = sc.columns
@@ -226,7 +230,7 @@ function generate(req: GenRequest): GenOutput {
   const be = `internal/modules/${req.module}`
   const fe = `web/src/pages/${req.module}`
   const form = cols.filter((c) => c.config.form)
-  const files: GenFile[] = [
+  let files: GenFile[] = [
     {
       path: `${be}/model.go`, lang: 'go',
       content: `package ${req.module}\n\ntype ${P} struct {\n\tdatabase.TenantModel\n${req.define?.softDelete ? '\tDeletedAt gorm.DeletedAt\n' : ''}${cols.map((c) => `\t${pascal(c.name)} ${goType(c.kind)} \`gorm:"column:${c.name}"\``).join('\n')}\n}\n\nfunc (${P}) TableName() string { return "${sc.table}" }\n`,
@@ -248,26 +252,62 @@ function generate(req: GenRequest): GenOutput {
     },
     { path: `${fe}/${req.module}.mock.ts`, lang: 'ts', content: `// mock data for /${req.module}s\n` },
     { path: `${fe}/${P}Page.tsx`, lang: 'tsx', content: `import { useState } from 'react'\nimport { Plus } from 'lucide-react'\nimport { useTranslation } from 'react-i18next'\nimport { DataTable, type Column } from '@/framework/components/DataTable'\nimport { PageHeader } from '@/framework/components/PageHeader'\nimport { Button } from '@/framework/ui/button'\nimport { use${P}List, type ${P} } from './api'\n\nexport function ${P}Page() {\n  const { t } = useTranslation()\n  const [page, setPage] = useState(1)\n  const list = use${P}List({ page })\n\n  const columns: Column<${P}>[] = [\n    { key: 'id', title: t('${req.module}.field.id'), mobile: 'title' },\n    { key: 'createdAt', title: t('${req.module}.field.createdAt') },\n  ]\n\n  return (\n    <div className="flex flex-col gap-4">\n      <PageHeader\n        title={t('${req.module}.title')}\n        action={\n          <Button>\n            <Plus aria-hidden="true" />\n            {t('common.create')}\n          </Button>\n        }\n      />\n      <DataTable columns={columns} data={list.data?.items ?? []} rowKey="id" loading={list.isPending} />\n    </div>\n  )\n}\n` },
-    { path: `${fe}/${P}FormDialog.tsx`, lang: 'tsx', content: `// form dialog: ResponsiveDialog + FormLayout (${form.length} fields)\n` },
+    {
+      path: `${fe}/${P}FormDialog.tsx`, lang: 'tsx',
+      content: `// form dialog: ResponsiveDialog + FormLayout (${form.length} fields)\nconst defaults = {\n${form.map((c) => {
+        const value = c.config.defaultValue?.trim()
+        const empty = value ? (c.kind === 'bool' ? (value === 'true' ? 'true' : 'false') : JSON.stringify(value)) : c.kind === 'bool' ? 'false' : "''"
+        return `  ${camel(c.name)}: ${empty},`
+      }).join('\n')}\n}\n\n${form.map((c) => `// ${camel(c.name)} placeholder=${JSON.stringify(c.config.placeholder?.trim() || c.config.label?.trim() || c.comment || c.name)}`).join('\n')}\n`,
+    },
     {
       path: `${fe}/locales/zh-CN.json`, lang: 'json',
-      content: JSON.stringify({ [req.module]: { menu: req.module, field: Object.fromEntries(cols.map((c) => [camel(c.name), c.comment || c.name])) } }, null, 2) + '\n',
+      content: JSON.stringify({
+        [req.module]: {
+          menu: req.module,
+          field: Object.fromEntries(cols.map((c) => [camel(c.name), c.config.label?.trim() || c.comment || c.name])),
+          validation: Object.fromEntries(form.flatMap((c) => {
+            const key = camel(c.name)
+            const label = c.config.label?.trim() || c.comment || c.name
+            const entries: [string, string][] = []
+            if (c.config.required && c.kind !== 'bool') entries.push([`${key}Required`, `${label}不能为空`])
+            if (c.config.minLength || c.config.maxLength || c.config.pattern) entries.push([`${key}Invalid`, `${label}格式不正确`])
+            return entries
+          })),
+        },
+      }, null, 2) + '\n',
     },
     {
       path: `${fe}/locales/en-US.json`, lang: 'json',
-      content: JSON.stringify({ [req.module]: { menu: req.module, field: Object.fromEntries(cols.map((c) => [camel(c.name), pascal(c.name)])) } }, null, 2) + '\n',
+      content: JSON.stringify({
+        [req.module]: {
+          menu: req.module,
+          field: Object.fromEntries(cols.map((c) => [camel(c.name), c.config.label?.trim() || pascal(c.name)])),
+          validation: Object.fromEntries(form.flatMap((c) => {
+            const key = camel(c.name)
+            const label = c.config.label?.trim() || pascal(c.name)
+            const entries: [string, string][] = []
+            if (c.config.required && c.kind !== 'bool') entries.push([`${key}Required`, `${label} is required`])
+            if (c.config.minLength || c.config.maxLength || c.config.pattern) entries.push([`${key}Invalid`, `${label} is invalid`])
+            return entries
+          })),
+        },
+      }, null, 2) + '\n',
     },
   ]
-  if (req.define) files.push(...migrations(req.define, sc.table))
+  if (!hasBackend) files = files.filter((f) => f.lang !== 'go' && f.lang !== 'sql')
+  if (!hasFrontend) files = files.filter((f) => f.lang === 'go')
+  if (req.define && hasBackend) files.push(...migrations(req.define, sc.table))
   files.sort((a, b) => a.path.localeCompare(b.path))
-  const notes: GenOutput['notes'] = [
-    { code: 'import_line', value: `_ "${req.goModule || 'nexadmin'}/internal/modules/${req.module}"` },
-    { code: 'api_prefix', value: `/api/v1/${req.module}s` },
-  ]
-  if (req.define) {
-    notes.push({ code: 'migration', value: `migrations/business/mysql/${migrationNumber(req.define.migration)}_${sc.table}.sql` })
-  } else {
-    notes.push({ code: 'null_zero', value: '' })
+  const notes: GenOutput['notes'] = []
+  if (hasBackend) notes.push({ code: 'import_line', value: `_ "${req.goModule || 'nexadmin'}/internal/modules/${req.module}"` })
+  notes.push({ code: 'api_prefix', value: `/api/v1/${req.module}s` })
+  if (hasBackend) {
+    if (req.define) {
+      notes.push({ code: 'migration', value: `migrations/business/mysql/${migrationNumber(req.define.migration)}_${sc.table}.sql` })
+    } else {
+      notes.push({ code: 'null_zero', value: '' })
+    }
   }
   return {
     files,
@@ -276,10 +316,12 @@ function generate(req: GenRequest): GenOutput {
       ok: true,
       checkedAt: new Date().toISOString(),
       checks: [
-        { code: 'go_build', status: 'passed' },
-        { code: 'typescript', status: 'passed' },
-        { code: 'sql', status: 'passed' },
-        { code: 'migrations', status: 'passed' },
+        ...(hasBackend ? [{ code: 'go_build', status: 'passed' as const }] : []),
+        ...(hasFrontend ? [{ code: 'typescript', status: 'passed' as const }] : []),
+        ...(hasBackend ? [
+          { code: 'sql', status: 'passed' as const },
+          { code: 'migrations', status: 'passed' as const },
+        ] : []),
       ],
       issues: [],
     },
@@ -317,7 +359,7 @@ defineMock([
         validation: out.validation,
         files: [
           ...out.files.map((f) => ({ path: f.path, action: 'new', generatedHash: f.path })),
-          ...(req.register ? [{ path: 'internal/modules/modules.go', action: 'register', generatedHash: 'mock' }] : []),
+          ...(req.register && req.profile !== 'frontend' ? [{ path: 'internal/modules/modules.go', action: 'register', generatedHash: 'mock' }] : []),
         ],
       }
     },
@@ -327,8 +369,9 @@ defineMock([
     url: '/plugins/codegen/install',
     handler: ({ body }) => {
       const out = generate(body as GenRequest)
+      const req = body as GenRequest & { register?: boolean }
       // mock 模式没有真实磁盘：全部算写入、模拟注册成功，给界面走通回执链路。
-      return { root: '(mock)', written: out.files.map((f) => f.path), skipped: [], overwritten: [], backupDir: '(mock)', registered: true, validation: out.validation }
+      return { root: '(mock)', written: out.files.map((f) => f.path), skipped: [], overwritten: [], backupDir: '(mock)', registered: !!req.register && req.profile !== 'frontend', validation: out.validation }
     },
   },
   { method: 'GET', url: '/plugins/codegen/configs', handler: () => savedConfigs },
@@ -344,9 +387,11 @@ defineMock([
         name: req.name.trim(),
         module: req.module,
         goModule: req.goModule ?? '',
+        profile: req.profile,
         table: req.table ?? '',
         define: req.define,
         columns: req.columns ?? [],
+        sub: req.sub,
       }
       savedConfigs = existing ? savedConfigs.map((c) => (c.id === existing.id ? row : c)) : [...savedConfigs, row]
       return row

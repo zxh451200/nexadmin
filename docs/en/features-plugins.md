@@ -51,7 +51,7 @@ Every card on the plugin page has a switch, backed by `POST /plugins/<id>/enable
 
 | ID | Name | Version |
 | --- | --- | --- |
-| `codegen` | Code generator | 1.3.0 |
+| `codegen` | Code generator | 1.4.0 |
 | `crm` | Customer master data | 0.1.0 |
 | `cron` | Scheduled jobs | 1.0.0 |
 | `imports` | Import center | 0.1.0 |
