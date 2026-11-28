@@ -555,17 +555,22 @@ function PostFormDialog({
   )
 }
 
-/** 栏目名译文：原文与 slug 是组织维度，只在这里改各语言的展示名。 */
+/** 栏目名编辑：原文与各语言展示名共用同一字段；slug 与新闻归属不变。 */
 function CategoryI18nBody({ row, onOpenChange }: { row: PostCategory; onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const save = useSaveCategory()
   const lf = useLocaleForm()
 
   const submit = async () => {
+    const title = lf.baseValues().title.trim()
+    if (!title) {
+      toast.error(t('plugin_website.post.categoryRequired'))
+      return
+    }
     try {
       await save.mutateAsync({
         id: row.id,
-        data: { title: row.title, slug: row.slug, sort: row.sort, i18nJson: lf.serialize().i18nJson },
+        data: { title, slug: row.slug, sort: row.sort, i18nJson: lf.serialize().i18nJson },
       })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
@@ -579,6 +584,7 @@ function CategoryI18nBody({ row, onOpenChange }: { row: PostCategory; onOpenChan
       open
       onOpenChange={onOpenChange}
       title={t('plugin_website.post.categoryI18nTitle', { name: row.title })}
+      description={t('plugin_website.post.categoryI18nHint')}
       size="md"
       footer={
         <>
@@ -593,10 +599,6 @@ function CategoryI18nBody({ row, onOpenChange }: { row: PostCategory; onOpenChan
       </div>
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="title" required />
-        <SharedFieldShell labelKey="plugin_website.post.categoryTitle">
-          <Input value={row.title} readOnly disabled className="font-mono" />
-        </SharedFieldShell>
-        <p className="text-xs text-muted-foreground">{t('plugin_website.post.categoryI18nHint')}</p>
         <LocaleFormActions />
       </div>
     </ResponsiveDialog>
@@ -806,40 +808,47 @@ function CategoryRow({
   const [title, setTitle] = useState(row.title)
   const [slug, setSlug] = useState(row.slug)
 
+  useEffect(() => setTitle(row.title), [row.title])
+  useEffect(() => setSlug(row.slug), [row.slug])
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onBlur={() => void onSave(row, title, slug)}
         aria-label={t('plugin_website.post.categoryTitle')}
-        className="w-40"
+        className="min-w-0 flex-1 basis-32 sm:w-40 sm:flex-none"
         maxLength={100}
       />
       <Input
         value={slug}
         onChange={(e) => setSlug(e.target.value)}
         aria-label={t('plugin_website.post.categorySlug')}
-        className="w-40 font-mono"
+        className="min-w-0 flex-1 basis-32 font-mono sm:w-40 sm:flex-none"
         maxLength={64}
       />
-      <span className="num ms-auto shrink-0 text-xs text-muted-foreground">
-        {t('plugin_website.post.postsCount', { count: row.postCount })}
-      </span>
-      <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.categoryI18n')} onClick={onI18n}>
-        <Globe aria-hidden="true" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={t('common.save')}
-        onClick={() => void onSave(row, title, slug)}
-      >
-        <Pencil aria-hidden="true" />
-      </Button>
-      <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={onDelete}>
-        <Trash2 aria-hidden="true" />
-      </Button>
+      <div className="flex w-full items-center gap-1 sm:ms-auto sm:w-auto">
+        <span className="num me-auto shrink-0 text-xs text-muted-foreground">
+          {t('plugin_website.post.postsCount', { count: row.postCount })}
+        </span>
+        <Button variant="ghost" size="sm" aria-label={t('plugin_website.post.categoryI18n')} onClick={onI18n}>
+          <Globe aria-hidden="true" />
+          {t('plugin_website.post.categoryI18n')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t('common.save')}
+          title={t('common.save')}
+          onClick={() => void onSave(row, title, slug)}
+        >
+          <Pencil aria-hidden="true" />
+        </Button>
+        <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={onDelete}>
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   )
 }

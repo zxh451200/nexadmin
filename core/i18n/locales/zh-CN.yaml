@@ -717,12 +717,12 @@ openapi:
   signature_invalid: "签名不正确"
   ip_not_allowed: "IP 不在允许范围内"
   nonce_reused: "nonce 已使用"
-  rate_limited: 已超过该凭证的调用配额，请稍后重试
-  rate_limit_invalid: 调用配额必须是 0 到 1000000 的整数
-  rate_window_invalid: 限流窗口必须是 1 到 86400 秒
-  audit_type_invalid: 凭证类型只能是 pat 或 app
-  audit_status_invalid: HTTP 状态码必须是 100 到 599 的整数
-  audit_time_invalid: 时间格式不正确，请使用 RFC3339 或 YYYY-MM-DD
+  rate_limited: "已超过该凭证的调用配额，请稍后重试"
+  rate_limit_invalid: "调用配额必须是 0 到 1000000 的整数"
+  rate_window_invalid: "限流窗口必须是 1 到 86400 秒"
+  audit_type_invalid: "凭证类型只能是 pat 或 app"
+  audit_status_invalid: "HTTP 状态码必须是 100 到 599 的整数"
+  audit_time_invalid: "时间格式不正确，请使用 RFC3339 或 YYYY-MM-DD"
 sso:
   name_required: "名称不能为空且不超过 100 个字符"
   redirect_uri_invalid: "回调地址不合法：%s"
@@ -808,6 +808,7 @@ website:
   faq_question_required: "请填写问题"
   faq_question_too_long: "问题最多 300 个字"
   faq_answer_too_long: "答案最多 5000 个字"
+  faq_category_too_long: "分类最多 64 个字"
   faq_not_found: "常见问题不存在或已删除"
   faq_ids_empty: "请至少选择一个常见问题"
   faq_enabled_invalid: "启用状态不合法"
@@ -866,6 +867,7 @@ website:
   import_faqs_title: "常见问题导入"
   import_faq_question: "问题"
   import_faq_answer: "答案"
+  import_faq_category: "分类"
   import_faq_sort: "排序"
   import_faq_status: "状态"
 codegen:
@@ -1131,7 +1133,9 @@ saml:
     metadata_too_large: "元数据超过 1 MiB"
     operation_failed: "操作未完成：%s"
   cert_alert:
-    title: SAML SP 证书即将过期
+    title: SAML 证书即将过期
     current: 当前证书
     next: 备用证书
+    idp: IdP 签名证书
     content: "身份源「%s」的%s将于 %s 到期（剩余约 %d 天）。请按两段式轮换流程发布新证书，并先在 IdP 更新信任。"
+    idp_content: "身份源「%s」的%s将于 %s 到期（剩余约 %d 天）。请联系 IdP 管理员轮换签名证书并更新元数据。"

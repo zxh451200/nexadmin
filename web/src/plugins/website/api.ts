@@ -665,6 +665,8 @@ export interface FaqItem {
   id: string
   question: string
   answer: string
+  /** 分组标签；空串 = 未分类。与问题/答案原文同语言 */
+  category: string
   sort: number
   enabled: boolean
   /** 非默认语言的问题/答案译文；空 = 回退原文（非默认语言不展示） */
@@ -674,6 +676,16 @@ export interface FaqItem {
 export interface FaqQuery extends PageQuery {
   /** "true" | "false"；省略 = 全部 */
   enabled?: string
+  /** 分类名；省略 = 全部，__none__ = 只看未分类 */
+  category?: string
+}
+
+/** 已使用的 FAQ 分类名（筛选下拉 / 表单联想共用）。 */
+export function useFaqCategories() {
+  return useQuery({
+    queryKey: [...KEY, 'faqs', 'categories'],
+    queryFn: () => api.get<string[]>(`${BASE}/faqs/categories`),
+  })
 }
 
 /** FAQ 列表（分页 + 关键词/启用状态过滤 + 表头排序）。 */
@@ -686,11 +698,11 @@ export function useFaqs(query: FaqQuery) {
 }
 
 /** 创建 FAQ 导出任务：按当前筛选提交到导出中心；进度与下载见导出中心。 */
-export function createFaqExportJob(query: Pick<FaqQuery, 'keyword' | 'enabled'>) {
+export function createFaqExportJob(query: Pick<FaqQuery, 'keyword' | 'enabled' | 'category'>) {
   return api.post<{ id: string }>(
     `${BASE}/faqs/export-async`,
     null,
-    { params: { keyword: query.keyword ?? '', enabled: query.enabled ?? '' } },
+    { params: { keyword: query.keyword ?? '', enabled: query.enabled ?? '', category: query.category ?? '' } },
   )
 }
 
@@ -706,7 +718,7 @@ export function useDeleteFaqs() {
 export function useSaveFaq() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...data }: { id?: string; question: string; answer: string; sort: number; enabled: boolean; i18nJson?: string }) =>
+    mutationFn: ({ id, ...data }: { id?: string; question: string; answer: string; category?: string; sort: number; enabled: boolean; i18nJson?: string }) =>
       id ? api.put<FaqItem>(`${BASE}/faqs/${id}`, data) : api.post<FaqItem>(`${BASE}/faqs`, data),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'faqs'] }),
   })

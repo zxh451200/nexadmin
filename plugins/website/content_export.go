@@ -204,13 +204,14 @@ func (p orderExportParams) query() SiteOrderQuery {
 
 // faqExportParams 是 FAQ 导出任务参数（筛选与列表 query 同契约）。
 type faqExportParams struct {
-	Keyword string `json:"keyword,omitempty"`
-	Enabled string `json:"enabled,omitempty"`
-	ActorID int64  `json:"actorId"`
+	Keyword  string `json:"keyword,omitempty"`
+	Enabled  string `json:"enabled,omitempty"`
+	Category string `json:"category,omitempty"`
+	ActorID  int64  `json:"actorId"`
 }
 
 func (p faqExportParams) query() FaqQuery {
-	return FaqQuery{Keyword: p.Keyword, Enabled: p.Enabled}
+	return FaqQuery{Keyword: p.Keyword, Enabled: p.Enabled, Category: p.Category}
 }
 
 // RunSiteOrderExportJob 把筛选后的订单写成 xlsx：列与订单列表一致。
@@ -290,7 +291,7 @@ func (s *Service) RunFaqExportJob(ctx context.Context, j *job.Job, report job.Re
 	report(0, fmt.Sprintf("共 %d 行", len(rows)))
 	return job.WriteResult(ctx, j, fmt.Sprintf("faqs-%s.xlsx", time.Now().Format("20060102")), xlsxContentType, func(w io.Writer) error {
 		x := excel.NewWriter(w)
-		sh, err := x.NewSheet("常见问题", excel.SheetOptions{Header: []string{"问题", "答案", "排序", "状态", "更新时间"}})
+		sh, err := x.NewSheet("常见问题", excel.SheetOptions{Header: []string{"问题", "答案", "分类", "排序", "状态", "更新时间"}})
 		if err != nil {
 			return err
 		}
@@ -303,7 +304,7 @@ func (s *Service) RunFaqExportJob(ctx context.Context, j *job.Job, report job.Re
 			if f.Enabled {
 				status = "展示中"
 			}
-			if err := sh.WriteRow(f.Question, f.Answer, f.Sort, status, f.UpdatedAt.In(time.Local)); err != nil {
+			if err := sh.WriteRow(f.Question, f.Answer, f.Category, f.Sort, status, f.UpdatedAt.In(time.Local)); err != nil {
 				return err
 			}
 			report((i+1)*100/max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
@@ -366,7 +367,7 @@ func (h *handler) SiteOrderExportAsync(c *gin.Context) {
 
 // FaqExportAsync POST /faqs/export-async
 func (h *handler) FaqExportAsync(c *gin.Context) {
-	p := faqExportParams{Keyword: c.Query("keyword"), Enabled: c.Query("enabled")}
+	p := faqExportParams{Keyword: c.Query("keyword"), Enabled: c.Query("enabled"), Category: c.Query("category")}
 	var owner idgen.ID
 	if cl := auth.ClaimsFrom(c); cl != nil {
 		p.ActorID, owner = int64(cl.UserID), cl.UserID

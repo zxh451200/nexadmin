@@ -44,6 +44,8 @@
       "action": "分配权限",
       "title": "分配权限",
       "description": "角色：{{name}}",
+      "builtinHint": "内置超级管理员由系统自动授予全部权限，无需手动勾选；此处仅供查看。",
+      "readOnly": "只读",
       "success": "权限已保存",
       "empty": "暂无可分配的权限",
       "selectAll": "全选",

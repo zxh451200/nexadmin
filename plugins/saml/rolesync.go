@@ -267,6 +267,26 @@ func containsCode(codes []string, code string) bool {
 	return false
 }
 
+func (s *Service) revokeSourceRolesDB(ctx context.Context, db *gorm.DB, m *Source) error {
+	var grants []roleGrant
+	if err := db.Where("source_id = ?", int64(m.ID)).Find(&grants).Error; err != nil {
+		return err
+	}
+	users := make(map[int64]bool, len(grants))
+	for _, grant := range grants {
+		users[grant.UserID] = true
+	}
+	revoke := *m
+	revoke.RevokeRolesOnEmptyGroups = true
+	for userID := range users {
+		u := &auth.User{ID: idgen.ID(userID), TenantID: m.TenantID}
+		if _, _, _, err := s.reconcileRolesDB(ctx, db, &revoke, u, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SyncRolesOnLogin 把「本次断言映射出的角色」与本地授权对齐。
 // 失败不阻断登录（会话已经签发），但每次都会留一条带计数的日志，便于区分「没变化」和「没跑」。
 func (s *Service) SyncRolesOnLogin(ctx context.Context, m *Source, u *auth.User, desired []string) {
@@ -307,8 +327,12 @@ func (s *Service) syncRoles(ctx context.Context, m *Source, u *auth.User, desire
 
 // reconcileRoles 在一个事务里完成补授与收回。锁住用户行，避免同一账号并发登录产生重复授权。
 func (s *Service) reconcileRoles(ctx context.Context, m *Source, u *auth.User, desired []string) (added, removed, skipped []string, err error) {
+	return s.reconcileRolesDB(ctx, s.db.WithContext(ctx), m, u, desired)
+}
+
+func (s *Service) reconcileRolesDB(ctx context.Context, db *gorm.DB, m *Source, u *auth.User, desired []string) (added, removed, skipped []string, err error) {
 	tenantID, userID, sourceID := int64(u.TenantID), int64(u.ID), int64(m.ID)
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		var locked struct{ ID int64 }
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Table("sys_user").Select("id").
 			Where("tenant_id = ? AND id = ? AND deleted_at IS NULL", tenantID, userID).Take(&locked).Error; err != nil {

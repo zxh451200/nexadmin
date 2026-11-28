@@ -59,8 +59,8 @@ func parseCurrencyRates(raw string) (map[string]float64, error) {
 }
 
 // normalizeCurrencySetting 清洗管理端提交的币种设置：
-// 汇率表为空时两者都清空（关掉换算）；表非空时默认币种必须在表内，
-// 且自动补上 USD=1。返回入库用的 (default_currency, currency_rates) 文本。
+// 汇率表为空时两者都清空；表非空时允许默认币种为空（停用换算），
+// 非空默认币种必须在表内，且自动补上 USD=1。返回入库用的文本。
 func normalizeCurrencySetting(defaultCurrency, ratesRaw string) (string, string, error) {
 	rates, err := parseCurrencyRates(ratesRaw)
 	if err != nil {
@@ -70,8 +70,10 @@ func normalizeCurrencySetting(defaultCurrency, ratesRaw string) (string, string,
 		return "", "", nil
 	}
 	def := strings.ToUpper(strings.TrimSpace(defaultCurrency))
-	if _, ok := rates[def]; !ok {
-		return "", "", response.BadRequest("website.currency_default_invalid")
+	if def != "" {
+		if _, ok := rates[def]; !ok {
+			return "", "", response.BadRequest("website.currency_default_invalid")
+		}
 	}
 	b, err := json.Marshal(rates)
 	if err != nil {

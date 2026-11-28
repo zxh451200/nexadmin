@@ -31,7 +31,7 @@ func asResponseError(err error) *response.Error {
 
 // failACS 是 ACS 的唯一失败出口：浏览器拿到可读的双语错误页（原因 + 返回登录），
 // 明确要 JSON 的调用方（脚本 / 监控）仍拿到与原来同形的 {code,message}。
-func (s *Service) failACS(c *gin.Context, e *response.Error, detail string) {
+func (s *Service) failACS(c *gin.Context, m *Source, e *response.Error, detail string) {
 	if e == nil {
 		e = response.Internal()
 	}
@@ -46,6 +46,26 @@ func (s *Service) failACS(c *gin.Context, e *response.Error, detail string) {
 			zap.String("request_id", c.GetString(middleware.RequestIDKey)),
 			zap.String("error_key", e.Key),
 			zap.String("detail", detail))
+	}
+	if raw, ok := c.Get("samlTestState"); ok {
+		if state, valid := raw.(connectionTestState); valid {
+			message := msg
+			if detail != "" {
+				message += ": " + detail
+			}
+			s.finishConnectionTest(c, m, state, errors.New(message))
+			return
+		}
+	}
+	correlationID := c.GetString("samlTestCorrelation")
+	eventType := "login"
+	if correlationID != "" {
+		eventType = "connection_test"
+	} else {
+		correlationID = c.GetString(middleware.RequestIDKey)
+	}
+	if m != nil {
+		s.recordEvent(c.Request.Context(), m, eventType, "failed", correlationID, c.ClientIP(), e.Key+": "+detail)
 	}
 	if !wantsHTML(c.Request) {
 		response.Fail(c, e.WithMsg(msg))
@@ -64,7 +84,7 @@ func (s *Service) failACS(c *gin.Context, e *response.Error, detail string) {
 		Reason:      msg,
 		Hint:        i18n.T(ctx, "saml.acs.hint"),
 		BackLabel:   i18n.T(ctx, "saml.acs.back"),
-		BackURL:     baseURL(c) + "/admin/login",
+		BackURL:     s.baseURL(c, m) + "/admin/login",
 	})))
 }
 

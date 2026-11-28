@@ -59,10 +59,14 @@ function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-11 gap-2 px-2 md:h-9" aria-label={t('layout.userMenu')}>
-          {/* 没传头像图时不再渲染首字圆圈：昵称就在旁边，字母头像纯属重复 */}
-          {user?.avatar && (
+          {/* 手机端昵称隐藏，没有头像时用首字占位，避免触发器只剩空白胶囊。 */}
+          {user?.avatar ? (
             <Avatar className="size-7">
               <AvatarImage src={user.avatar} alt="" />
+            </Avatar>
+          ) : (
+            <Avatar className="size-7 md:hidden">
+              <AvatarFallback className="text-sm font-medium">{name.slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>
           )}
           <span className="hidden max-w-28 truncate text-sm md:inline">{name}</span>
@@ -206,7 +210,7 @@ export function AppLayout() {
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="start" className="w-72 p-0" closeLabel={t('common.close')}>
+        <SheetContent side="start" className="w-72 p-0" closeLabel={t('common.close')} closeClassName="top-1.5 inset-e-4 md:top-3">
           <SheetTitle className="sr-only">{t('layout.navigation')}</SheetTitle>
           <SheetDescription className="sr-only">{t('layout.navigation')}</SheetDescription>
           <Sidebar menu={menu} homePath={homePath} onNavigate={() => setMobileOpen(false)} />

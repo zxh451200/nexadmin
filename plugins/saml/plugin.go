@@ -30,6 +30,9 @@ func (*module) Name() string { return "saml" }
 func (*module) TenantTables() []tenant.Table {
 	return []tenant.Table{
 		{Name: "plg_saml_source", Column: "tenant_id"},
+		{Name: "plg_saml_source_version", Column: "tenant_id"},
+		{Name: "plg_saml_event", Column: "tenant_id"},
+		{Name: "plg_saml_session", Column: "tenant_id"},
 		{Name: "plg_saml_role_grant", Column: "tenant_id"},
 		{Name: "plg_saml_role_init", Column: "tenant_id"},
 	}
@@ -41,8 +44,10 @@ var _ plugin.Starter = (*module)(nil)
 // 同时注册会话跟踪：普通登录、二次验证后的签发、刷新轮换都会回调，IdP 发起的 SLO 才能吊销到当前令牌。
 func (*module) Start(ctx context.Context, d *core.Deps) error {
 	applyClockSkew()
+	svc := NewService(d.DB, d.Auth, d.Cache).SetLogger(d.Log)
 	auth.RegisterSessionTracker(func(ctx context.Context, cl *auth.Claims) {
 		recordBindingSession(ctx, d.Cache, cl)
+		recordBindingSessionDB(ctx, svc, cl)
 	})
 	if d.Notify != nil {
 		go func() {
@@ -69,7 +74,7 @@ func (*module) Start(ctx context.Context, d *core.Deps) error {
 		}
 		return nil
 	}
-	svc := NewService(d.DB, d.Auth, d.Cache).SetLogger(d.Log)
+	svc = NewService(d.DB, d.Auth, d.Cache).SetLogger(d.Log)
 	go func() {
 		sweep := func() {
 			checked, updated, failures, err := svc.SweepMetadata(tenant.Skip(ctx))
@@ -130,6 +135,12 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	admin.POST("/sources/:id/import-sp-key", core.Perm("saml:edit"), s.importSPKey)
 	admin.GET("/sources/:id/sp-cert", core.Perm("saml:list"), s.spCert)
 	admin.GET("/sources/:id/urls", core.Perm("saml:list"), s.sourceURLs)
+	admin.GET("/sources/:id/versions", core.Perm("saml:list"), s.listSourceVersions)
+	admin.POST("/sources/:id/rollback", core.Perm("saml:edit"), s.rollbackSource)
+	admin.GET("/sources/:id/events", core.Perm("saml:list"), s.listSourceEvents)
+	admin.GET("/sources/:id/sessions", core.Perm("saml:list"), s.listSourceSessions)
+	admin.POST("/sources/:id/sessions/:sessionId/revoke", core.Perm("saml:edit"), s.revokeSourceSession)
+	admin.POST("/sources/:id/test/start", core.Perm("saml:edit"), s.startConnectionTest)
 	admin.POST("/metadata/inspect", core.Perm("saml:edit"), s.inspectMetadata)
 	admin.GET("/sources/:id/logout", s.logout)
 	admin.POST("/sources/:id/logout", s.logoutJSON)

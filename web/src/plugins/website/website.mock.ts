@@ -339,6 +339,11 @@ const mockSchemas: Record<string, EntitySchema> = {
       { key: 'description', labelKey: 'plugin_website.fields.featureDesc', widget: 'textarea', max: 500, rows: 3 },
     ],
   },
+  category: {
+    entity: 'category',
+    publishable: false,
+    translatable: [{ key: 'title', labelKey: 'plugin_website.post.categoryTitle', widget: 'text', max: 0 }],
+  },
   page: {
     entity: 'page',
     publishable: true,
@@ -781,6 +786,7 @@ defineMock([
       row.title = title
       row.slug = slug
       row.sort = Number(body.sort ?? row.sort)
+      row.i18nJson = String(body.i18nJson ?? row.i18nJson)
       return row
     },
   },

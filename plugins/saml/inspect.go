@@ -37,18 +37,23 @@ type IdPCandidate struct {
 }
 
 type IdPInfo struct {
-	EntityID         string         `json:"entityId"`
-	SSOURL           string         `json:"ssoUrl"`
-	SSOBinding       string         `json:"ssoBinding"`
-	SLOURL           string         `json:"sloUrl"`
-	SLOBinding       string         `json:"sloBinding,omitempty"`
-	CertNotAfter     string         `json:"certNotAfter,omitempty"`
-	CertCount        int            `json:"certCount"`
-	CertExpired      bool           `json:"certExpired"`
-	CertExpiringSoon bool           `json:"certExpiringSoon"`
-	MetadataURL      string         `json:"metadataUrl,omitempty"`
-	Candidates       []IdPCandidate `json:"candidates,omitempty"`
-	Error            string         `json:"error,omitempty"`
+	EntityID              string         `json:"entityId"`
+	SSOURL                string         `json:"ssoUrl"`
+	SSOBinding            string         `json:"ssoBinding"`
+	SLOURL                string         `json:"sloUrl"`
+	SLOBinding            string         `json:"sloBinding,omitempty"`
+	CertNotAfter          string         `json:"certNotAfter,omitempty"`
+	CertCount             int            `json:"certCount"`
+	CertExpired           bool           `json:"certExpired"`
+	CertExpiringSoon      bool           `json:"certExpiringSoon"`
+	MetadataURL           string         `json:"metadataUrl,omitempty"`
+	MetadataValidUntil    string         `json:"metadataValidUntil,omitempty"`
+	MetadataCacheDuration string         `json:"metadataCacheDuration,omitempty"`
+	MetadataCacheSeconds  int64          `json:"metadataCacheSeconds,omitempty"`
+	MetadataExpired       bool           `json:"metadataExpired"`
+	MetadataStale         bool           `json:"metadataStale"`
+	Candidates            []IdPCandidate `json:"candidates,omitempty"`
+	Error                 string         `json:"error,omitempty"`
 }
 
 type SPInfo struct {
@@ -137,6 +142,14 @@ func selectEntity(entities []saml.EntityDescriptor, want string) (*saml.EntityDe
 // describeEntity 提取一个 IdP 实体真正要用的信息。
 func describeEntity(ed *saml.EntityDescriptor) IdPInfo {
 	info := IdPInfo{EntityID: ed.EntityID}
+	if !ed.ValidUntil.IsZero() {
+		info.MetadataValidUntil = ed.ValidUntil.UTC().Format(time.RFC3339)
+		info.MetadataExpired = !ed.ValidUntil.After(time.Now())
+	}
+	if ed.CacheDuration > 0 {
+		info.MetadataCacheDuration = ed.CacheDuration.String()
+		info.MetadataCacheSeconds = int64(ed.CacheDuration.Seconds())
+	}
 	if len(ed.IDPSSODescriptors) == 0 {
 		return info
 	}
@@ -329,6 +342,9 @@ func inspectSource(m *Source, base string) SourceInfo {
 	info := SourceInfo{Source: *m, SP: spInfo(m, base)}
 	idp, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
 	idp.MetadataURL = m.IdPMetadataURL
+	if m.MetadataRefreshedAt != nil && idp.MetadataCacheSeconds > 0 {
+		idp.MetadataStale = time.Now().After(m.MetadataRefreshedAt.Add(time.Duration(idp.MetadataCacheSeconds) * time.Second))
+	}
 	if err != nil {
 		idp.Error = err.Error()
 	}
@@ -357,6 +373,15 @@ func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
 	}
 	add("metadata", true, false, fmt.Sprintf("Entity ID: %s", idp.EntityID))
 	add("entity", true, false, fmt.Sprintf("已选择 %s（元数据共 %d 个 IdP）", idp.EntityID, len(idp.Candidates)))
+	if idp.MetadataExpired {
+		add("metadataValidity", false, false, "元数据已超过 validUntil："+idp.MetadataValidUntil)
+		res.OK = false
+	} else if idp.MetadataValidUntil != "" {
+		add("metadataValidity", true, false, "元数据有效至 "+idp.MetadataValidUntil)
+	}
+	if idp.MetadataStale {
+		add("metadataFreshness", true, true, "元数据已超过 cacheDuration，请刷新")
+	}
 
 	if idp.SSOURL == "" {
 		add("ssoUrl", false, false, "元数据里没有 HTTP-Redirect / HTTP-POST 的 SingleSignOnService")

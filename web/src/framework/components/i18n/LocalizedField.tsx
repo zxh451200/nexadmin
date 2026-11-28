@@ -38,6 +38,7 @@ export function LocalizedField({ fieldKey, placeholder, required, aiTarget, tags
   const value = field(fieldKey)
   const src = source(fieldKey)
   const rich = f.widget === 'rich'
+  const maxLength = f.max && f.max > 0 ? f.max : undefined
   const inputId = `lf-${active}-${fieldKey}`
   const tagsMode = tags && !rich
   const caption = (
@@ -64,7 +65,7 @@ export function LocalizedField({ fieldKey, placeholder, required, aiTarget, tags
       // 关键词类字段（多词枚举）按标题当要点起草；普通 text 字段自己就是要点。
       getBrief={target === 'keywords' ? () => field('title') : f.widget === 'text' || fieldKey === 'title' ? undefined : () => field('title')}
       onResult={(text) => {
-        setField(fieldKey, rich ? text : text.slice(0, f.max ?? text.length))
+        setField(fieldKey, rich ? text : maxLength ? text.slice(0, maxLength) : text)
         // 写到译文页签下的内容一律把该语言降回「机翻未校对」：已经人工校对过的语言被 AI 改写后
         // 必须重新看一眼，否则「已校对」就成了假状态。原文页签不受影响。
         if (!isSource) markMachine()
@@ -128,7 +129,7 @@ export function LocalizedField({ fieldKey, placeholder, required, aiTarget, tags
         <Textarea
           id={inputId}
           rows={f.rows ?? 2}
-          maxLength={f.max}
+          maxLength={maxLength}
           placeholder={placeholder}
           value={value}
           onChange={(e) => setField(fieldKey, e.target.value)}
@@ -136,7 +137,7 @@ export function LocalizedField({ fieldKey, placeholder, required, aiTarget, tags
       ) : (
         <Input
           id={inputId}
-          maxLength={f.max}
+          maxLength={maxLength}
           placeholder={placeholder}
           value={value}
           onChange={(e) => setField(fieldKey, e.target.value)}

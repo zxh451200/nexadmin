@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react'
 import type { Control, FieldPath, FieldValues } from 'react-hook-form'
+import { FieldHint } from '@/framework/components/FieldHint'
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
@@ -47,6 +48,7 @@ export interface SwitchFieldProps<T extends FieldValues> {
   name: FieldPath<T>
   label: ReactNode
   description?: ReactNode
+  hint?: string
   disabled?: boolean
   /** 放进已有边框的容器（卡片、divide-y 分组）时去掉自身边框与内边距，避免「卡片里再套一圈」 */
   bare?: boolean
@@ -64,6 +66,7 @@ export function SwitchField<T extends FieldValues>({
   name,
   label,
   description,
+  hint,
   disabled,
   bare,
   valueOn = true,
@@ -78,7 +81,10 @@ export function SwitchField<T extends FieldValues>({
       render={({ field }) => (
         <FormItem className={cn(rowClass, 'space-y-0', !bare && boxedClass, className)}>
           <div className="min-w-0 space-y-0.5">
-            <FormLabel>{label}</FormLabel>
+            <FormLabel>
+              {label}
+              {hint ? <FieldHint text={hint} icon="alert" /> : null}
+            </FormLabel>
             {description ? <FormDescription className="text-xs">{description}</FormDescription> : null}
             <FormMessage />
           </div>

@@ -415,7 +415,12 @@
           </div>
         </div>
         <div class="hp-faq" data-reveal>
+          {{$lastCategory := ""}}
           {{range .Faqs}}
+          {{if and .Category (ne .Category $lastCategory)}}
+          <h3 class="faq-group-title" data-faq-group>{{.Category}}</h3>
+          {{$lastCategory = .Category}}
+          {{else if not .Category}}{{$lastCategory = ""}}{{end}}
           <details class="hp-faq-item">
             <summary>{{.Question}}</summary>
             <div class="hp-faq-answer">{{.Answer}}</div>

@@ -44,6 +44,13 @@ func newRelay() string {
 	return hex.EncodeToString(b[:])
 }
 
+func (s *Service) baseURL(c *gin.Context, m *Source) string {
+	if m != nil && m.ExternalBaseURL != "" {
+		return m.ExternalBaseURL
+	}
+	return baseURL(c)
+}
+
 // baseURL 从请求推导站点基址（反向代理场景采信 X-Forwarded-Proto 的首个值）。
 func baseURL(c *gin.Context) string {
 	scheme := "http"
@@ -87,7 +94,7 @@ func (s *Service) metadata(c *gin.Context) {
 	if !ok {
 		return
 	}
-	sp, err := s.provider(m, baseURL(c))
+	sp, err := s.provider(m, s.baseURL(c, m))
 	if err != nil {
 		failDetail(c, err)
 		return
@@ -131,7 +138,7 @@ func (s *Service) login(c *gin.Context) {
 		response.Fail(c, response.BadRequest("saml.sso.source_disabled"))
 		return
 	}
-	sp, err := s.provider(m, baseURL(c))
+	sp, err := s.provider(m, s.baseURL(c, m))
 	if err != nil {
 		failDetail(c, err)
 		return
@@ -181,18 +188,20 @@ func (s *Service) acs(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !m.Enabled {
-		s.failACS(c, response.BadRequest("saml.acs.err_source_disabled"), "")
-		return
-	}
-	sp, err := s.provider(m, baseURL(c))
-	if err != nil {
-		s.failACS(c, response.BadRequest("saml.acs.err_metadata"), err.Error())
-		return
-	}
 	// 库从 req.PostForm 读取 SAMLResponse：必须先解析表单，否则真实 IdP 回调一律失败。
 	if err := c.Request.ParseForm(); err != nil {
-		s.failACS(c, response.BadRequest("saml.acs.err_response"), "SAML 回调表单解析失败")
+		s.failACS(c, m, response.BadRequest("saml.acs.err_response"), "SAML 回调表单解析失败")
+		return
+	}
+	relayState := c.Request.PostForm.Get("RelayState")
+	testState, isTest := s.consumeConnectionTest(c, relayState, "sso")
+	if !m.Enabled {
+		s.failACS(c, m, response.BadRequest("saml.acs.err_source_disabled"), "")
+		return
+	}
+	sp, err := s.provider(m, s.baseURL(c, m))
+	if err != nil {
+		s.failACS(c, m, response.BadRequest("saml.acs.err_metadata"), err.Error())
 		return
 	}
 	if m.RequireEncryptedAssertion {
@@ -200,7 +209,7 @@ func (s *Service) acs(c *gin.Context) {
 		data, derr := base64.StdEncoding.DecodeString(raw)
 		if raw == "" || derr != nil || !hasEncryptedAssertion(data) {
 			// 库对明文与加密断言都接受，要求加密时必须先看原始响应再交给库。
-			s.failACS(c, response.BadRequest("saml.acs.err_encrypted"), "")
+			s.failACS(c, m, response.BadRequest("saml.acs.err_encrypted"), "")
 			return
 		}
 	}
@@ -208,14 +217,16 @@ func (s *Service) acs(c *gin.Context) {
 	// 找不到（含 IdP-initiated）时传空，带 InResponseTo 的响应会被拒绝（fail closed）。
 	var possibleIDs []string
 	redirect := ""
-	if relay := c.Request.PostForm.Get("RelayState"); relay != "" && s.cache != nil {
-		if v, err := s.cache.Get(c.Request.Context(), "saml:req:"+relay); err == nil && v != "" {
+	if isTest {
+		possibleIDs = []string{testState.RequestID}
+	} else if relayState != "" && s.cache != nil {
+		if v, err := s.cache.Get(c.Request.Context(), "saml:req:"+relayState); err == nil && v != "" {
 			parts := strings.SplitN(v, "|", 2)
 			possibleIDs = []string{parts[0]}
 			if len(parts) == 2 {
 				redirect = safeRedirect(parts[1])
 			}
-			_ = s.cache.Del(c.Request.Context(), "saml:req:"+relay)
+			_ = s.cache.Del(c.Request.Context(), "saml:req:"+relayState)
 		}
 	}
 	assertion, err := parseResponseSafe(sp, c.Request, possibleIDs)
@@ -225,11 +236,11 @@ func (s *Service) acs(c *gin.Context) {
 		if ivr, ok := err.(*saml.InvalidResponseError); ok && ivr.PrivateErr != nil {
 			detail = ivr.PrivateErr.Error()
 		}
-		s.failACS(c, response.BadRequest("saml.acs.err_response"), detail)
+		s.failACS(c, m, response.BadRequest("saml.acs.err_response"), detail)
 		return
 	}
 	if assertion.Subject == nil || assertion.Subject.NameID == nil {
-		s.failACS(c, response.BadRequest("saml.acs.err_nameid"), "")
+		s.failACS(c, m, response.BadRequest("saml.acs.err_nameid"), "")
 		return
 	}
 	subject := assertion.Subject.NameID.Value
@@ -238,6 +249,10 @@ func (s *Service) acs(c *gin.Context) {
 	if len(assertion.AuthnStatements) > 0 {
 		sessionIndex = assertion.AuthnStatements[0].SessionIndex
 	}
+	if isTest {
+		s.finishConnectionTest(c, m, testState, nil)
+		return
+	}
 	username := attr(assertion, m.AttrUsername)
 	if username == "" {
 		username = subject
@@ -245,7 +260,7 @@ func (s *Service) acs(c *gin.Context) {
 	// 组映射：新账号初始化与登录时角色同步共用；开了「必须命中组」而一个都没命中时拒绝登录。
 	mapped, err := mappedRoleCodes(attrValues(assertion, m.AttrGroups), m.GroupRoleMappings, m.RequireMappedGroup)
 	if err != nil {
-		s.failACS(c, response.Forbidden("saml.acs.err_group"), "")
+		s.failACS(c, m, response.Forbidden("saml.acs.err_group"), "")
 		return
 	}
 	// ProviderKey 留空：框架只接受 ldap-<数字> 或旧 ldap/cas 键，自定义键会被拒。
@@ -274,12 +289,13 @@ func (s *Service) acs(c *gin.Context) {
 		Completion:     completion,
 	})
 	if err != nil {
-		s.failACS(c, asResponseError(err), "")
+		s.failACS(c, m, asResponseError(err), "")
 		return
 	}
+	s.recordEvent(c.Request.Context(), m, "login", "success", correlationID(c), c.ClientIP(), "assertion accepted")
 	if out.Challenge != nil && out.CreatedUserID != 0 {
 		if err := s.markRoleInitializationPending(c.Request.Context(), m, out.CreatedUserID); err != nil {
-			s.failACS(c, response.Internal(), "")
+			s.failACS(c, m, response.Internal(), "")
 			return
 		}
 	}
@@ -294,7 +310,7 @@ func (s *Service) acs(c *gin.Context) {
 	// IdP 发起：RelayState 是站内路径时作为深链（登录后回到该页），否则回后台登录页；
 	// 两种情况都由 SPA 兑换一次性 code。RelayState 的站内校验与 SP 发起侧同一口径。
 	if m.AllowIDPInitiated {
-		if u := s.redeemURL(c, m.ID, payload, idpInitiatedTarget(baseURL(c), c.Request.PostForm.Get("RelayState"))); u != "" {
+		if u := s.redeemURL(c, m.ID, payload, idpInitiatedTarget(s.baseURL(c, m), c.Request.PostForm.Get("RelayState"))); u != "" {
 			c.Redirect(http.StatusFound, u)
 			return
 		}
@@ -458,7 +474,7 @@ func (s *Service) buildLogoutPlan(c *gin.Context) (*logoutPlan, bool) {
 		response.Fail(c, response.BadRequest("saml.sso.not_from_source"))
 		return nil, false
 	}
-	sp, err := s.provider(m, baseURL(c))
+	sp, err := s.provider(m, s.baseURL(c, m))
 	if err != nil {
 		failDetail(c, err)
 		return nil, false
@@ -469,8 +485,17 @@ func (s *Service) buildLogoutPlan(c *gin.Context) (*logoutPlan, bool) {
 	}
 	plan := &logoutPlan{relayState: relay}
 	if sloURL := sp.GetSLOBindingLocation(saml.HTTPRedirectBinding); sloURL != "" {
-		u, err := sp.MakeRedirectLogoutRequest(nameID, relay)
+		req, err := sp.MakeLogoutRequest(sloURL, nameID)
 		if err != nil {
+			response.Fail(c, err)
+			return nil, false
+		}
+		u, err := sp.RedirectLogoutRequestURL(req, relay)
+		if err != nil {
+			response.Fail(c, err)
+			return nil, false
+		}
+		if err := s.cache.Set(c.Request.Context(), "saml:logout:"+relay, req.ID, 10*time.Minute); err != nil {
 			response.Fail(c, err)
 			return nil, false
 		}
@@ -481,15 +506,22 @@ func (s *Service) buildLogoutPlan(c *gin.Context) (*logoutPlan, bool) {
 			response.Fail(c, err)
 			return nil, false
 		}
+		if err := s.cache.Set(c.Request.Context(), "saml:logout:"+relay, req.ID, 10*time.Minute); err != nil {
+			response.Fail(c, err)
+			return nil, false
+		}
 		plan.postURL, plan.post = sloURL, req
 	} else {
 		response.Fail(c, response.BadRequest("saml.sso.slo_unavailable"))
 		return nil, false
 	}
-	_ = s.cache.Del(c.Request.Context(), key)
 	if r, ok := s.issuer.(SessionRevoker); ok {
-		_ = r.RevokeSession(c.Request.Context(), cl)
+		if err := r.RevokeSession(c.Request.Context(), cl); err != nil {
+			response.Fail(c, err)
+			return nil, false
+		}
 	}
+	_ = s.cache.Del(c.Request.Context(), key)
 	return plan, true
 }
 
@@ -501,33 +533,59 @@ func (s *Service) slo(c *gin.Context) {
 	if !ok {
 		return
 	}
-	sp, err := s.provider(m, baseURL(c))
+	_ = c.Request.ParseForm()
+	testRelay := c.Query("RelayState")
+	if testRelay == "" {
+		testRelay = c.Request.PostForm.Get("RelayState")
+	}
+	testState, isTest := s.consumeConnectionTest(c, testRelay, "slo")
+	sp, err := s.provider(m, s.baseURL(c, m))
 	if err != nil {
-		failDetail(c, err)
+		if isTest {
+			s.finishConnectionTest(c, m, testState, err)
+		} else {
+			failDetail(c, err)
+		}
+		return
+	}
+	if !isLogoutRequest(c.Request) {
+		if isTest {
+			if _, err := sp.ParseLogoutResponse(c.Request, []string{testState.RequestID}); err != nil {
+				s.finishConnectionTest(c, m, testState, err)
+				return
+			}
+			s.finishConnectionTest(c, m, testState, nil)
+			return
+		}
+		requestID := ""
+		if testRelay != "" && s.cache != nil {
+			if value, err := s.cache.Get(c.Request.Context(), "saml:logout:"+testRelay); err == nil && value != "" {
+				requestID = value
+				_ = s.cache.Del(c.Request.Context(), "saml:logout:"+testRelay)
+			}
+		}
+		if requestID == "" {
+			response.Fail(c, response.BadRequest("saml.sso.slo_response_invalid", "missing logout request correlation"))
+			return
+		}
+		if _, err := sp.ParseLogoutResponse(c.Request, []string{requestID}); err != nil {
+			response.Fail(c, response.BadRequest("saml.sso.slo_response_invalid", err.Error()))
+			return
+		}
+		// 完成回执后回到发起登出的前端页面（next 在白名单校验后写入缓存）。
+		if testRelay != "" && s.cache != nil {
+			if next, err := s.cache.Get(c.Request.Context(), "saml:next:"+testRelay); err == nil && next != "" {
+				_ = s.cache.Del(c.Request.Context(), "saml:next:"+testRelay)
+				c.Redirect(http.StatusFound, next)
+				return
+			}
+		}
+		response.OK(c, gin.H{"ok": true})
 		return
 	}
 	if isLogoutRequest(c.Request) {
 		s.idpInitiatedLogout(c, m, sp)
-		return
 	}
-	if err := sp.ValidateLogoutResponseRequest(c.Request); err != nil {
-		response.Fail(c, response.BadRequest("saml.sso.slo_response_invalid", err.Error()))
-		return
-	}
-	// 完成回执后回到发起登出的前端页面（next 在白名单校验后写入缓存）。
-	relay := c.Query("RelayState")
-	if relay == "" {
-		_ = c.Request.ParseForm()
-		relay = c.Request.PostForm.Get("RelayState")
-	}
-	if relay != "" && s.cache != nil {
-		if next, err := s.cache.Get(c.Request.Context(), "saml:next:"+relay); err == nil && next != "" {
-			_ = s.cache.Del(c.Request.Context(), "saml:next:"+relay)
-			c.Redirect(http.StatusFound, next)
-			return
-		}
-	}
-	response.OK(c, gin.H{"ok": true})
 }
 
 // isLogoutRequest 判断到达 SLO 端点的是 IdP 的 LogoutRequest 还是 SP 发起的 LogoutResponse。
@@ -562,7 +620,11 @@ func (s *Service) idpInitiatedLogout(c *gin.Context, m *Source, sp *saml.Service
 			indexes = append(indexes, v)
 		}
 	}
-	s.revokeSessionsByNameID(c.Request.Context(), m, nameID, indexes)
+	if err := s.revokeSessionsByNameID(c.Request.Context(), m, nameID, indexes); err != nil {
+		response.Fail(c, response.Internal().Wrap(err))
+		return
+	}
+	s.recordEvent(c.Request.Context(), m, "logout", "success", correlationID(c), c.ClientIP(), "IdP logout accepted")
 	relay := c.Query("RelayState")
 	if relay == "" {
 		_ = c.Request.ParseForm()
@@ -579,50 +641,89 @@ func (s *Service) idpInitiatedLogout(c *gin.Context, m *Source, sp *saml.Service
 		c.Data(http.StatusOK, "text/html; charset=utf-8", html)
 		return
 	}
-	response.OK(c, gin.H{"ok": true})
+	response.Fail(c, response.Internal().Wrap(errors.New("failed to build SAML logout response")))
 }
 
 // revokeSessionsByNameID 吊销某 NameID 在本来源上的本地会话。indexes 非空时只吊销 SessionIndex
 // 命中的那些（IdP 只结束了其中一次会话），为空时吊销全部（IdP 没给索引）。
 // NameID 找不到（会话已过期 / 从未在这里登录）按成功处理：SAML 规范里登出未知会话不算失败。
-func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID string, indexes []string) {
-	if s.cache == nil || nameID == "" {
-		return
-	}
-	key := sessionKey(m.ID, nameID)
-	raw, err := s.cache.Get(ctx, key)
-	if err != nil || raw == "" {
-		return
-	}
-	rev, ok := s.issuer.(TokenRevoker)
-	if !ok {
-		return
-	}
-	var list []samlSession
-	if json.Unmarshal([]byte(raw), &list) != nil {
-		return
+func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID string, indexes []string) error {
+	if nameID == "" {
+		return nil
 	}
 	want := make(map[string]bool, len(indexes))
 	for _, v := range indexes {
 		want[v] = true
 	}
+	var errs []error
+	rev, canRevoke := s.issuer.(TokenRevoker)
+	if s.db != nil {
+		sum := sha256.Sum256([]byte(nameID))
+		var rows []samlSessionRecord
+		if err := s.db.WithContext(ctx).Where("source_id = ? AND name_id_hash = ? AND revoked_at IS NULL", int64(m.ID), hex.EncodeToString(sum[:])).Find(&rows).Error; err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if len(want) > 0 && !(row.SessionIndex != "" && want[row.SessionIndex]) {
+				continue
+			}
+			if !canRevoke {
+				errs = append(errs, fmt.Errorf("session %s cannot be revoked: token revoker unavailable", row.ID))
+				continue
+			}
+			if err := rev.RevokeByJTI(ctx, row.AccessJTI, row.RefreshJTI); err != nil {
+				errs = append(errs, fmt.Errorf("revoke session %s: %w", row.ID, err))
+				continue
+			}
+			now := time.Now().UTC()
+			if err := s.db.WithContext(ctx).Model(&samlSessionRecord{}).Where("id = ?", row.ID).Update("revoked_at", now).Error; err != nil {
+				errs = append(errs, fmt.Errorf("mark session %s revoked: %w", row.ID, err))
+			}
+		}
+	}
+	if s.cache == nil {
+		return errors.Join(errs...)
+	}
+	key := sessionKey(m.ID, nameID)
+	raw, err := s.cache.Get(ctx, key)
+	if err != nil || raw == "" {
+		return errors.Join(errs...)
+	}
+	var list []samlSession
+	if json.Unmarshal([]byte(raw), &list) != nil {
+		return errors.Join(append(errs, errors.New("decode tracked SAML sessions"))...)
+	}
 	kept := make([]samlSession, 0, len(list))
+	matched := false
 	for _, sess := range list {
 		// 升级前签发、还没有 SessionIndex 的会话无法按索引匹配，保留到自然过期。
 		if len(want) > 0 && !(sess.SID != "" && want[sess.SID]) {
 			kept = append(kept, sess)
 			continue
 		}
-		_ = rev.RevokeByJTI(ctx, sess.JTI, sess.RID)
+		matched = true
+		if !canRevoke {
+			kept = append(kept, sess)
+			continue
+		}
+		if err := rev.RevokeByJTI(ctx, sess.JTI, sess.RID); err != nil {
+			errs = append(errs, fmt.Errorf("revoke tracked session: %w", err))
+			kept = append(kept, sess)
+			continue
+		}
 		_ = s.cache.Del(ctx, sloKey(sess.TenantID, m.ID, sess.UserID))
+	}
+	if matched && !canRevoke {
+		errs = append(errs, errors.New("tracked SAML sessions cannot be revoked: token revoker unavailable"))
 	}
 	if len(kept) == 0 {
 		_ = s.cache.Del(ctx, key)
-		return
+		return errors.Join(errs...)
 	}
 	if b, err := json.Marshal(kept); err == nil {
 		_ = s.cache.Set(ctx, key, string(b), samlSessionTTL)
 	}
+	return errors.Join(errs...)
 }
 
 const (
@@ -721,10 +822,9 @@ func (s *Service) listSources(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	base := baseURL(c)
 	out := make([]SourceInfo, 0, len(list))
 	for i := range list {
-		out = append(out, inspectSource(&list[i], base))
+		out = append(out, inspectSource(&list[i], s.baseURL(c, &list[i])))
 	}
 	response.OK(c, out)
 }
@@ -813,7 +913,7 @@ func (s *Service) sourceURLs(c *gin.Context) {
 	if !ok {
 		return
 	}
-	sp := spInfo(m, baseURL(c))
+	sp := spInfo(m, s.baseURL(c, m))
 	response.OK(c, gin.H{
 		"entityId":    sp.EntityID,
 		"acsUrl":      sp.ACSUrl,
@@ -873,36 +973,45 @@ func (s *Service) refreshMetadata(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"changed": changed, "source": inspectSource(fresh, baseURL(c))})
+	response.OK(c, gin.H{"changed": changed, "source": inspectSource(fresh, s.baseURL(c, fresh))})
 }
 
 // SPCertInfo 是证书弹窗需要的状态：当前证书 + 已发布待切换 + 上一代兜底（含保留截止）。
 type SPCertInfo struct {
-	Cert         string `json:"cert"`
-	NotAfter     string `json:"notAfter"`
-	NextCert     string `json:"nextCert,omitempty"`
-	NextNotAfter string `json:"nextNotAfter,omitempty"`
-	PrevCert     string `json:"prevCert,omitempty"`
-	PrevNotAfter string `json:"prevNotAfter,omitempty"`
-	PrevUntil    string `json:"prevUntil,omitempty"`
+	Cert         string       `json:"cert"`
+	NotAfter     string       `json:"notAfter"`
+	Details      CertDetails  `json:"details"`
+	NextCert     string       `json:"nextCert,omitempty"`
+	NextNotAfter string       `json:"nextNotAfter,omitempty"`
+	NextDetails  *CertDetails `json:"nextDetails,omitempty"`
+	PrevCert     string       `json:"prevCert,omitempty"`
+	PrevNotAfter string       `json:"prevNotAfter,omitempty"`
+	PrevUntil    string       `json:"prevUntil,omitempty"`
+	PrevDetails  *CertDetails `json:"prevDetails,omitempty"`
 }
 
 func certInfo(m *Source) (SPCertInfo, error) {
-	notAfter, err := spCertNotAfter(m.SPCert)
+	cert, err := parseSingleCert(m.SPCert)
 	if err != nil {
 		return SPCertInfo{}, err
 	}
-	out := SPCertInfo{Cert: m.SPCert, NotAfter: notAfter.UTC().Format(time.RFC3339)}
+	out := SPCertInfo{
+		Cert: m.SPCert, NotAfter: cert.NotAfter.UTC().Format(time.RFC3339), Details: describeCert(cert),
+	}
 	if strings.TrimSpace(m.NextSPCert) != "" {
 		out.NextCert = m.NextSPCert
-		if t, err := spCertNotAfter(m.NextSPCert); err == nil {
-			out.NextNotAfter = t.UTC().Format(time.RFC3339)
+		if next, err := parseSingleCert(m.NextSPCert); err == nil {
+			details := describeCert(next)
+			out.NextDetails = &details
+			out.NextNotAfter = next.NotAfter.UTC().Format(time.RFC3339)
 		}
 	}
 	if strings.TrimSpace(m.PrevSPCert) != "" && (m.PrevSPExpiresAt == nil || time.Now().Before(*m.PrevSPExpiresAt)) {
 		out.PrevCert = m.PrevSPCert
-		if t, err := spCertNotAfter(m.PrevSPCert); err == nil {
-			out.PrevNotAfter = t.UTC().Format(time.RFC3339)
+		if prev, err := parseSingleCert(m.PrevSPCert); err == nil {
+			details := describeCert(prev)
+			out.PrevDetails = &details
+			out.PrevNotAfter = prev.NotAfter.UTC().Format(time.RFC3339)
 		}
 		if m.PrevSPExpiresAt != nil {
 			out.PrevUntil = m.PrevSPExpiresAt.UTC().Format(time.RFC3339)

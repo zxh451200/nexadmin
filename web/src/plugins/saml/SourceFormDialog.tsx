@@ -5,11 +5,12 @@ import { useFieldArray, useForm, useWatch, type Control, type FieldErrors, type 
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
+import { FieldHint } from '@/framework/components/FieldHint'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
@@ -36,6 +37,18 @@ function buildSchema(t: (k: string) => string) {
     .object({
       name: z.string().trim().min(1, t('plugin_saml.errors.nameRequired')).max(100, t('plugin_saml.errors.nameTooLong')),
       enabled: z.boolean(),
+      externalBaseUrl: z
+        .string()
+        .trim()
+        .refine((v) => {
+          if (!v) return true
+          try {
+            const u = new URL(v)
+            return (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && !u.password && !u.search && !u.hash && (u.pathname === '' || u.pathname === '/')
+          } catch {
+            return false
+          }
+        }, t('plugin_saml.errors.externalBaseUrlInvalid')),
       idpMetadata: z.string().trim().min(1, t('plugin_saml.errors.metadataRequired')),
       idpMetadataUrl: z
         .string()
@@ -143,6 +156,7 @@ type FormValues = z.infer<ReturnType<typeof buildSchema>>
 const empty: FormValues = {
   name: '',
   enabled: false,
+  externalBaseUrl: '',
   idpMetadata: '',
   idpMetadataUrl: '',
   idpEntityId: '',
@@ -182,6 +196,7 @@ function toValues(s?: SamlSource | null): FormValues {
   return {
     name: s.name,
     enabled: s.enabled,
+    externalBaseUrl: s.externalBaseUrl ?? '',
     idpMetadata: s.idpMetadata,
     idpMetadataUrl: s.idpMetadataUrl ?? '',
     idpEntityId: s.idpEntityId ?? '',
@@ -252,7 +267,10 @@ function TextField({ control, name, label, hint, placeholder, mono }: TextProps)
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <FormLabel>
+            {label}
+            <FieldHint text={hint} icon="alert" />
+          </FormLabel>
           <FormControl>
             <Input
               className={mono ? 'font-mono' : undefined}
@@ -266,7 +284,6 @@ function TextField({ control, name, label, hint, placeholder, mono }: TextProps)
               ref={field.ref}
             />
           </FormControl>
-          {hint ? <FormDescription>{hint}</FormDescription> : null}
           <FormMessage />
         </FormItem>
       )}
@@ -283,7 +300,7 @@ interface Props {
 type TabKey = 'basic' | 'account' | 'advanced'
 
 // TabsContent 会卸载非活动面板，字段自身的 FormMessage 被隐藏，靠 Trigger 上的圆点提示哪个 Tab 有错。
-const BASIC_ERROR_KEYS = ['name', 'idpMetadata', 'idpMetadataUrl', 'idpEntityId']
+const BASIC_ERROR_KEYS = ['name', 'externalBaseUrl', 'idpMetadata', 'idpMetadataUrl', 'idpEntityId']
 const ACCOUNT_ERROR_KEYS = [
   'attrUsername',
   'attrEmail',
@@ -446,10 +463,18 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
             <TabsContent value="basic" className="min-h-0 flex-1 overflow-y-auto pe-1">
               <FormGrid cols={1}>
                 <TextField control={c} name="name" label={p('name')} placeholder={t('common.pleaseInput')} />
-                <SwitchField control={c} name="enabled" label={p('enabled')} description={h('enabled')} />
+                <SwitchField control={c} name="enabled" label={p('enabled')} hint={h('enabled')} />
+                <TextField
+                  control={c}
+                  name="externalBaseUrl"
+                  label={p('externalBaseUrl')}
+                  hint={h('externalBaseUrl')}
+                  mono
+                  placeholder="https://saml.example.com"
+                />
 
                 <FormGridFull>
-                  <div className="space-y-3 rounded-md bg-muted/40 p-3">
+                  <div className="space-y-4">
                     <TextField
                       control={c}
                       name="idpMetadataUrl"
@@ -503,7 +528,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       name="idpMetadata"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{p('idpMetadata')}</FormLabel>
+                          <FormLabel>
+                            {p('idpMetadata')}
+                            <FieldHint text={h('idpMetadata')} icon="alert" />
+                          </FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
@@ -513,7 +541,6 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                               placeholder="<EntityDescriptor …>"
                             />
                           </FormControl>
-                          <FormDescription>{h('idpMetadata')}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -524,7 +551,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                         name="idpEntityId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>{p('idpEntityId')}</FormLabel>
+                            <FormLabel>
+                              {p('idpEntityId')}
+                              <FieldHint text={h('idpEntityId')} icon="alert" />
+                            </FormLabel>
                             <Select
                               value={field.value || undefined}
                               onValueChange={(v) => {
@@ -546,7 +576,6 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                                 ))}
                               </SelectContent>
                             </Select>
-                            <FormDescription>{h('idpEntityId')}</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -577,7 +606,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                 </FormGridFull>
 
                 <FormGridFull>
-                  <div className="space-y-3 rounded-md bg-muted/40 p-3">
+                  <div className="space-y-4">
                     <TextField
                       control={c}
                       name="spEntityIdOverride"
@@ -591,7 +620,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       name="metadataCaCert"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{p('metadataCaCert')}</FormLabel>
+                          <FormLabel>
+                            {p('metadataCaCert')}
+                            <FieldHint text={h('metadataCaCert')} icon="alert" />
+                          </FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
@@ -601,7 +633,6 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                               placeholder="-----BEGIN CERTIFICATE-----"
                             />
                           </FormControl>
-                          <FormDescription>{h('metadataCaCert')}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -611,7 +642,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       name="metadataSignCert"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{p('metadataSignCert')}</FormLabel>
+                          <FormLabel>
+                            {p('metadataSignCert')}
+                            <FieldHint text={h('metadataSignCert')} icon="alert" />
+                          </FormLabel>
                           <FormControl>
                             <Textarea
                               {...field}
@@ -621,7 +655,6 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                               placeholder="-----BEGIN CERTIFICATE-----"
                             />
                           </FormControl>
-                          <FormDescription>{h('metadataSignCert')}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -641,14 +674,14 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                 <TextField control={c} name="attrExternalId" label={p('attrExternalId')} hint={h('attrExternalId')} mono placeholder="immutableId" />
 
                 <FormGridFull>
-                  <div className="space-y-3 rounded-md bg-muted/40 p-3">
-                    <SwitchField control={c} name="autoCreate" label={p('autoCreate')} description={h('autoCreate')} bare />
-                    <SwitchField control={c} name="matchExisting" label={p('matchExisting')} description={h('matchExisting')} bare />
+                  <div className="space-y-4">
+                    <SwitchField control={c} name="autoCreate" label={p('autoCreate')} hint={h('autoCreate')} bare />
+                    <SwitchField control={c} name="matchExisting" label={p('matchExisting')} hint={h('matchExisting')} bare />
                     <SwitchField
                       control={c}
                       name="matchProvisionedExternalId"
                       label={p('matchProvisionedExternalId')}
-                      description={h('matchProvisionedExternalId')}
+                      hint={h('matchProvisionedExternalId')}
                       bare
                       disabled={!form.watch('attrExternalId')}
                     />
@@ -665,21 +698,23 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                 </FormGridFull>
 
                 <FormGridFull>
-                  <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
-                    <legend className="px-1 text-sm font-medium">{p('groupRoleMappings')}</legend>
-                    <p className="text-sm text-muted-foreground">{h('groupRoleMappings')}</p>
+                  <fieldset className="space-y-4">
+                    <legend className="px-1 text-sm font-medium">
+                      {p('groupRoleMappings')}
+                      <FieldHint text={h('groupRoleMappings')} icon="alert" />
+                    </legend>
                     <SwitchField
                       control={c}
                       name="requireMappedGroup"
                       label={p('requireMappedGroup')}
-                      description={h('requireMappedGroup')}
+                      hint={h('requireMappedGroup')}
                       bare
                     />
                     <SwitchField
                       control={c}
                       name="syncRolesOnLogin"
                       label={p('syncRolesOnLogin')}
-                      description={h('syncRolesOnLogin')}
+                      hint={h('syncRolesOnLogin')}
                       bare
                       disabled={mappings.fields.length === 0}
                     />
@@ -687,23 +722,25 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       control={c}
                       name="revokeRolesOnEmptyGroups"
                       label={p('revokeRolesOnEmptyGroups')}
-                      description={h('revokeRolesOnEmptyGroups')}
+                      hint={h('revokeRolesOnEmptyGroups')}
                       bare
                       disabled={!form.watch('syncRolesOnLogin')}
                     />
                     {mappings.fields.map((mapping, index) => (
-                      <div key={mapping.id} className="grid grid-cols-1 gap-3 rounded-md bg-background p-3">
+                      <div key={mapping.id} className="grid grid-cols-1 gap-3">
                         <TextField control={c} name={`groupRoleMappings.${index}.externalGroup`} label={p('group')} mono />
                         <FormField
                           control={c}
                           name={`groupRoleMappings.${index}.roleCodes`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>{p('roles')}</FormLabel>
+                              <FormLabel>
+                                {p('roles')}
+                                <FieldHint text={h('roleCodes')} icon="alert" />
+                              </FormLabel>
                               <FormControl>
                                 <Textarea {...field} rows={2} className="font-mono" spellCheck={false} />
                               </FormControl>
-                              <FormDescription>{h('roleCodes')}</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -734,131 +771,145 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
             <TabsContent value="advanced" className="min-h-0 flex-1 overflow-y-auto pe-1">
               <FormGrid cols={1}>
                 <FormGridFull>
-                  <div className="space-y-3 rounded-md bg-muted/40 p-3">
-                    <SwitchField
-                      control={c}
-                      name="allowIdpInitiated"
-                      label={p('allowIdpInitiated')}
-                      description={h('allowIdpInitiated')}
-                      bare
-                    />
-                    <SwitchField
-                      control={c}
-                      name="signAuthnRequest"
-                      label={p('signAuthnRequest')}
-                      description={h('signAuthnRequest')}
-                      bare
-                    />
-                    <SwitchField
-                      control={c}
-                      name="requireEncryptedAssertion"
-                      label={p('requireEncryptedAssertion')}
-                      description={h('requireEncryptedAssertion')}
-                      bare
-                    />
-                    <SwitchField
-                      control={c}
-                      name="signMetadata"
-                      label={p('signMetadata')}
-                      description={h('signMetadata')}
-                      bare
-                    />
-                    <SwitchField
-                      control={c}
-                      name="allowSha1Signatures"
-                      label={p('allowSha1Signatures')}
-                      description={h('allowSha1Signatures')}
-                      bare
-                    />
-                    <FormField
-                      control={c}
-                      name="nameIdFormat"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{p('nameIdFormat')}</FormLabel>
-                          <Select
-                            value={field.value || 'default'}
-                            onValueChange={(v) => field.onChange(v === 'default' ? '' : v)}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="default">{t('plugin_saml.nameId.default')}</SelectItem>
-                              <SelectItem value="persistent">persistent</SelectItem>
-                              <SelectItem value="transient">transient</SelectItem>
-                              <SelectItem value="emailAddress">emailAddress</SelectItem>
-                              <SelectItem value="unspecified">unspecified</SelectItem>
-                              <SelectItem value="entity">entity</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormDescription>{h('nameIdFormat')}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <SwitchField control={c} name="forceAuthn" label={p('forceAuthn')} description={h('forceAuthn')} bare />
-                    <SwitchField
-                      control={c}
-                      name="requireSignedResponseForCBC"
-                      label={p('requireSignedResponseForCBC')}
-                      description={h('requireSignedResponseForCBC')}
-                      bare
-                    />
-                    <SwitchField
-                      control={c}
-                      name="rejectUnknownConditions"
-                      label={p('rejectUnknownConditions')}
-                      description={h('rejectUnknownConditions')}
-                      bare
-                    />
-                    <FormField
-                      control={c}
-                      name="authnContextPreset"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{p('authnContext')}</FormLabel>
-                          <Select value={field.value || 'none'} onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">{t('plugin_saml.authnContext.none')}</SelectItem>
-                              <SelectItem value="passwordProtectedTransport">
-                                {t('plugin_saml.authnContext.passwordProtectedTransport')}
-                              </SelectItem>
-                              <SelectItem value="password">{t('plugin_saml.authnContext.password')}</SelectItem>
-                              <SelectItem value="mfa">{t('plugin_saml.authnContext.mfa')}</SelectItem>
-                              <SelectItem value="sfa">{t('plugin_saml.authnContext.sfa')}</SelectItem>
-                              <SelectItem value="custom">{t('plugin_saml.authnContext.custom')}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormDescription>{h('authnContext')}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {authnContextPreset === 'custom' ? (
-                      <TextField
+                  <div className="space-y-5">
+                    <fieldset className="space-y-4 rounded-lg border border-border p-4">
+                      <legend className="px-1 text-sm font-semibold">{t('plugin_saml.advancedGroups.signing')}</legend>
+                      <SwitchField
                         control={c}
-                        name="authnContextCustom"
-                        label={p('authnContextCustom')}
-                        hint={h('authnContextCustom')}
-                        mono
-                        placeholder="urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+                        name="signAuthnRequest"
+                        label={p('signAuthnRequest')}
+                        hint={h('signAuthnRequest')}
+                        bare
                       />
-                    ) : null}
-                    <SwitchField
-                      control={c}
-                      name="requireAuthnContext"
-                      label={p('requireAuthnContext')}
-                      description={h('requireAuthnContext')}
-                      bare
-                    />
+                      <SwitchField
+                        control={c}
+                        name="requireEncryptedAssertion"
+                        label={p('requireEncryptedAssertion')}
+                        description={t('plugin_saml.riskHints.requireEncryptedAssertion')}
+                        hint={h('requireEncryptedAssertion')}
+                        bare
+                      />
+                      <SwitchField
+                        control={c}
+                        name="signMetadata"
+                        label={p('signMetadata')}
+                        hint={h('signMetadata')}
+                        bare
+                      />
+                      <SwitchField
+                        control={c}
+                        name="allowSha1Signatures"
+                        label={p('allowSha1Signatures')}
+                        description={t('plugin_saml.riskHints.allowSha1Signatures')}
+                        hint={h('allowSha1Signatures')}
+                        bare
+                      />
+                      <SwitchField
+                        control={c}
+                        name="requireSignedResponseForCBC"
+                        label={p('requireSignedResponseForCBC')}
+                        description={t('plugin_saml.riskHints.requireSignedResponseForCBC')}
+                        hint={h('requireSignedResponseForCBC')}
+                        bare
+                      />
+                    </fieldset>
+
+                    <fieldset className="space-y-4 rounded-lg border border-border p-4">
+                      <legend className="px-1 text-sm font-semibold">{t('plugin_saml.advancedGroups.login')}</legend>
+                      <SwitchField
+                        control={c}
+                        name="allowIdpInitiated"
+                        label={p('allowIdpInitiated')}
+                        hint={h('allowIdpInitiated')}
+                        bare
+                      />
+                      <FormField
+                        control={c}
+                        name="nameIdFormat"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {p('nameIdFormat')}
+                              <FieldHint text={h('nameIdFormat')} icon="alert" />
+                            </FormLabel>
+                            <Select
+                              value={field.value || 'default'}
+                              onValueChange={(v) => field.onChange(v === 'default' ? '' : v)}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="default">{t('plugin_saml.nameId.default')}</SelectItem>
+                                <SelectItem value="persistent">persistent</SelectItem>
+                                <SelectItem value="transient">transient</SelectItem>
+                                <SelectItem value="emailAddress">emailAddress</SelectItem>
+                                <SelectItem value="unspecified">unspecified</SelectItem>
+                                <SelectItem value="entity">entity</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <SwitchField control={c} name="forceAuthn" label={p('forceAuthn')} hint={h('forceAuthn')} bare />
+                      <FormField
+                        control={c}
+                        name="authnContextPreset"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {p('authnContext')}
+                              <FieldHint text={h('authnContext')} icon="alert" />
+                            </FormLabel>
+                            <Select value={field.value || 'none'} onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="none">{t('plugin_saml.authnContext.none')}</SelectItem>
+                                <SelectItem value="passwordProtectedTransport">
+                                  {t('plugin_saml.authnContext.passwordProtectedTransport')}
+                                </SelectItem>
+                                <SelectItem value="password">{t('plugin_saml.authnContext.password')}</SelectItem>
+                                <SelectItem value="mfa">{t('plugin_saml.authnContext.mfa')}</SelectItem>
+                                <SelectItem value="sfa">{t('plugin_saml.authnContext.sfa')}</SelectItem>
+                                <SelectItem value="custom">{t('plugin_saml.authnContext.custom')}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {authnContextPreset === 'custom' ? (
+                        <TextField
+                          control={c}
+                          name="authnContextCustom"
+                          label={p('authnContextCustom')}
+                          hint={h('authnContextCustom')}
+                          mono
+                          placeholder="urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+                        />
+                      ) : null}
+                      <SwitchField
+                        control={c}
+                        name="requireAuthnContext"
+                        label={p('requireAuthnContext')}
+                        hint={h('requireAuthnContext')}
+                        bare
+                      />
+                      <SwitchField
+                        control={c}
+                        name="rejectUnknownConditions"
+                        label={p('rejectUnknownConditions')}
+                        hint={h('rejectUnknownConditions')}
+                        bare
+                      />
+                    </fieldset>
                   </div>
                 </FormGridFull>
               </FormGrid>

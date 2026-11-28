@@ -809,6 +809,7 @@ website:
   faq_question_required: "A question is required."
   faq_question_too_long: "The question must be at most 300 characters."
   faq_answer_too_long: "The answer must be at most 5000 characters."
+  faq_category_too_long: "The category must be at most 64 characters."
   faq_not_found: "The FAQ does not exist or has been deleted."
   faq_ids_empty: "Select at least one FAQ."
   faq_enabled_invalid: "Invalid visibility status."
@@ -867,6 +868,7 @@ website:
   import_faqs_title: "FAQ import"
   import_faq_question: "Question"
   import_faq_answer: "Answer"
+  import_faq_category: "Category"
   import_faq_sort: "Sort"
   import_faq_status: "Status"
 codegen:
@@ -1132,7 +1134,9 @@ saml:
     metadata_too_large: "Metadata exceeds 1 MiB"
     operation_failed: "The operation was not completed: %s"
   cert_alert:
-    title: SAML SP certificate is expiring
+    title: SAML certificate is expiring
     current: current certificate
     next: standby certificate
+    idp: IdP signing certificate
     content: "Identity source \"%s\": its %s expires on %s (about %d days left). Publish a new certificate using the two-step rollover and update trust at the IdP first."
+    idp_content: "Identity source \"%s\": its %s expires on %s (about %d days left). Ask the IdP administrator to rotate the signing certificate and update metadata."

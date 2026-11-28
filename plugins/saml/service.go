@@ -21,6 +21,7 @@ import (
 	"github.com/russellhaering/goxmldsig"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
@@ -72,6 +73,7 @@ type SourceForm struct {
 	IdPMetadataURL             string             `json:"idpMetadataUrl"`
 	IDPEntityID                string             `json:"idpEntityId"`
 	SPEntityID                 string             `json:"spEntityIdOverride"`
+	ExternalBaseURL            string             `json:"externalBaseUrl"`
 	MetadataCACert             string             `json:"metadataCaCert"`
 	MetadataSign               string             `json:"metadataSignCert"`
 	AttrUsername               string             `json:"attrUsername"`
@@ -130,7 +132,7 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 	}
 	m := Source{
 		Name: f.Name, Enabled: f.Enabled, IdPMetadata: f.IdPMetadata, IdPMetadataURL: f.IdPMetadataURL,
-		IDPEntityID: f.IDPEntityID, SPEntityID: f.SPEntityID,
+		IDPEntityID: f.IDPEntityID, SPEntityID: f.SPEntityID, ExternalBaseURL: f.ExternalBaseURL,
 		MetadataCACert: f.MetadataCACert, MetadataSignCert: f.MetadataSign,
 		SPCert: certPEM, SPKeyEnc: keyEnc,
 		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname, AttrGroups: f.AttrGroups, AttrPhone: f.AttrPhone,
@@ -151,62 +153,101 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 			return nil, err
 		}
 	}
-	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&m).Error; err != nil {
+			return err
+		}
+		return s.saveVersionDB(ctx, tx, &m, "create")
+	}); err != nil {
 		return nil, err
 	}
 	return &m, nil
 }
 
 func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source, error) {
-	m, err := s.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
+	return s.update(ctx, id, f, "update")
+}
+
+func (s *Service) update(ctx context.Context, id string, f SourceForm, reason string) (*Source, error) {
 	if err := f.validate(); err != nil {
 		return nil, err
 	}
-	m.Name = f.Name
-	m.Enabled = f.Enabled
-	m.IdPMetadata = f.IdPMetadata
-	m.IdPMetadataURL = f.IdPMetadataURL
-	m.IDPEntityID = f.IDPEntityID
-	m.SPEntityID = f.SPEntityID
-	m.MetadataCACert = f.MetadataCACert
-	m.MetadataSignCert = f.MetadataSign
-	m.AttrUsername = f.AttrUsername
-	m.AttrEmail = f.AttrEmail
-	m.AttrNickname = f.AttrNickname
-	m.AttrGroups = f.AttrGroups
-	m.AttrPhone = f.AttrPhone
-	m.AttrExternalID = f.AttrExternalID
-	m.AutoCreate = f.AutoCreate
-	m.MatchExisting = f.MatchExisting
-	m.MatchProvisionedExternalID = f.MatchProvisionedExternalID
-	m.DefaultRole = f.DefaultRole
-	m.GroupRoleMappings = f.GroupMappings
-	m.RequireMappedGroup = f.RequireMapped
-	m.SyncRolesOnLogin = f.SyncRoles
-	m.RevokeRolesOnEmptyGroups = f.RevokeEmptyRoles
-	m.AllowIDPInitiated = f.AllowIDPInit
-	m.SignAuthnRequest = f.SignRequests
-	m.NameIDFormat = f.NameIDFormat
-	m.RequireEncryptedAssertion = f.RequireEncrypted
-	m.SignMetadata = f.SignMetadata
-	m.AllowSHA1 = f.AllowSHA1
-	m.RequireSignedCBC = f.RequireSignedCBC
-	m.RejectUnknownConditions = f.RejectUnknownConditions
-	m.ForceAuthn = f.ForceAuthn
-	m.AuthnContextClassRef = f.AuthnContextClassRef
-	m.RequireAuthnContext = f.RequireAuthnContext
-	if m.Enabled {
-		if err := m.ready(); err != nil {
-			return nil, err
+	var m Source
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).Take(&m).Error; err != nil {
+			return err
 		}
-	}
-	if err := s.db.WithContext(ctx).Save(m).Error; err != nil {
+		wasEnabled := m.Enabled
+		m.Name = f.Name
+		m.Enabled = f.Enabled
+		m.IdPMetadata = f.IdPMetadata
+		m.IdPMetadataURL = f.IdPMetadataURL
+		m.IDPEntityID = f.IDPEntityID
+		m.SPEntityID = f.SPEntityID
+		m.ExternalBaseURL = f.ExternalBaseURL
+		m.MetadataCACert = f.MetadataCACert
+		m.MetadataSignCert = f.MetadataSign
+		m.AttrUsername = f.AttrUsername
+		m.AttrEmail = f.AttrEmail
+		m.AttrNickname = f.AttrNickname
+		m.AttrGroups = f.AttrGroups
+		m.AttrPhone = f.AttrPhone
+		m.AttrExternalID = f.AttrExternalID
+		m.AutoCreate = f.AutoCreate
+		m.MatchExisting = f.MatchExisting
+		m.MatchProvisionedExternalID = f.MatchProvisionedExternalID
+		m.DefaultRole = f.DefaultRole
+		m.GroupRoleMappings = f.GroupMappings
+		m.RequireMappedGroup = f.RequireMapped
+		m.SyncRolesOnLogin = f.SyncRoles
+		m.RevokeRolesOnEmptyGroups = f.RevokeEmptyRoles
+		m.AllowIDPInitiated = f.AllowIDPInit
+		m.SignAuthnRequest = f.SignRequests
+		m.NameIDFormat = f.NameIDFormat
+		m.RequireEncryptedAssertion = f.RequireEncrypted
+		m.SignMetadata = f.SignMetadata
+		m.AllowSHA1 = f.AllowSHA1
+		m.RequireSignedCBC = f.RequireSignedCBC
+		m.RejectUnknownConditions = f.RejectUnknownConditions
+		m.ForceAuthn = f.ForceAuthn
+		m.AuthnContextClassRef = f.AuthnContextClassRef
+		m.RequireAuthnContext = f.RequireAuthnContext
+		if m.Enabled {
+			if err := m.ready(); err != nil {
+				return err
+			}
+		}
+		if wasEnabled && !m.Enabled {
+			if err := s.revokeSourceRolesDB(ctx, tx, &m); err != nil {
+				return err
+			}
+		}
+		if err := m.BeforeSave(nil); err != nil {
+			return err
+		}
+		updates := map[string]any{
+			"name": m.Name, "enabled": m.Enabled, "idp_metadata": m.IdPMetadata, "idp_metadata_url": m.IdPMetadataURL,
+			"idp_entity_id": m.IDPEntityID, "sp_entity_id": m.SPEntityID, "external_base_url": m.ExternalBaseURL,
+			"metadata_ca_cert": m.MetadataCACert, "metadata_sign_cert": m.MetadataSignCert,
+			"attr_username": m.AttrUsername, "attr_email": m.AttrEmail, "attr_nickname": m.AttrNickname,
+			"attr_groups": m.AttrGroups, "attr_phone": m.AttrPhone, "attr_external_id": m.AttrExternalID,
+			"auto_create": m.AutoCreate, "match_existing": m.MatchExisting, "match_provisioned_external_id": m.MatchProvisionedExternalID,
+			"default_role": m.DefaultRole, "group_role_mappings": m.GroupRoleMappingsJSON, "require_mapped_group": m.RequireMappedGroup,
+			"sync_roles_on_login": m.SyncRolesOnLogin, "revoke_roles_on_empty_groups": m.RevokeRolesOnEmptyGroups,
+			"allow_idp_initiated": m.AllowIDPInitiated, "sign_authn_request": m.SignAuthnRequest, "name_id_format": m.NameIDFormat,
+			"require_encrypted_assertion": m.RequireEncryptedAssertion, "sign_metadata": m.SignMetadata, "allow_sha1_signatures": m.AllowSHA1,
+			"require_signed_cbc": m.RequireSignedCBC, "reject_unknown_conditions": m.RejectUnknownConditions,
+			"force_authn": m.ForceAuthn, "authn_context_class_ref": m.AuthnContextClassRef, "require_authn_context": m.RequireAuthnContext,
+		}
+		if err := tx.Model(&Source{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			return err
+		}
+		return s.saveVersionDB(ctx, tx, &m, reason)
+	})
+	if err != nil {
 		return nil, err
 	}
-	return m, nil
+	return &m, nil
 }
 
 // spPrevGrace 是切换后旧证书继续出现在元数据、并继续用于解密断言的时长。
@@ -267,26 +308,48 @@ func (s *Service) PromoteSPKey(ctx context.Context, id string) (*Source, error) 
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) error {
-	m, err := s.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if enabled {
-		if err := m.ready(); err != nil {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var m Source
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).Take(&m).Error; err != nil {
 			return err
 		}
-	}
-	return s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", id).Update("enabled", enabled).Error
+		if enabled {
+			if err := m.ready(); err != nil {
+				return err
+			}
+		} else if err := s.revokeSourceRolesDB(ctx, tx, &m); err != nil {
+			return err
+		}
+		if err := tx.Model(&Source{}).Where("id = ?", id).Update("enabled", enabled).Error; err != nil {
+			return err
+		}
+		m.Enabled = enabled
+		return s.saveVersionDB(ctx, tx, &m, "enabled")
+	})
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
-	// 授予记账跟着来源一起删：来源没了，它授过的角色不再属于任何映射，
-	// 但用户身上已生效的角色保持现状（删配置不等于收权）。
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var m Source
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).Take(&m).Error; err != nil {
+			return err
+		}
+		if err := s.revokeSourceRolesDB(ctx, tx, &m); err != nil {
+			return err
+		}
 		if err := tx.Where("source_id = ?", id).Delete(&roleGrant{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("source_id = ?", id).Delete(&roleInitialization{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("source_id = ?", id).Delete(&sourceVersion{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("source_id = ?", id).Delete(&samlEvent{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("source_id = ?", id).Delete(&samlSessionRecord{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("id = ?", id).Delete(&Source{}).Error
@@ -340,6 +403,11 @@ func (f *SourceForm) validate() error {
 	if err := validateSPEntityID(f.SPEntityID); err != nil {
 		return err
 	}
+	normalizedBaseURL, err := normalizeExternalBaseURL(f.ExternalBaseURL)
+	if err != nil {
+		return err
+	}
+	f.ExternalBaseURL = normalizedBaseURL
 	f.AttrUsername = defAttr(f.AttrUsername, "uid")
 	f.AttrEmail = defAttr(f.AttrEmail, "mail")
 	f.AttrNickname = defAttr(f.AttrNickname, "displayName")
@@ -376,6 +444,21 @@ func (f *SourceForm) validate() error {
 		return errors.New("saml: 开启空组收权前必须先开启登录时同步角色")
 	}
 	return validateGroupMappings(f.GroupMappings, f.RequireMapped)
+}
+
+func normalizeExternalBaseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return "", errors.New("saml: 外部访问地址必须是 http(s) 基址，不能包含查询参数或片段")
+	}
+	if u.Path != "" && u.Path != "/" {
+		return "", errors.New("saml: 外部访问地址只能包含协议、主机和可选端口")
+	}
+	return strings.TrimRight(raw, "/"), nil
 }
 
 // validateSPEntityID 校验可选的 SP Entity ID 覆盖值：必须是带 scheme 的 URI，且不含空白/控制字符。
@@ -791,6 +874,8 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		EntityID:    entityID,
 		AcsURL:      u("/api/v1/auth/saml/" + id + "/acs"),
 		MetadataURL: u("/api/v1/auth/saml/" + id + "/metadata"),
+		// 仅实现 HTTP-POST ACS；不能发布库默认的 Artifact 端点让 IdP 误选。
+		AssertionConsumerServiceBindings: []string{saml.HTTPPostBinding},
 		// SLO：登出需要 IdP 侧能回 LogoutResponse 到本端点。
 		SloURL:         u("/api/v1/auth/saml/" + id + "/slo"),
 		LogoutBindings: []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding},

@@ -15,7 +15,7 @@
     },
     "on": "Enabled",
     "off": "Disabled",
-    "deleteConfirm": "Delete identity source \"{{name}}\"? Bindings of users who signed in through it are kept.",
+    "deleteConfirm": "Delete identity source \"{{name}}\"? Roles granted by this source will be revoked, and its configuration, diagnostics and session records will be deleted. User bindings are kept.",
     "btn": {
       "edit": "Edit",
       "test": "Self-test",
@@ -40,6 +40,7 @@
       "idpMetadata": "IdP metadata (XML)",
       "idpMetadataUrl": "IdP metadata URL (optional)",
       "spEntityIdOverride": "SP Entity ID (optional)",
+      "externalBaseUrl": "External base URL (optional)",
       "metadataCaCert": "Metadata CA (PEM, optional)",
       "metadataSignCert": "Metadata signing certificate (PEM, optional)",
       "metadataSource": "Metadata source",
@@ -68,6 +69,7 @@
       "requireSignedResponseForCBC": "Require a signed response for CBC-encrypted assertions",
       "rejectUnknownConditions": "Reject unknown Conditions",
       "authnContext": "Authentication context class",
+      "authnContextClassRef": "Authentication context class reference",
       "authnContextCustom": "Custom authentication context classes",
       "requireAuthnContext": "Require matching authentication context",
       "idpEntityId": "Entity ID to use",
@@ -84,6 +86,7 @@
     },
     "hints": {
       "enabled": "Only enabled sources appear on the sign-in page.",
+      "externalBaseUrl": "Fixed http(s) base URL users use to reach NexAdmin. When set, ACS, SLO, SP metadata and sign-in return URLs no longer depend on Host or proxy headers. Recommended for reverse-proxy deployments.",
       "idpMetadataUrl": "After filling this in, use \"Fetch from URL\" to refresh the metadata; the self-test also checks that the remote copy still matches.",
       "idpMetadata": "Paste the EntityDescriptor XML from the IdP; saving requires a parsable IDPSSODescriptor.",
       "attrUsername": "Attribute used as the local username; leave empty to use the NameID.",
@@ -115,7 +118,16 @@
       "allowSha1Signatures": "SHA-1 signed assertions / responses / logout messages are rejected by default; enable only for legacy IdPs, and only for this source.",
       "spEntityIdOverride": "Leave empty to use the SP metadata URL as the Entity ID. Some IdPs require a fixed value; it must be a URI with a scheme (https://… or urn:…).",
       "metadataCaCert": "When IdP metadata is issued by an internal CA, paste its root/intermediate certificates; metadata fetches then trust only this CA.",
-      "metadataSignCert": "With a pinned certificate, saving, refreshing and self-test all require the metadata root element to carry a matching XML signature; leave empty to rely on TLS only."
+      "metadataSignCert": "With a pinned certificate, saving, refreshing and self-testing all require the metadata root element to carry a matching XML signature; leave empty to rely on TLS only."
+    },
+    "advancedGroups": {
+      "signing": "Signing & encryption",
+      "login": "Sign-in, NameID & assertion validation"
+    },
+    "riskHints": {
+      "requireEncryptedAssertion": "Confirm the IdP encrypts assertions with the SP certificate before enabling this.",
+      "allowSha1Signatures": "Use only for legacy IdPs without SHA-256 support; it weakens signature security.",
+      "requireSignedResponseForCBC": "Requires the IdP to sign the response too; IdPs that sign only assertions will fail to sign in."
     },
     "placeholder": {
       "spEntityId": "Default: the SP metadata URL"
@@ -160,6 +172,15 @@
       "expired": "IdP certificate expired ({{date}})",
       "title": "SP signing certificate",
       "download": "Download certificate",
+      "details": "Certificate details",
+      "subject": "Subject",
+      "issuer": "Issuer",
+      "serial": "Serial number",
+      "validity": "Validity",
+      "algorithms": "Public key / signature algorithm",
+      "sha256": "SHA-256 fingerprint",
+      "sha1": "SHA-1 thumbprint",
+      "thumbprintHint": "The SHA-1 thumbprint is only for matching the certificate thumbprint shown by your IdP; it is not used for signing or security validation.",
       "expires": "Expires: {{date}}",
       "rotateHint": "Two-step rollover: publish the new certificate, update the IdP with it (or with the SP metadata), then switch. The old one stays for 7 days.",
       "rotateConfirm": "Publish a new certificate and start the rollover? After publishing, import the new certificate (or SP metadata) at the IdP and confirm it verifies signatures with the new certificate before switching.",
@@ -259,12 +280,49 @@
       "mappingDuplicate": "Group values must be unique",
       "entityInvalid": "Invalid Entity ID (at most 500 bytes, no control characters)",
       "entityRequired": "Choose the Entity ID to use",
+      "externalBaseUrlInvalid": "External base URL must be an http(s) origin without a path, query or fragment",
       "authnContextRequired": "Choose an authentication context class before enabling enforcement",
       "authnContextCount": "At most 10 authentication context classes",
       "authnContextInvalid": "Authentication context classes must be urn: or http(s):// URIs, comma-separated",
       "authnContextDuplicate": "Authentication context classes must be unique",
       "fileTooLarge": "Metadata file must be at most 1 MiB",
       "fileReadFailed": "Failed to read the file"
+    },
+    "metadata": {
+      "expired": "Metadata expired",
+      "stale": "Metadata needs refresh"
+    },
+    "governance": {
+      "open": "Diagnostics & governance",
+      "title": "{{name}} · Diagnostics & governance",
+      "test": "Live test",
+      "versions": "Config versions",
+      "events": "Diagnostic events",
+      "sessions": "Active sessions",
+      "sessionUser": "User {{id}}",
+      "testHint": "A live test redirects to the IdP and returns a standalone result page without issuing a NexAdmin session. An SLO test requires the IdP-side NameID.",
+      "testMode": "Test type",
+      "sso": "SSO sign-in round trip",
+      "slo": "SLO logout round trip",
+      "nameId": "IdP NameID",
+      "startTest": "Start live test",
+      "testPopupBlocked": "The browser blocked the new window. Allow pop-ups and try again.",
+      "rollback": "Roll back",
+      "rollbackConfirm": "Roll back to v{{version}}? The current SP certificate and private key are kept; all other settings come from that version.",
+      "rollbackReason": "Enter a rollback reason",
+      "revoke": "Revoke",
+      "revokeConfirm": "Immediately revoke the local access and refresh tokens for this SAML session?",
+      "revoked": "Revoked",
+      "expires": "Expires",
+      "noVersions": "No configuration versions yet",
+      "firstVersion": "First version; no earlier configuration to compare",
+      "noChanges": "No changes from the previous version",
+      "changes": "View {{count}} changes",
+      "updated": "Updated",
+      "on": "On",
+      "off": "Off",
+      "noEvents": "No diagnostic events yet",
+      "noSessions": "No active sessions yet"
     },
     "refresh": {
       "changed": "Metadata updated",

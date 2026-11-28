@@ -56,6 +56,7 @@ export interface WebhookTestResult {
   success: boolean
   statusCode: number
   durationMs: number
+  body?: string | null
   error?: string
 }
 
@@ -71,9 +72,11 @@ export interface Delivery {
   id: string
   webhookId: string
   webhookName?: string
+  eventId: string
   event: string
   status: DeliveryStatus
   attempts: number
+  durationMs: number
   /** 发出去的 JSON 请求体：排障时与响应同样重要 */
   payload?: string | null
   responseStatus?: number | null

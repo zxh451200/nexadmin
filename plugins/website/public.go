@@ -135,10 +135,10 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 		return
 	}
 	v.ensureLang()
-	// 展示币种按访客 cookie 升级：cookie 值必须在汇率表内才认（防脏值/越权码），
+	// 展示币种按访客 cookie 升级：默认币种非空且 cookie 值在汇率表内才认，
 	// 之后才能决定头部弹层显不显示（CurrencyOn）。所有公开页都过 render，
 	// 弹层数据与价格换算在这里统一定型。
-	if len(v.fx.rates) > 0 {
+	if v.fx.display != "" && len(v.fx.rates) > 0 {
 		if cur, cerr := c.Cookie(currencyCookie); cerr == nil {
 			if _, ok := v.fx.rates[strings.ToUpper(cur)]; ok {
 				v.fx.display = strings.ToUpper(cur)

@@ -30,6 +30,8 @@ type Source struct {
 	MetadataRefreshedAt *time.Time `gorm:"column:metadata_refreshed_at"`
 	// SPEntityID 覆盖 SP 的 Entity ID（默认 = SP 元数据地址）；部分 IdP 只接受固定值。
 	SPEntityID string `gorm:"column:sp_entity_id;size:500;not null;default:''"`
+	// ExternalBaseURL 固定对外基址，避免元数据与回调地址随 Host 或代理头变化。
+	ExternalBaseURL string `gorm:"column:external_base_url;size:500;not null;default:''"`
 	// 元数据信任（可选）：MetadataCACert 让我们拉元数据时信任内网 CA；
 	// MetadataSignCert 钉住签名证书，保存 / 刷新 / 自检时要求元数据带匹配的 XML 签名。
 	MetadataCACert   string `gorm:"column:metadata_ca_cert;type:text"`

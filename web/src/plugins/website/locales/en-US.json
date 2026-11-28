@@ -709,12 +709,16 @@
         "answer": "Answer",
         "sort": "Sort",
         "enabled": "Enabled",
-        "actions": "Actions"
+        "actions": "Actions",
+        "category": "Category"
       },
       "status": {
         "on": "Shown",
         "off": "Hidden"
-      }
+      },
+      "categoryPlaceholder": "e.g. Payment & shipping (blank = uncategorized)",
+      "categoryHint": "Categories group FAQs on the public site. Only categories already in use appear in the dropdown.",
+      "categoryNone": "Uncategorized"
     },
     "purchase": {
       "enabled": "Enable product checkout",

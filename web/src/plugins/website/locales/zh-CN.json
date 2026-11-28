@@ -709,12 +709,16 @@
         "answer": "答案",
         "sort": "排序",
         "enabled": "启用",
-        "actions": "操作"
+        "actions": "操作",
+        "category": "分类"
       },
       "status": {
         "on": "展示中",
         "off": "已停用"
-      }
+      },
+      "categoryPlaceholder": "如：付款与物流（留空则未分类）",
+      "categoryHint": "分类用于官网分组展示，只有输入过同类问题的条目才会出现在下拉里。",
+      "categoryNone": "未分类"
     },
     "purchase": {
       "enabled": "开启产品在线购买",

@@ -10,7 +10,12 @@
            aria-label="{{.T "faq.searchPlaceholder"}}"
            autocomplete="off">
     <div class="hp-faq faq-page-list" data-faq-list>
+      {{$lastCategory := ""}}
       {{range .Faqs}}
+      {{if and .Category (ne .Category $lastCategory)}}
+      <h2 class="faq-group-title" data-faq-group>{{.Category}}</h2>
+      {{$lastCategory = .Category}}
+      {{else if not .Category}}{{$lastCategory = ""}}{{end}}
       <details class="hp-faq-item">
         <summary>{{.Question}}</summary>
         <div class="hp-faq-answer">{{.Answer}}</div>

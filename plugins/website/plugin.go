@@ -115,6 +115,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	// 常见问题（FAQ）：首页板块的问答条目，与特性卡片同一范式。
 	g.GET("/faqs", core.Perm("website:faq"), core.Desc("常见问题列表"), h.listFaqs)
+	g.GET("/faqs/categories", core.Perm("website:faq"), core.Desc("常见问题分类列表"), h.listFaqCategories)
 	g.POST("/faqs/export-async", core.Perm("website:faq"), core.Desc("提交常见问题异步导出任务"), h.FaqExportAsync)
 	g.POST("/faqs", core.Perm("website:faq"), core.Desc("新增常见问题"), h.createFaq)
 	g.PUT("/faqs/reorder", core.Perm("website:faq"), core.Desc("常见问题拖拽排序"), h.reorderFaqs)

@@ -11,6 +11,7 @@ import {
   Plug,
   Plus,
   RefreshCw,
+  Settings2,
   ShieldCheck,
   Trash2,
   Upload,
@@ -45,9 +46,11 @@ import {
   type SamlSource,
   type RolePreview,
   type SPCert,
+  type CertDetails,
   type TestResult,
 } from './api'
 import SourceFormDialog from './SourceFormDialog'
+import GovernanceDialog from './GovernanceDialog'
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const { t } = useTranslation()
@@ -109,6 +112,13 @@ function CertStatus({ idp }: { idp: SamlSource['idp'] }) {
   return <Badge variant="success">{t('plugin_saml.cert.ok', { date })}</Badge>
 }
 
+function MetadataStatus({ idp }: { idp: SamlSource['idp'] }) {
+  const { t } = useTranslation()
+  if (idp?.metadataExpired) return <Badge variant="destructive">{t('plugin_saml.metadata.expired')}</Badge>
+  if (idp?.metadataStale) return <Badge variant="warning">{t('plugin_saml.metadata.stale')}</Badge>
+  return null
+}
+
 function TestDialog({ result, onClose }: { result: TestResult | null; onClose: () => void }) {
   const { t } = useTranslation()
   return (
@@ -153,6 +163,28 @@ function TestDialog({ result, onClose }: { result: TestResult | null; onClose: (
         </div>
       ) : null}
     </ResponsiveDialog>
+  )
+}
+
+function CertDetailsPanel({ details }: { details: CertDetails }) {
+  const { t } = useTranslation()
+  const formatDate = (value: string) => new Date(value).toLocaleString()
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <div className="text-sm font-medium">{t('plugin_saml.cert.details')}</div>
+      <ValueRow label={t('plugin_saml.cert.subject')} value={details.subject || '—'} />
+      <ValueRow label={t('plugin_saml.cert.issuer')} value={details.issuer || '—'} />
+      <ValueRow label={t('plugin_saml.cert.serial')} value={details.serialNumber} />
+      <ValueRow label={t('plugin_saml.cert.validity')} value={`${formatDate(details.notBefore)} — ${formatDate(details.notAfter)}`} />
+      <ValueRow label={t('plugin_saml.cert.algorithms')} value={`${details.publicKeyAlgorithm} / ${details.signatureAlgorithm}`} />
+      <ValueRow label={t('plugin_saml.cert.sha256')} value={details.sha256Fingerprint}>
+        <CopyButton text={details.sha256Fingerprint} label={t('plugin_saml.btn.copy')} />
+      </ValueRow>
+      <ValueRow label={t('plugin_saml.cert.sha1')} value={details.sha1Thumbprint}>
+        <CopyButton text={details.sha1Thumbprint} label={t('plugin_saml.btn.copy')} />
+      </ValueRow>
+      <p className="text-xs text-muted-foreground">{t('plugin_saml.cert.thumbprintHint')}</p>
+    </div>
   )
 }
 
@@ -288,6 +320,7 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
           <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-muted-foreground">
             {t('plugin_saml.cert.rotateHint')}
           </p>
+          <CertDetailsPanel details={data.details} />
           {data.nextCert ? (
             <div className="space-y-2 rounded-md border border-info/40 bg-info/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -299,17 +332,29 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
                   date: data.nextNotAfter ? new Date(data.nextNotAfter).toLocaleString() : '—',
                 })}
               </p>
+              {data.nextDetails ? (
+                <ValueRow label={t('plugin_saml.cert.sha256')} value={data.nextDetails.sha256Fingerprint}>
+                  <CopyButton text={data.nextDetails.sha256Fingerprint} label={t('plugin_saml.btn.copy')} />
+                </ValueRow>
+              ) : null}
             </div>
           ) : null}
           <pre className="max-h-80 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-all">
             {data.cert}
           </pre>
           {data.prevCert ? (
-            <p className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-              {t('plugin_saml.cert.prevHint', {
-                date: data.prevUntil ? new Date(data.prevUntil).toLocaleString() : '—',
-              })}
-            </p>
+            <div className="space-y-2">
+              <p className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                {t('plugin_saml.cert.prevHint', {
+                  date: data.prevUntil ? new Date(data.prevUntil).toLocaleString() : '—',
+                })}
+              </p>
+              {data.prevDetails ? (
+                <ValueRow label={t('plugin_saml.cert.sha256')} value={data.prevDetails.sha256Fingerprint}>
+                  <CopyButton text={data.prevDetails.sha256Fingerprint} label={t('plugin_saml.btn.copy')} />
+                </ValueRow>
+              ) : null}
+            </div>
           ) : null}
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -480,6 +525,7 @@ export default function SamlPage() {
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [certSource, setCertSource] = useState<SamlSource | null>(null)
   const [previewSource, setPreviewSource] = useState<SamlSource | null>(null)
+  const [governanceSource, setGovernanceSource] = useState<SamlSource | null>(null)
   const [refreshing, setRefreshing] = useState<string | null>(null)
 
   const openForm = (s: SamlSource | null) => {
@@ -578,6 +624,7 @@ export default function SamlPage() {
                   {s.enabled ? t('plugin_saml.on') : t('plugin_saml.off')}
                 </Badge>
                 <CertStatus idp={s.idp} />
+                <MetadataStatus idp={s.idp} />
                 <div className="ms-auto flex flex-wrap items-center gap-1">
                   <Can
                     perm="saml:edit"
@@ -650,6 +697,7 @@ export default function SamlPage() {
               )}
 
               <div className="space-y-1.5 border-t border-border pt-3">
+                {s.externalBaseUrl ? <ValueRow label={t('plugin_saml.fields.externalBaseUrl')} value={s.externalBaseUrl} /> : null}
                 <ValueRow label={t('plugin_saml.fields.spEntityId')} value={s.sp?.entityId}>
                   <CopyButton text={s.sp?.entityId ?? ''} label={t('plugin_saml.btn.copy')} />
                 </ValueRow>
@@ -686,6 +734,10 @@ export default function SamlPage() {
                   <Button variant="outline" size="sm" onClick={() => setCertSource(s)}>
                     <ShieldCheck aria-hidden="true" />
                     {t('plugin_saml.btn.viewCert')}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setGovernanceSource(s)}>
+                    <Settings2 aria-hidden="true" />
+                    {t('plugin_saml.governance.open')}
                   </Button>
                   {s.idpMetadataUrl ? (
                     <Can perm="saml:edit">
@@ -746,6 +798,7 @@ export default function SamlPage() {
       <TestDialog result={testResult} onClose={() => setTestResult(null)} />
       <CertDialog source={certSource} onClose={() => setCertSource(null)} />
       <RolePreviewDialog source={previewSource} onClose={() => setPreviewSource(null)} />
+      <GovernanceDialog source={governanceSource} onClose={() => setGovernanceSource(null)} />
     </PageContainer>
   )
 }

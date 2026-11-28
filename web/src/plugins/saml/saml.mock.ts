@@ -1,6 +1,19 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
 import { mockIssueSession } from '@/framework/auth/auth.mock'
-import type { GroupRoleMapping, IdPCandidate, IdPInfo, RolePreview, SamlSource, SourceForm, SPInfo, TestResult } from './api'
+import type {
+  ConnectionTestStart,
+  GroupRoleMapping,
+  IdPCandidate,
+  IdPInfo,
+  RolePreview,
+  SamlEvent,
+  SamlSession,
+  SamlSource,
+  SourceForm,
+  SourceVersion,
+  SPInfo,
+  TestResult,
+} from './api'
 
 /**
  * 登录页的 SAML 入口在真后端是匿名路由（plugins/saml/plugin.go 用 d.Public.Group("/auth/saml")
@@ -83,6 +96,12 @@ const C2: IdPCandidate = {
 const infoFor = (candidate: IdPCandidate, candidates: IdPCandidate[]): IdPInfo => ({
   ...candidate,
   sloUrl: `${candidate.ssoUrl}/slo`,
+  sloBinding: 'redirect',
+  metadataValidUntil: inDays(30),
+  metadataCacheDuration: 'P1D',
+  metadataCacheSeconds: 86_400,
+  metadataExpired: false,
+  metadataStale: false,
   candidates,
 })
 
@@ -109,6 +128,7 @@ const okta: SamlSource = {
   idpMetadataUrl: 'https://idp.example.com/metadata',
   idpEntityId: C1.entityId,
   spEntityIdOverride: '',
+  externalBaseUrl: ORIGIN,
   metadataCaCert: '',
   metadataSignCert: '',
   attrUsername: 'uid',
@@ -186,6 +206,82 @@ const federation: SamlSource = {
 }
 
 let sources: SamlSource[] = [okta, azure, federation]
+
+// 版本快照只保留可编辑配置，不把 idp/sp 等派生字段混进 SourceForm。
+const configFor = (source: SamlSource): SourceForm => {
+  const config = { ...source }
+  for (const key of ['id', 'idp', 'sp', 'metadataRefreshedAt', 'createdAt', 'updatedAt']) {
+    Reflect.deleteProperty(config, key)
+  }
+  return config
+}
+
+const versionsFor = (source: SamlSource): SourceVersion[] => {
+  const current = configFor(source)
+  return [
+    {
+      version: 2,
+      config: current,
+      operatorId: 'demo',
+      operatorName: '演示管理员',
+      reason: '更新身份源配置',
+      createdAt: source.updatedAt,
+    },
+    {
+      version: 1,
+      config: { ...current, enabled: !current.enabled },
+      operatorId: 'demo',
+      operatorName: '演示管理员',
+      reason: '初始导入',
+      createdAt: source.createdAt,
+    },
+  ]
+}
+
+const eventsFor = (source: SamlSource): SamlEvent[] => [
+  {
+    id: `${source.id}-event-login`,
+    type: 'login',
+    result: 'success',
+    operatorId: '',
+    operatorName: '',
+    userId: 'demo',
+    correlationId: `${source.id}-correlation`,
+    ip: '127.0.0.1',
+    detail: `用户通过 ${source.idp.entityId} 完成单点登录`,
+    createdAt: ago(15),
+  },
+  {
+    id: `${source.id}-event-refresh`,
+    type: 'metadata.refresh',
+    result: 'success',
+    operatorId: 'demo',
+    operatorName: '演示管理员',
+    userId: '',
+    correlationId: `${source.id}-metadata`,
+    ip: '127.0.0.1',
+    detail: '元数据已刷新，配置校验通过',
+    createdAt: ago(60 * 26),
+  },
+]
+
+const sessionsBySource: Record<string, SamlSession[]> = Object.fromEntries(sources.map((source) => [source.id, [
+  {
+    id: `${source.id}-session-active`,
+    userId: 'demo',
+    sessionIndex: `_${source.id}`,
+    expiresAt: inDays(1),
+    lastSeenAt: ago(15),
+  },
+  {
+    id: `${source.id}-session-revoked`,
+    userId: 'demo',
+    sessionIndex: `_${source.id}-old`,
+    expiresAt: inDays(1),
+    lastSeenAt: ago(60 * 26),
+    revokedAt: ago(60 * 25),
+  },
+]]))
 
 const find = (id: string) => sources.find((s) => s.id === id) ?? mockError(404, 'Not found')
 
@@ -283,6 +379,18 @@ TkVYVC1DRVJUSUZJQ0FURS1NT0NL
 -----END CERTIFICATE-----
 `
 
+const mockCertDetails = (notAfter: string) => ({
+  subject: 'CN=nexadmin-saml-saml',
+  issuer: 'CN=nexadmin-saml-saml',
+  serialNumber: '7612345678901234567',
+  notBefore: new Date(Date.now() - 365 * 24 * 60 * 60_000).toISOString(),
+  notAfter,
+  publicKeyAlgorithm: 'RSA',
+  signatureAlgorithm: 'SHA256-RSA',
+  sha256Fingerprint: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+  sha1Thumbprint: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD',
+})
+
 defineMock([
   { method: 'GET', url: '/plugins/saml/sources', handler: () => sources },
   {
@@ -375,7 +483,8 @@ defineMock([
     url: '/plugins/saml/sources/:id/sp-cert',
     handler: ({ params }) => {
       find(params.id)
-      return { cert: CERT, notAfter: inDays(3600) }
+      const notAfter = inDays(3600)
+      return { cert: CERT, notAfter, details: mockCertDetails(notAfter) }
     },
   },
   {
@@ -384,7 +493,12 @@ defineMock([
     handler: ({ params }) => {
       find(params.id)
       // 两段式轮换第一步：只发布，不改变当前签名证书。
-      return { cert: CERT, notAfter: inDays(3600), nextCert: CERT_NEXT, nextNotAfter: inDays(3650) }
+      const notAfter = inDays(3600)
+      const nextNotAfter = inDays(3650)
+      return {
+        cert: CERT, notAfter, details: mockCertDetails(notAfter),
+        nextCert: CERT_NEXT, nextNotAfter, nextDetails: mockCertDetails(nextNotAfter),
+      }
     },
   },
   {
@@ -394,7 +508,12 @@ defineMock([
       const notAfter = inDays(3650)
       const row = { ...find(params.id), sp: { ...find(params.id).sp, certNotAfter: notAfter } }
       sources = sources.map((s) => (s.id === row.id ? row : s))
-      return { cert: CERT_NEXT, notAfter, prevCert: CERT, prevNotAfter: inDays(3600), prevUntil: inDays(7) }
+      const prevNotAfter = inDays(3600)
+      const prevUntil = inDays(7)
+      return {
+        cert: CERT_NEXT, notAfter, details: mockCertDetails(notAfter),
+        prevCert: CERT, prevNotAfter, prevDetails: mockCertDetails(prevNotAfter), prevUntil,
+      }
     },
   },
   {
@@ -404,6 +523,68 @@ defineMock([
       const row = { ...find(params.id), metadataRefreshedAt: new Date().toISOString() }
       sources = sources.map((s) => (s.id === row.id ? row : s))
       return { changed: false, source: row }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/saml/sources/:id/versions',
+    handler: ({ params }) => versionsFor(find(params.id)),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/rollback',
+    handler: ({ params, body }) => {
+      const source = find(params.id)
+      const version = Number(body?.version)
+      const target = versionsFor(source).find((item) => item.version === version)
+      if (!target) mockError(404, 'saml: 版本不存在')
+      const row = build(target.config, source.id, source)
+      sources = sources.map((s) => (s.id === row.id ? row : s))
+      return row
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/saml/sources/:id/events',
+    handler: ({ params }) => eventsFor(find(params.id)),
+  },
+  {
+    method: 'GET',
+    url: '/plugins/saml/sources/:id/sessions',
+    handler: ({ params }) => {
+      find(params.id)
+      return sessionsBySource[params.id] ?? []
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/sessions/:sessionId/revoke',
+    handler: ({ params }) => {
+      find(params.id)
+      const rows = sessionsBySource[params.id] ?? []
+      const session = rows.find((item) => item.id === params.sessionId)
+      if (!session) mockError(404, 'saml: 会话不存在')
+      session.revokedAt = new Date().toISOString()
+      return null
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/test/start',
+    handler: ({ params, body }) => {
+      find(params.id)
+      const mode = String(body?.mode ?? '')
+      if (mode !== 'sso' && mode !== 'slo') mockError(400, 'saml: 测试模式无效')
+      const nameId = String(body?.nameId ?? '').trim()
+      if (mode === 'slo' && !nameId) mockError(400, 'saml: 单点登出测试需要 Name ID')
+      const result: ConnectionTestStart = {
+        testId: genId(),
+        mode,
+        binding: 'redirect',
+        url: mode === 'sso' ? 'https://idp.example.com/sso' : 'https://idp.example.com/sso/slo',
+        relayState: params.id,
+      }
+      return result
     },
   },
   {
@@ -417,7 +598,21 @@ defineMock([
       const isBundle = (xml || url).includes('EntitiesDescriptor') || url.includes('federation')
       const candidates = isBundle ? [C1, C2] : [C1]
       const idp: IdPInfo = isBundle
-        ? { entityId: '', ssoUrl: '', ssoBinding: '', sloUrl: '', certCount: 0, certExpired: false, certExpiringSoon: false, candidates }
+        ? {
+            entityId: '',
+            ssoUrl: '',
+            ssoBinding: '',
+            sloUrl: '',
+            certCount: 0,
+            certExpired: false,
+            certExpiringSoon: false,
+            metadataValidUntil: inDays(30),
+            metadataCacheDuration: 'P1D',
+            metadataCacheSeconds: 86_400,
+            metadataExpired: false,
+            metadataStale: false,
+            candidates,
+          }
         : infoFor(C1, candidates)
       return { metadata: xml || (isBundle ? BUNDLE_METADATA : IDP_METADATA), idp }
     },

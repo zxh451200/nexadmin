@@ -18,13 +18,27 @@ import (
 )
 
 // FaqQuery 是管理端 FAQ 列表查询。Enabled 为空字符串 = 全部，否则 "true"/"false"。
+// Category 为空字符串 = 全部；"__none__" = 只看未分类。
 type FaqQuery struct {
 	Keyword  string
 	Enabled  string
+	Category string
 	Sort     string
 	Desc     bool
 	Page     int
 	PageSize int
+}
+
+// FaqCategoryNone 是「未分类」在筛选下拉里的哨兵值：空串已被「全部」占用。
+const FaqCategoryNone = "__none__"
+
+// ListFaqCategories 返回已用过的分类名（按出现顺序，空串=未分类不返回）。
+// 后台筛选下拉与表单联想共用；不给分类建独立表，避免出现「建了没人用」的空分类。
+func (s *Service) ListFaqCategories(ctx context.Context) ([]string, error) {
+	var rows []string
+	err := s.db.WithContext(ctx).Model(&Faq{}).
+		Where("category <> ''").Distinct().Order("category ASC").Pluck("category", &rows).Error
+	return rows, err
 }
 
 // faqFilter 是列表与导出共用的筛选，保证导出的文件与页面看到的列表同口径。
@@ -37,6 +51,11 @@ func faqFilter(tx *gorm.DB, q FaqQuery) *gorm.DB {
 		tx = tx.Where("enabled = ?", true)
 	} else if q.Enabled == "false" {
 		tx = tx.Where("enabled = ?", false)
+	}
+	if q.Category == FaqCategoryNone {
+		tx = tx.Where("category = ''")
+	} else if c := strings.TrimSpace(q.Category); c != "" {
+		tx = tx.Where("category = ?", c)
 	}
 	return tx
 }
@@ -51,6 +70,7 @@ func (s *Service) ListFaqs(ctx context.Context, q FaqQuery) ([]Faq, int64, error
 	var rows []Faq
 	if err := tx.Order(contentOrder(q.Sort, q.Desc, map[string]string{
 		"question":   "question",
+		"category":   "category",
 		"sort":       "sort",
 		"enabled":    "enabled",
 		"created_at": "created_at",
@@ -60,12 +80,13 @@ func (s *Service) ListFaqs(ctx context.Context, q FaqQuery) ([]Faq, int64, error
 	return rows, total, nil
 }
 
-// PublicFaqs 公开页只取启用的（sort 排序），渲染 FAQ 板块。
+// PublicFaqs 公开页只取启用的，渲染 FAQ 板块。按分类、sort 排序：
+// 未分类（category=''）排在最前，其余按分类名排序，同组内按 sort——模板据此插入分组标题。
 // 非默认语言只返回真正录过译文的条目：FAQ 是营销内容，宁可少几条也不要把中文问答
 // 摆到英文站上；默认语言仍展示全部（含未翻译的原文）。
 func (s *Service) PublicFaqs(ctx context.Context, lang string) []Faq {
 	var rows []Faq
-	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("sort, id DESC").Find(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("category ASC, sort ASC, id DESC").Find(&rows).Error; err != nil {
 		return nil
 	}
 	out := rows[:0]
@@ -83,6 +104,7 @@ func (s *Service) PublicFaqs(ctx context.Context, lang string) []Faq {
 type FaqForm struct {
 	Question string `json:"question"`
 	Answer   string `json:"answer"`
+	Category string `json:"category"`
 	Sort     int    `json:"sort"`
 	Enabled  bool   `json:"enabled"`
 	I18nJSON string `json:"i18nJson"`
@@ -100,6 +122,10 @@ func (s *Service) SaveFaq(ctx context.Context, id idgen.ID, f FaqForm) (*Faq, er
 	if utf8Len(f.Answer) > 5000 {
 		return nil, response.BadRequest("website.faq_answer_too_long")
 	}
+	f.Category = strings.TrimSpace(f.Category)
+	if utf8Len(f.Category) > 64 {
+		return nil, response.BadRequest("website.faq_category_too_long")
+	}
 	var row Faq
 	if id != 0 {
 		if err := s.db.WithContext(ctx).First(&row, "id = ?", int64(id)).Error; err != nil {
@@ -114,6 +140,7 @@ func (s *Service) SaveFaq(ctx context.Context, id idgen.ID, f FaqForm) (*Faq, er
 	}
 	row.Question = f.Question
 	row.Answer = strings.TrimSpace(f.Answer)
+	row.Category = f.Category
 	row.Sort = f.Sort
 	row.Enabled = f.Enabled
 	row.I18nJSON = i18n
@@ -177,6 +204,7 @@ func faqImportColumns() []importspec.Column {
 	return []importspec.Column{
 		{Key: "question", Label: "问题", LabelKey: "website.import_faq_question", Required: true, Example: "支持哪些付款方式？"},
 		{Key: "answer", Label: "答案", LabelKey: "website.import_faq_answer", Example: "支持 T/T、PayPal 等方式"},
+		{Key: "category", Label: "分类", LabelKey: "website.import_faq_category", Example: "付款与物流"},
 		{Key: "sort", Label: "排序", LabelKey: "website.import_faq_sort", Example: "10"},
 		{Key: "status", Label: "状态", LabelKey: "website.import_faq_status", Example: "展示中"},
 	}
@@ -231,7 +259,10 @@ func (s *Service) importFaqRow(ctx context.Context, row map[string]string) error
 			i18n = exist.I18nJSON
 		}
 	}
-	_, err = s.SaveFaq(ctx, id, FaqForm{Question: question, Answer: row["answer"], Sort: sort, Enabled: enabled, I18nJSON: i18n})
+	_, err = s.SaveFaq(ctx, id, FaqForm{
+		Question: question, Answer: row["answer"], Category: strings.TrimSpace(row["category"]),
+		Sort: sort, Enabled: enabled, I18nJSON: i18n,
+	})
 	return rowError(ctx, err)
 }
 
@@ -253,7 +284,11 @@ func (s *Service) faqIDByQuestion(ctx context.Context, question string) (idgen.I
 func (h *handler) listFaqs(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	sortField, desc := response.ParseSort(c)
-	q := FaqQuery{Page: page, PageSize: size, Keyword: c.Query("keyword"), Enabled: c.Query("enabled"), Sort: sortField, Desc: desc}
+	q := FaqQuery{
+		Page: page, PageSize: size, Keyword: c.Query("keyword"),
+		Enabled: c.Query("enabled"), Category: c.Query("category"),
+		Sort: sortField, Desc: desc,
+	}
 	if q.Enabled != "" && q.Enabled != "true" && q.Enabled != "false" {
 		response.Fail(c, response.BadRequest("website.faq_enabled_invalid"))
 		return
@@ -264,6 +299,12 @@ func (h *handler) listFaqs(c *gin.Context) {
 		return
 	}
 	response.Page(c, list, total, q.Page, q.PageSize)
+}
+
+// GET /plugins/website/faqs/categories —— 已使用的分类名（筛选/联想）。
+func (h *handler) listFaqCategories(c *gin.Context) {
+	rows, err := h.svc.ListFaqCategories(c.Request.Context())
+	respond(c, rows, err)
 }
 
 // DELETE /plugins/website/faqs?ids=1,2,3 —— 批量删除 FAQ。

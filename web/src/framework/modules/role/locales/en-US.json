@@ -44,6 +44,8 @@
       "action": "Assign permissions",
       "title": "Assign permissions",
       "description": "Role: {{name}}",
+      "builtinHint": "The built-in super admin automatically receives all permissions. No selection is required; this view is read-only.",
+      "readOnly": "Read-only",
       "success": "Permissions saved",
       "empty": "No permissions available",
       "selectAll": "Select all",

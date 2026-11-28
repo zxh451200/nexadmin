@@ -77,9 +77,11 @@ const deliveries: Delivery[] = Array.from({ length: 20 }, (_, i) => {
   return {
     id: `18700000000000001${String(i + 1).padStart(2, '0')}`,
     webhookId: wh.id,
+    eventId: `evt_${rand(16)}`,
     webhookName: wh.name,
     event,
     status,
+    durationMs: status === 'success' ? 80 + (i % 5) * 37 : status === 'failed' ? 3000 + i * 41 : 0,
     attempts: status === 'success' ? 1 : status === 'failed' ? 3 + (i % 3) : 1,
     responseStatus: status === 'pending' ? null : failed ? (i % 8 === 1 ? 500 : 502) : 200,
     responseBody:

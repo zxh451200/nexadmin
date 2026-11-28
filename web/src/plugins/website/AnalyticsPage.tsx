@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { Cell, Pie, PieChart, Tooltip } from 'recharts'
 import { Eye, Inbox, Monitor, Radio, Timer, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { TrendArea } from '@/framework/modules/dashboard/cards/TrendArea'
+import { ChartBox } from '@/framework/components/ChartBox'
 import { ChartCard, type ChartCardRange } from '@/framework/components/ChartCard'
 import { StatCard } from '@/framework/components/StatCard'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -61,37 +63,60 @@ export default function AnalyticsPage() {
   const entryMax = Math.max(...entries.map((e) => e.views), 1)
 
   const kindLabel = (kind: AnalyticsRefRow['kind']) => t(`plugin_website.analytics.refKind.${kind}`)
-
-  // 设备两块并列条形（浏览器 / 操作系统），复用份额条样式
-  const deviceRows = (rows: AnalyticsDeviceRow[]) => {
-    const max = Math.max(...rows.map((r) => r.sessions), 1)
-    return rows.map((r) => (
-      <div key={r.key} className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="num min-w-0 truncate text-sm" title={deviceKey(r.key)}>{deviceKey(r.key)}</span>
-          <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / max) * 100}%` }} />
-        </div>
-      </div>
-    ))
+  const refColor = (kind: AnalyticsRefRow['kind']) => {
+    const index = ['direct', 'search', 'social', 'external', 'internal'].indexOf(kind)
+    return `hsl(var(--chart-${(index < 0 ? 0 : index) + 1}))`
   }
+  const sourceRows = data?.refKindStats ?? []
+  const sourceTotal = sourceRows.reduce((sum, row) => sum + row.sessions, 0)
+  const sourceSlices = sourceRows.map((row) => ({
+    name: kindLabel(row.key as AnalyticsRefRow['kind']),
+    value: row.sessions,
+    color: refColor(row.key as AnalyticsRefRow['kind']),
+  }))
 
-  // 来源大类份额：一行一条（数量少，不做弹层），徽章复用明细卡的语义色
-  const kindRows = (data?.refKindStats ?? []).map((r) => (
-    <div key={r.key} className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <Badge variant={refTone(r.key as AnalyticsRefRow['kind']) ? undefined : 'secondary'} tone={refTone(r.key as AnalyticsRefRow['kind'])}>
-          {kindLabel(r.key as AnalyticsRefRow['kind'])}
-        </Badge>
-        <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
+  const deviceStack = (title: string, rows: AnalyticsDeviceRow[]) => {
+    const total = rows.reduce((sum, row) => sum + row.sessions, 0)
+    if (rows.length === 0) return null
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <span className="num text-xs text-muted-foreground">{fmt(total)}</span>
+        </div>
+        <div
+          className="flex h-3 overflow-hidden rounded-full bg-muted"
+          role="img"
+          aria-label={`${title}: ${rows.map((row) => `${deviceKey(row.key)} ${fmt(row.sessions)}`).join(', ')}`}
+        >
+          {rows.map((row, index) => (
+            <div
+              key={row.key}
+              className="h-full"
+              style={{
+                width: `${total > 0 ? (row.sessions / total) * 100 : 0}%`,
+                backgroundColor: `hsl(var(--chart-${(index % 5) + 1}))`,
+              }}
+              title={`${deviceKey(row.key)}: ${fmt(row.sessions)}`}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          {rows.map((row, index) => (
+            <div key={row.key} className="flex min-w-0 items-center gap-1.5 text-xs">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: `hsl(var(--chart-${(index % 5) + 1}))` }}
+              />
+              <span className="min-w-0 flex-1 truncate" title={deviceKey(row.key)}>{deviceKey(row.key)}</span>
+              <span className="num shrink-0 font-medium">{fmt(row.sessions)}</span>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / Math.max(...(data?.refKindStats ?? []).map((k) => k.sessions), 1)) * 100}%` }} />
-      </div>
-    </div>
-  ))
+    )
+  }
 
   const pathList = (rows: typeof paths, max: number, tone: string) =>
     rows.map((p, i) => (
@@ -198,32 +223,77 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent className="flex-1 space-y-3">
             {isLoading ? (
-              <Skeleton className="h-40 w-full" />
-            ) : kindRows.length === 0 ? (
+              <Skeleton className="h-48 w-full" />
+            ) : sourceTotal === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_website.analytics.empty')}</p>
             ) : (
               <>
-                {kindRows}
-                <div className="space-y-3 border-t border-border pt-3">
-                  <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.sources.topDomains')}</p>
-                  {refRows.map((r, i) => (
-                    <div key={`${r.kind}-${r.host}-${i}`} className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Badge variant={refTone(r.kind) ? undefined : 'secondary'} tone={refTone(r.kind)}>
-                            {kindLabel(r.kind)}
-                          </Badge>
-                          {/* direct 无来源域：徽章即全部信息，不重复一遍分类名 */}
-                          {r.host ? <span className="num truncate text-sm">{r.host}</span> : null}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <ChartBox height={168} className="shrink-0 sm:w-40">
+                    {({ width, height }) => (
+                      <div className="relative size-full">
+                        <PieChart width={width} height={height}>
+                          <Pie
+                            data={sourceSlices}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius="58%"
+                            outerRadius="82%"
+                            paddingAngle={2}
+                            stroke="hsl(var(--card))"
+                          >
+                            {sourceSlices.map((slice) => (
+                              <Cell key={slice.name} fill={slice.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            cursor={false}
+                            formatter={(value) => fmt(Number(value))}
+                            contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, color: 'hsl(var(--popover-foreground))', fontSize: 12 }}
+                            itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                          />
+                        </PieChart>
+                        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="num text-lg font-semibold">{fmt(sourceTotal)}</span>
+                          <span className="text-[11px] text-muted-foreground">{t('plugin_website.analytics.kpi.sessions')}</span>
+                        </div>
+                      </div>
+                    )}
+                  </ChartBox>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {sourceSlices.map((slice) => (
+                      <div key={slice.name} className="flex items-center gap-2 text-sm">
+                        <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
+                        <span className="min-w-0 flex-1 truncate">{slice.name}</span>
+                        <span className="num shrink-0 text-xs text-muted-foreground">
+                          {sourceTotal > 0 ? Math.round((slice.value / sourceTotal) * 100) : 0}%
                         </span>
-                        <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
+                        <span className="num w-10 shrink-0 text-end font-medium">{fmt(slice.value)}</span>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / refMax) * 100}%` }} />
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+                {refRows.length > 0 ? (
+                  <div className="space-y-3 border-t border-border pt-3">
+                    <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.sources.topDomains')}</p>
+                    {refRows.map((r, i) => (
+                      <div key={`${r.kind}-${r.host}-${i}`} className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Badge variant={refTone(r.kind) ? undefined : 'secondary'} tone={refTone(r.kind)}>
+                              {kindLabel(r.kind)}
+                            </Badge>
+                            {r.host ? <span className="num truncate text-sm">{r.host}</span> : null}
+                          </span>
+                          <span className="num shrink-0 text-sm font-medium">{fmt(r.sessions)}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-chart-2" style={{ width: `${(r.sessions / refMax) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </>
             )}
           </CardContent>
@@ -233,21 +303,15 @@ export default function AnalyticsPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium">{t('plugin_website.analytics.devices.title')}</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 space-y-4">
+          <CardContent className="flex-1 space-y-5">
             {isLoading ? (
-              <Skeleton className="h-40 w-full" />
-            ) : (data?.browsers?.length ?? 0) === 0 ? (
+              <Skeleton className="h-48 w-full" />
+            ) : (data?.browsers?.length ?? 0) === 0 && (data?.oses?.length ?? 0) === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_website.analytics.empty')}</p>
             ) : (
               <>
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.devices.browser')}</p>
-                  {deviceRows(data?.browsers ?? [])}
-                </div>
-                <div className="space-y-3 border-t border-border pt-3">
-                  <p className="text-sm font-medium text-foreground">{t('plugin_website.analytics.devices.os')}</p>
-                  {deviceRows(data?.oses ?? [])}
-                </div>
+                {deviceStack(t('plugin_website.analytics.devices.browser'), data?.browsers ?? [])}
+                {deviceStack(t('plugin_website.analytics.devices.os'), data?.oses ?? [])}
               </>
             )}
           </CardContent>

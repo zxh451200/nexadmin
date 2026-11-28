@@ -19,11 +19,13 @@ type setNXCacher interface {
 }
 
 type certAlert struct {
-	SourceID idgen.ID `gorm:"column:source_id"`
-	TenantID idgen.ID `gorm:"column:tenant_id"`
-	Name     string   `gorm:"column:name"`
-	Cert     string   `gorm:"column:sp_cert"`
-	NextCert string   `gorm:"column:next_sp_cert"`
+	SourceID    idgen.ID `gorm:"column:source_id"`
+	TenantID    idgen.ID `gorm:"column:tenant_id"`
+	Name        string   `gorm:"column:name"`
+	Cert        string   `gorm:"column:sp_cert"`
+	NextCert    string   `gorm:"column:next_sp_cert"`
+	IdPMetadata string   `gorm:"column:idp_metadata"`
+	IDPEntityID string   `gorm:"column:idp_entity_id"`
 }
 
 type certAlertHolder struct {
@@ -37,7 +39,7 @@ func sweepCertAlerts(ctx context.Context, db *gorm.DB, sender *notify.Service, c
 	}
 	var sources []certAlert
 	err := db.WithContext(tenant.Skip(ctx)).Table("plg_saml_source").
-		Select("id AS source_id, tenant_id, name, sp_cert, next_sp_cert").
+		Select("id AS source_id, tenant_id, name, sp_cert, next_sp_cert, idp_metadata, idp_entity_id").
 		Where("enabled = ?", true).Find(&sources).Error
 	if err != nil {
 		if log != nil {
@@ -75,6 +77,20 @@ func sweepCertAlerts(ctx context.Context, db *gorm.DB, sender *notify.Service, c
 			}
 			sendCertAlert(ctx, db, sender, source, item.role, expires, days, log)
 		}
+		if info, err := parseIdP(source.IdPMetadata, source.IDPEntityID); err == nil && info.CertCount > 0 {
+			expires, err := time.Parse(time.RFC3339, info.CertNotAfter)
+			if err == nil && !expires.After(now.Add(certWarnWindow)) {
+				days := int(expires.Sub(now).Hours() / 24)
+				if expires.Before(now) {
+					days = 0
+				}
+				key := cache.GlobalKey("saml-cert-alert", source.TenantID.String(), source.SourceID.String(), "idp", now.UTC().Format("2006-01-02"))
+				claimed, err := nx.SetNX(tenant.Skip(ctx), key, "1", 25*time.Hour)
+				if err == nil && claimed {
+					sendCertAlert(ctx, db, sender, source, "idp", expires, days, log)
+				}
+			}
+		}
 	}
 }
 
@@ -105,13 +121,20 @@ func sendCertAlert(ctx context.Context, db *gorm.DB, sender *notify.Service, sou
 	}
 	tctx := tenant.With(ctx, source.TenantID)
 	roleText := i18n.T(tctx, "saml.cert_alert.current")
-	if role == "next" {
+	switch role {
+	case "next":
 		roleText = i18n.T(tctx, "saml.cert_alert.next")
+	case "idp":
+		roleText = i18n.T(tctx, "saml.cert_alert.idp")
+	}
+	contentKey := "saml.cert_alert.content"
+	if role == "idp" {
+		contentKey = "saml.cert_alert.idp_content"
 	}
 	msg := notify.Msg{
 		To: ids, Category: "saml", Channels: []string{notify.ChannelInApp},
 		Title: i18n.T(tctx, "saml.cert_alert.title"),
-		Content: i18n.T(tctx, "saml.cert_alert.content", source.Name, roleText,
+		Content: i18n.T(tctx, contentKey, source.Name, roleText,
 			expires.UTC().Format("2006-01-02"), days),
 		Link: "/system/saml",
 	}

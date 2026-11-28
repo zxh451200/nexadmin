@@ -837,6 +837,7 @@
     if (!input || !list) return;
     var empty = document.querySelector('[data-faq-empty]');
     var items = Array.prototype.slice.call(list.querySelectorAll('.hp-faq-item'));
+    var groups = Array.prototype.slice.call(list.querySelectorAll('[data-faq-group]'));
     input.addEventListener('input', function () {
       var kw = input.value.trim().toLowerCase();
       var shown = 0;
@@ -844,6 +845,17 @@
         var hit = !kw || item.textContent.toLowerCase().indexOf(kw) !== -1;
         item.hidden = !hit;
         if (hit) shown++;
+      });
+      // 分组标题跟着可见条目走：组内一条都没命中就把标题一起藏掉，
+      // 免得搜索后出现一串「有组名没内容」的空标题。
+      groups.forEach(function (heading) {
+        var visible = false;
+        var sib = heading.nextElementSibling;
+        while (sib && !sib.hasAttribute('data-faq-group')) {
+          if (sib.classList.contains('hp-faq-item') && !sib.hidden) { visible = true; break; }
+          sib = sib.nextElementSibling;
+        }
+        heading.hidden = !visible;
       });
       if (empty) empty.hidden = shown > 0;
     });

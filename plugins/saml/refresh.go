@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"nexadmin/pkg/idgen"
 )
 
@@ -33,13 +36,37 @@ func (s *Service) RefreshMetadata(ctx context.Context, m *Source) (bool, error) 
 		return false, err
 	}
 	now := time.Now().UTC()
-	if err := s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", int64(m.ID)).Updates(map[string]any{
-		"idp_metadata":          string(raw),
-		"idp_entity_id":         entityID,
-		"metadata_refreshed_at": now,
-	}).Error; err != nil {
+	var fresh Source
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", int64(m.ID)).Take(&fresh).Error; err != nil {
+			return err
+		}
+		entityID, changed, err = planRefresh(&fresh, string(raw))
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&Source{}).Where("id = ?", int64(m.ID)).Updates(map[string]any{
+			"idp_metadata":          string(raw),
+			"idp_entity_id":         entityID,
+			"metadata_refreshed_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		fresh.IdPMetadata, fresh.IDPEntityID, fresh.MetadataRefreshedAt = string(raw), entityID, &now
+		if changed {
+			return s.saveVersionDB(ctx, tx, &fresh, "metadata refresh")
+		}
+		return nil
+	})
+	if err != nil {
 		return false, err
 	}
+	*m = fresh
+	detail := "unchanged"
+	if changed {
+		detail = "changed"
+	}
+	s.recordEvent(ctx, m, "metadata_refresh", "success", "", "", detail)
 	return changed, nil
 }
 
@@ -57,6 +84,9 @@ func planRefresh(m *Source, raw string) (entityID string, changed bool, err erro
 	}
 	if info.CertExpired {
 		return "", false, errors.New("saml: 远程元数据的 IdP 签名证书已过期，拒绝替换")
+	}
+	if info.MetadataExpired {
+		return "", false, errors.New("saml: 远程元数据已超过 validUntil，拒绝替换")
 	}
 	current, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
 	if err != nil {

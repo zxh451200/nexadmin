@@ -119,6 +119,8 @@ type Faq struct {
 	database.PlatformModel
 	Question string `gorm:"size:300;not null" json:"question"`
 	Answer   string `gorm:"type:text;not null" json:"answer"`
+	// Category 是分组标签：空串=未分类。与问题/答案一样属于运营原文，不做独立翻译。
+	Category string `gorm:"size:64;not null;default:'';index" json:"category"`
 	Sort     int    `json:"sort"`
 	Enabled  bool   `json:"enabled"`
 	// I18nJSON 是非默认语言的问题/答案译文；空 = 回退原文。非默认语言只展示有译文的条目。

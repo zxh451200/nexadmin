@@ -133,15 +133,18 @@ export function PermissionTree({ data, value, onChange, disabled, className }: P
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex flex-wrap items-center gap-2">
         <ExpandAllToggle ids={allParents} expanded={open} onChange={setExpanded} />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() => onChange(allSelected ? [] : allIds)}
-        >
-          {allSelected ? t('role.assign.clearAll') : t('role.assign.selectAll')}
-        </Button>
+        {disabled ? (
+          <Badge variant="secondary">{t('role.assign.readOnly')}</Badge>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onChange(allSelected ? [] : allIds)}
+          >
+            {allSelected ? t('role.assign.clearAll') : t('role.assign.selectAll')}
+          </Button>
+        )}
         <span className="num ms-auto text-sm text-muted-foreground">{t('role.assign.selectedCount', { count: value.length })}</span>
       </div>
       <ul role="tree" aria-multiselectable="true" className="rounded-lg border border-border bg-card p-1">

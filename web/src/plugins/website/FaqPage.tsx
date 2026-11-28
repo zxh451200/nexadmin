@@ -39,6 +39,7 @@ import {
   fetchProductImportJob,
   fetchProductImportTemplate,
   useDeleteFaqs,
+  useFaqCategories,
   useFaqs,
   useI18nSchema,
   useLanguages,
@@ -60,7 +61,9 @@ function FaqFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) => 
   const { disabled: sharedDisabled } = useSharedField()
   const [sortText, setSortText] = useState(String(editing?.sort ?? 0))
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
+  const [category, setCategory] = useState(editing?.category ?? '')
   const [questionMissing, setQuestionMissing] = useState(false)
+  const { data: categoryOptions = [] } = useFaqCategories()
 
   const submit = async () => {
     const base = lf.baseValues()
@@ -75,6 +78,7 @@ function FaqFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) => 
         id: editing?.id,
         question: (base.question ?? '').trim(),
         answer: base.answer ?? '',
+        category: category.trim(),
         sort: Math.trunc(Number(sortText)) || 0,
         enabled,
         i18nJson: lf.serialize().i18nJson,
@@ -109,6 +113,20 @@ function FaqFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) => 
         {questionMissing ? <p className="text-xs text-destructive">{t('plugin_website.faq.questionRequired')}</p> : null}
         <LocalizedField fieldKey="answer" />
         <p className="text-xs text-muted-foreground">{t('plugin_website.faq.answerHint')}</p>
+        <SharedFieldShell labelKey="plugin_website.faq.fields.category">
+          <Input
+            list="faq-category-options"
+            value={category}
+            maxLength={64}
+            disabled={sharedDisabled}
+            placeholder={t('plugin_website.faq.categoryPlaceholder')}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+          <datalist id="faq-category-options">
+            {categoryOptions.map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </SharedFieldShell>
+        <p className="text-xs text-muted-foreground">{t('plugin_website.faq.categoryHint')}</p>
         <SharedFieldShell labelKey="plugin_website.faq.fields.sort">
           <Input type="number" step={1} value={sortText} disabled={sharedDisabled} onChange={(e) => setSortText(e.target.value)} />
         </SharedFieldShell>
@@ -270,14 +288,16 @@ export default function FaqPage() {
   const page = 1
   // 表头排序：与筛选分开存；默认按 sort 升序（与官网展示顺序、后端回退一致）
   const { sort, desc, sortProp } = useHeaderSort('sort', false)
-  const [draft, setDraft] = useState<{ keyword?: string; enabled?: string }>({})
-  const [filters, setFilters] = useState<{ keyword?: string; enabled?: string }>({})
+  const [draft, setDraft] = useState<{ keyword?: string; enabled?: string; category?: string }>({})
+  const [filters, setFilters] = useState<{ keyword?: string; enabled?: string; category?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
+  const { data: categoryOptions = [] } = useFaqCategories()
   const { data, isLoading, isError, refetch, isFetching } = useFaqs({
     page,
     pageSize: 200,
     keyword: filters.keyword || undefined,
     enabled: filters.enabled,
+    category: filters.category,
     sort,
     desc,
   })
@@ -289,7 +309,7 @@ export default function FaqPage() {
 
   // 拖动排序只在「默认视图」开放：带筛选/表头排序时列表是查询结果，
   // 拖完落库的顺序语义说不清，索性不给把手。
-  const canDrag = !filters.keyword && !filters.enabled && sort === 'sort' && !desc
+  const canDrag = !filters.keyword && !filters.enabled && !filters.category && sort === 'sort' && !desc
   const onReorder = (ids: string[]) => reorder.mutateAsync(ids)
 
   const openAdd = () => {
@@ -306,7 +326,7 @@ export default function FaqPage() {
   const onExport = async () => {
     setExporting(true)
     try {
-      await startExportJob(() => createFaqExportJob({ keyword: filters.keyword, enabled: filters.enabled }))
+      await startExportJob(() => createFaqExportJob({ keyword: filters.keyword, enabled: filters.enabled, category: filters.category }))
     } catch {
       toast.error(t('common.operateFailed'))
     } finally {
@@ -346,6 +366,13 @@ export default function FaqPage() {
       ),
     },
     {
+      key: 'category',
+      title: t('plugin_website.faq.fields.category'),
+      render: (f) => (f.category
+        ? <span className="text-muted-foreground">{f.category}</span>
+        : <span className="text-muted-foreground/60">—</span>),
+    },
+    {
       key: 'i18n',
       title: t('plugin_website.i18n.status'),
       render: (f) => <TranslationStatus value={f.i18nJson} fields={['question', 'answer']} />,
@@ -374,7 +401,7 @@ export default function FaqPage() {
       )}
       <FilterBar
         onSearch={() => {
-          setFilters({ keyword: draft.keyword, enabled: draft.enabled })
+          setFilters({ keyword: draft.keyword, enabled: draft.enabled, category: draft.category })
           setSelected([])
         }}
         onReset={() => {
@@ -400,6 +427,17 @@ export default function FaqPage() {
           ]}
           className="md:w-40"
           placeholder={t('common.status')}
+        />
+        <OptionPicker
+          title={t('plugin_website.faq.fields.category')}
+          value={draft.category ? [draft.category] : []}
+          onChange={(v) => setDraft((d) => ({ ...d, category: v.length ? v[0] : undefined }))}
+          options={[
+            { value: '__none__', label: t('plugin_website.faq.categoryNone') },
+            ...categoryOptions.map((c) => ({ value: c, label: c })),
+          ]}
+          className="md:w-48"
+          placeholder={t('plugin_website.faq.fields.category')}
         />
       </FilterBar>
       <DataTable
@@ -428,7 +466,7 @@ export default function FaqPage() {
         isError={isError}
         onRetry={() => void refetch()}
         retrying={isFetching}
-        hasFilters={hasActiveFilterValues({ keyword: filters.keyword, enabled: filters.enabled })}
+        hasFilters={hasActiveFilterValues({ keyword: filters.keyword, enabled: filters.enabled, category: filters.category })}
         total={data?.total}
         columnSettingsKey="website-faqs"
         sortable={canDrag ? { onReorder } : undefined}

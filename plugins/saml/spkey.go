@@ -6,6 +6,8 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -54,6 +56,47 @@ func parseSingleCert(certPEM string) (*x509.Certificate, error) {
 		return nil, errors.New("saml: 证书解析失败: " + err.Error())
 	}
 	return cert, nil
+}
+
+type CertDetails struct {
+	Subject            string `json:"subject"`
+	Issuer             string `json:"issuer"`
+	SerialNumber       string `json:"serialNumber"`
+	NotBefore          string `json:"notBefore"`
+	NotAfter           string `json:"notAfter"`
+	PublicKeyAlgorithm string `json:"publicKeyAlgorithm"`
+	SignatureAlgorithm string `json:"signatureAlgorithm"`
+	SHA256Fingerprint  string `json:"sha256Fingerprint"`
+	SHA1Thumbprint     string `json:"sha1Thumbprint"`
+}
+
+func describeCert(cert *x509.Certificate) CertDetails {
+	sha256Sum := sha256.Sum256(cert.Raw)
+	// SHA-1 thumbprint 仅用于和 IdP 后台显示值核对，不参与签名或安全校验。
+	sha1Sum := sha1.Sum(cert.Raw)
+	return CertDetails{
+		Subject:            cert.Subject.String(),
+		Issuer:             cert.Issuer.String(),
+		SerialNumber:       cert.SerialNumber.String(),
+		NotBefore:          cert.NotBefore.UTC().Format(time.RFC3339),
+		NotAfter:           cert.NotAfter.UTC().Format(time.RFC3339),
+		PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
+		SignatureAlgorithm: cert.SignatureAlgorithm.String(),
+		SHA256Fingerprint:  formatCertFingerprint(sha256Sum[:]),
+		SHA1Thumbprint:     formatCertFingerprint(sha1Sum[:]),
+	}
+}
+
+func formatCertFingerprint(raw []byte) string {
+	const hexDigits = "0123456789ABCDEF"
+	out := make([]byte, 0, len(raw)*3-1)
+	for i, b := range raw {
+		if i > 0 {
+			out = append(out, ':')
+		}
+		out = append(out, hexDigits[b>>4], hexDigits[b&0x0f])
+	}
+	return string(out)
 }
 
 // checkSPKeyStrength 挡掉明显偏弱的密钥：RSA < 2048 / EC < P-256。

@@ -44,10 +44,11 @@ interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   closeLabel?: string
+  closeClassName?: string
 }
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = 'end', className, children, closeLabel, ...props }, ref) => {
+  ({ side = 'end', className, children, closeLabel, closeClassName, ...props }, ref) => {
     const { t } = useTranslation()
     return (
       <SheetPortal>
@@ -56,7 +57,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
           {children}
           <SheetPrimitive.Close
             aria-label={closeLabel ?? t('common.close')}
-            className="absolute inset-e-4 top-4 flex h-11 w-11 items-center justify-center rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none md:h-8 md:w-8"
+            className={cn('absolute inset-e-4 top-4 flex h-11 w-11 items-center justify-center rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none md:h-8 md:w-8', closeClassName)}
           >
             <X className="h-4 w-4" />
           </SheetPrimitive.Close>
