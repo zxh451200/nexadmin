@@ -92,7 +92,7 @@ function EventPicker({ events, value, onChange }: { events: OpenEvent[]; value: 
                   </Badge>
                 </AccordionTrigger>
               </div>
-              <AccordionContent className="p-2">
+              <AccordionContent className="p-2 ps-6">
                 <div className="grid grid-cols-1 gap-1">
                   {list.map((e) => {
                     const on = value.includes(e.name)
