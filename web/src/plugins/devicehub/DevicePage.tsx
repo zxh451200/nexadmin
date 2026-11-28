@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +12,7 @@ import { JsonInput } from '@/framework/components/JsonInput'
 import { FormGrid, FormGridFull, FormSection } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { ApiError } from '@/framework/request/http'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { LocationField, type GeoPoint } from '@/framework/map'
@@ -117,6 +118,21 @@ export default function DevicePage() {
 
   // URL ?device=DEV... 直达某台设备（站内信/书签）；默认选第一台
   const [selectedNo, setSelectedNo] = useState<string | undefined>(params.get('device') ?? undefined)
+  const selectedDevice = useDevice(selectedNo)
+  const clearSelection = useCallback(() => {
+    setSelectedNo(undefined)
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('device')
+        return next
+      },
+      { replace: true },
+    )
+  }, [setParams])
+  useEffect(() => {
+    if (selectedDevice.error instanceof ApiError && selectedDevice.error.status === 404) clearSelection()
+  }, [selectedDevice.error, clearSelection])
   useEffect(() => {
     if (!selectedNo && list.length > 0) setSelectedNo(list[0].deviceNo)
   }, [list, selectedNo])
@@ -175,13 +191,7 @@ export default function DevicePage() {
     try {
       await del.mutateAsync(d.deviceNo)
       toast.success(t('common.operateSuccess'))
-      setSelectedNo(undefined)
-      // URL 里还挂着刚删掉的编号：留着会让「默认选第一台」把详情重新打开成别的设备
-      if (params.get('device')) {
-        const next = new URLSearchParams(params)
-        next.delete('device')
-        setParams(next, { replace: true })
-      }
+      clearSelection()
     } catch {
       // 失败原因由 http 拦截器统一弹出
     }
@@ -327,7 +337,7 @@ export default function DevicePage() {
                   {t('plugin_devicehub.device.backToList')}
                 </Button>
               </div>
-              <DeviceDetail deviceNo={selectedNo} onEdit={openEdit} onDelete={onDelete} />
+              <DeviceDetail deviceNo={selectedNo} device={selectedDevice.data} onEdit={openEdit} onDelete={onDelete} />
             </>
           ) : (
             listPane
@@ -337,7 +347,7 @@ export default function DevicePage() {
             {listPane}
             {/* 详情 */}
             {showDetail && selectedNo ? (
-              <DeviceDetail deviceNo={selectedNo} onEdit={openEdit} onDelete={onDelete} />
+              <DeviceDetail deviceNo={selectedNo} device={selectedDevice.data} onEdit={openEdit} onDelete={onDelete} />
             ) : (
               <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground lg:border-s">
                 {t('plugin_devicehub.pickDevice')}
@@ -354,16 +364,17 @@ export default function DevicePage() {
 
 function DeviceDetail({
   deviceNo,
+  device,
   onEdit,
   onDelete,
 }: {
   deviceNo: string
+  device?: Device
   onEdit: (d: Device) => void
   onDelete: (d: Device) => void
 }) {
   const { t } = useTranslation()
-  // 列表分页后设备行不在当前页也得能看详情：单查这一台
-  const d = useDevice(deviceNo).data
+  const d = device
   const points = usePoints(deviceNo)
   // 告警/指令用 Tab 切换，实时值常驻上方；?tab=alarms 供总览/站内信深链直达。
   const [params, setParams] = useSearchParams()

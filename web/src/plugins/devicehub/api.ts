@@ -208,8 +208,9 @@ export function useDevices(query: { kw?: string; page: number; pageSize: number 
 export function useDevice(deviceNo?: string) {
   return useQuery({
     queryKey: [...KEY, 'device', deviceNo],
-    queryFn: () => api.get<Device>(`${BASE}/devices/${deviceNo}`),
+    queryFn: ({ signal }) => api.get<Device>(`${BASE}/devices/${deviceNo}`, undefined, { signal }),
     enabled: !!deviceNo,
+    retry: false,
   })
 }
 
@@ -311,17 +312,26 @@ export function useSaveDevice() {
 }
 
 export function useDeleteDevice() {
-  const invalidate = useInvalidate()
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (deviceNo: string) => api.del<null>(`${BASE}/devices/${deviceNo}`),
-    onSuccess: invalidate,
+    onSuccess: (_data, deviceNo) => {
+      for (const part of ['device', 'points', 'commands', 'logs', 'rules', 'history', 'alarms'] as const) {
+        void qc.cancelQueries({ queryKey: [...KEY, part, deviceNo] })
+        qc.removeQueries({ queryKey: [...KEY, part, deviceNo] })
+      }
+      void qc.invalidateQueries({ queryKey: [...KEY, 'devices'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'stats'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'overview'] })
+    },
   })
 }
 
+// 后台轮询失败不重复弹 toast；设备失效由 useDevice 的 404 统一收口。
 export function usePoints(deviceNo?: string) {
   return useQuery({
     queryKey: [...KEY, 'points', deviceNo],
-    queryFn: () => api.get<Point[]>(`${BASE}/devices/${deviceNo}/points`),
+    queryFn: ({ signal }) => api.get<Point[]>(`${BASE}/devices/${deviceNo}/points`, undefined, { silent: true, signal }),
     enabled: !!deviceNo,
     refetchInterval: useHiddenPause(8000),
   })
@@ -349,7 +359,7 @@ export function useDeletePoint(deviceNo: string) {
 export function useHistory(deviceNo: string | undefined, query: { pointId: string; from?: string; to?: string; bucket?: string }) {
   return useQuery({
     queryKey: [...KEY, 'history', deviceNo, query],
-    queryFn: () => api.get<{ rows: HistoryRow[]; bucket: string }>(`${BASE}/devices/${deviceNo}/history`, query),
+    queryFn: ({ signal }) => api.get<{ rows: HistoryRow[]; bucket: string }>(`${BASE}/devices/${deviceNo}/history`, query, { signal }),
     enabled: !!deviceNo && !!query.pointId,
     placeholderData: keepPreviousData,
   })
@@ -380,7 +390,7 @@ export async function exportHistory(deviceNo: string, query: { pointId: string; 
 export function useCommands(deviceNo?: string) {
   return useQuery({
     queryKey: [...KEY, 'commands', deviceNo],
-    queryFn: () => api.get<CommandRow[]>(`${BASE}/devices/${deviceNo}/commands`, { limit: 50 }),
+    queryFn: ({ signal }) => api.get<CommandRow[]>(`${BASE}/devices/${deviceNo}/commands`, { limit: 50 }, { silent: true, signal }),
     enabled: !!deviceNo,
     refetchInterval: useHiddenPause(5000),
   })
@@ -402,7 +412,8 @@ export interface DeviceLog {
 export function useDeviceLogs(deviceNo?: string) {
   return useQuery({
     queryKey: [...KEY, 'logs', deviceNo],
-    queryFn: () => api.get<{ list: DeviceLog[]; capacity: number }>(`${BASE}/devices/${deviceNo}/logs`, { limit: 200 }),
+    queryFn: ({ signal }) =>
+      api.get<{ list: DeviceLog[]; capacity: number }>(`${BASE}/devices/${deviceNo}/logs`, { limit: 200 }, { silent: true, signal }),
     enabled: !!deviceNo,
     // 日志按秒级变化，但没必要跟 WS 抢实时性：4 秒一轮已经能看着故障发生
     refetchInterval: useHiddenPause(4000),
@@ -424,8 +435,8 @@ export function useAlarmEvents(
 ) {
   return useQuery({
     queryKey: [...KEY, 'alarms', deviceNo, query],
-    queryFn: () =>
-      api.get<Page<AlarmEvent>>(`${BASE}/alarms`, deviceNo ? { deviceNo, ...query } : query),
+    queryFn: ({ signal }) =>
+      api.get<Page<AlarmEvent>>(`${BASE}/alarms`, deviceNo ? { deviceNo, ...query } : query, { signal }),
     placeholderData: keepPreviousData,
     refetchInterval: useHiddenPause(8000),
   })
@@ -463,7 +474,7 @@ export function useSilenceAlarmEvent() {
 export function useDeviceRules(deviceNo?: string) {
   return useQuery({
     queryKey: [...KEY, 'rules', deviceNo],
-    queryFn: () => api.get<AlarmRule[]>(`${BASE}/devices/${deviceNo}/rules`),
+    queryFn: ({ signal }) => api.get<AlarmRule[]>(`${BASE}/devices/${deviceNo}/rules`, undefined, { silent: true, signal }),
     enabled: !!deviceNo,
   })
 }
