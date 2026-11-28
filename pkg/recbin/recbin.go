@@ -59,8 +59,7 @@ var Platform = map[string]bool{
 // 所以 user 的撞码判定单独放在 recycle.keyUserConflict（同租户内 username 相同，或 phone 非空且相同）。
 // notice 未登记：它的唯一性仍由数据库层索引决定，撞码时由还原 UPDATE 抛重复键兜底。
 //
-// customer 也未登记：手机号/信用代码的唯一性是「按客户类型 + 非空」的条件唯一，
-// AND 复合键写不出来；还原撞码交给源模块的查重闸在下次编辑时拦，疑似重复巡检面板兜底可见。
+// customer 的两把条件唯一键（个人手机号 / 企业信用代码）由 recycle.keyCustomerConflict 单独检查。
 var Keys = map[string][]string{
 	TypeRole:     {"tenant_id", "code"},
 	TypePost:     {"tenant_id", "code"},
@@ -80,6 +79,7 @@ var Children = map[string][]Child{
 	TypeNotice: {
 		{Table: "sys_notice_target", Column: "notice_id"},
 		{Table: "sys_notice_read", Column: "notice_id"},
+		{Table: "sys_notice_dismiss", Column: "notice_id"},
 	},
 	TypeRole: {
 		{Table: "sys_role_menu", Column: "role_id"},

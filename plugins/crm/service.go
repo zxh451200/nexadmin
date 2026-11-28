@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core/auth"
 	"nexadmin/core/datascope"
@@ -177,19 +178,19 @@ func (in *CustomerInput) normalize() error {
 // CrmStats 是 CRM 概览卡片：按类型/状态的客户计数 + 公海与在途商机数。
 // DailyCount 是按天聚合的一格（建档趋势）。
 type DailyCount struct {
-	Date  string `json:"date"`  // YYYY-MM-DD
+	Date  string `json:"date"` // YYYY-MM-DD
 	Count int64  `json:"count"`
 }
 
 // CrmStats 汇总 CRM 概览：既有六张卡 + 统计 Tab 的三个维度（阶段分布/来源分布/建档趋势）。
 type CrmStats struct {
-	Persons   int64 `json:"persons"`
-	Companies int64 `json:"companies"`
-	Active    int64 `json:"active"`
-	Inactive  int64 `json:"inactive"`
-	Pool      int64 `json:"pool"` // 公海客户数（owner 为空）；无主客户不属于任何人，不随数据范围收窄
-	OpenDeals int64 `json:"openDeals"`
-	Stages    map[string]int64 `json:"stages"`       // 六阶段商机计数（含 won/lost 终态）
+	Persons   int64            `json:"persons"`
+	Companies int64            `json:"companies"`
+	Active    int64            `json:"active"`
+	Inactive  int64            `json:"inactive"`
+	Pool      int64            `json:"pool"` // 公海客户数（owner 为空）；无主客户不属于任何人，不随数据范围收窄
+	OpenDeals int64            `json:"openDeals"`
+	Stages    map[string]int64 `json:"stages"` // 六阶段商机计数（含 won/lost 终态）
 	// StageAmounts 六阶段商机金额漏斗：stage → 币种 → 金额（amount_minor 累加）。
 	// 按币种分开是因为不同币种的钱不能相加；单币种部署每档只有一个键。
 	StageAmounts map[string]map[string]int64 `json:"stageAmounts"`
@@ -478,18 +479,25 @@ func (s *Service) UpdateCustomer(ctx context.Context, sc *datascope.Scope, id id
 // DeleteCustomer 删除客户主数据（软删除，进回收站）。还有商机挂在客户下时拒绝（主数据不级联消失）；
 // 联系人与跟进原样保留——还原即完整回来，只有回收站的彻底删除才物理清。sc 非 nil 且受限时，范围外客户得到 403。
 func (s *Service) DeleteCustomer(ctx context.Context, sc *datascope.Scope, id idgen.ID) error {
-	c, err := s.visibleCustomer(ctx, sc, id)
+	_, err := s.visibleCustomer(ctx, sc, id)
 	if err != nil {
 		return err
 	}
-	var n int64
-	if err := s.db.WithContext(ctx).Model(&Opportunity{}).Where("customer_id = ?", int64(id)).Count(&n).Error; err != nil {
-		return err
-	}
-	if n > 0 {
-		return response.Conflict("crm.customer_in_use")
-	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var c Customer
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Take(&c, int64(id)).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return response.NotFound("crm.not_found")
+			}
+			return err
+		}
+		var n int64
+		if err := tx.Model(&Opportunity{}).Where("customer_id = ?", int64(id)).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			return response.Conflict("crm.customer_in_use")
+		}
 		// 打 deleted_at + 登记回收站必须同事务：行删了、回收站没登记 = 永久失联的数据
 		if err := tx.Delete(&Customer{}, id).Error; err != nil {
 			return err
@@ -535,7 +543,7 @@ type CustomerQuery struct {
 }
 
 // customerSortCols 是列表排序的白名单：列名永远从这里出，查询参数只当键用
-//（拼接 ORDER BY 的来源不可信，这是排序注入的第一道也是最后一道闸）。
+// （拼接 ORDER BY 的来源不可信，这是排序注入的第一道也是最后一道闸）。
 var customerSortCols = map[string]string{
 	"created_at": "created_at",
 	"name":       "name",
@@ -731,7 +739,19 @@ func (s *Service) CreateOpportunity(ctx context.Context, sc *datascope.Scope, in
 		ExpectedAt: truncate(in.ExpectedAt, 10), Owner: truncate(in.Owner, 64),
 		Remark: truncate(in.Remark, 500),
 	}
-	if err := s.db.WithContext(ctx).Create(o).Error; err != nil {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if in.CustomerID != 0 {
+			var cu Customer
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Take(&cu, int64(in.CustomerID)).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return response.NotFound("crm.not_found")
+				}
+				return err
+			}
+			customerName = cu.Name
+		}
+		return tx.Create(o).Error
+	}); err != nil {
 		return nil, err
 	}
 	s.publishOppStage(ctx, o, "")
@@ -771,6 +791,16 @@ func (s *Service) UpdateOpportunity(ctx context.Context, sc *datascope.Scope, id
 				return response.NotFound("crm.not_found")
 			}
 			return err
+		}
+		if in.CustomerID != 0 {
+			var cu Customer
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Take(&cu, int64(in.CustomerID)).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return response.NotFound("crm.not_found")
+				}
+				return err
+			}
+			customerName = cu.Name
 		}
 		fromStage = o.Stage
 		if isFinalStage(o.Stage) && o.Stage != in.Stage {

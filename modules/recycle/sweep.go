@@ -10,11 +10,10 @@ import (
 	"nexadmin/modules/internal/recbin"
 )
 
-// sweepLoop 是孤儿记录清理循环：回收记录指向的源行可能已经被物理清掉（管理员在数据库里
-// 手工清理、或源模块做了硬删除），这些记录永远无法还原，只会一直躺在列表里。
-//
-// 每天清一次，只删「源行已不存在」的回收记录本身——绝不自动彻底删除源数据，
-// 那是 recycle:delete 权限下的人工决定。stop 关闭（进程优雅关闭）时立即退出。
+const retentionBatch = 200
+
+// sweepLoop 是孤儿记录与保留期清理循环：每天清一次源行已失效的回收记录，
+// 并按 recycle.retention_days 彻底删除过期数据；未配置保留期（<=0）时只清孤儿记录。
 func (s *Service) sweepLoop(stop <-chan struct{}) {
 	if s.db == nil {
 		return
@@ -35,7 +34,7 @@ func (s *Service) sweepLoop(stop <-chan struct{}) {
 
 // sweepOnce 扫一遍孤儿记录：逐类型取出回收记录，源行不在了（或已不在软删除状态）就清掉记录。
 // 查询全部走 GORM API——表名经 recbin.Tables 白名单传入 Table()，条件值参数绑定，不拼 SQL 文本。
-// 逐条校验是刻意的：回收站体量有限（只登记 user/notice 的软删除），每天一次的 N+1 换来三库零方言差异。
+// 逐条校验是刻意的：回收站体量有限，每天一次的 N+1 换来三库零方言差异。
 func (s *Service) sweepOnce(ctx context.Context) {
 	for typ, table := range recbin.Tables {
 		var entries []recbin.Entry
@@ -67,6 +66,41 @@ func (s *Service) sweepOnce(ctx context.Context) {
 		if s.log != nil {
 			s.log.Info("recycle: 已清理孤儿回收记录", zap.String("type", typ), zap.Int64("count", int64(len(orphanIDs))))
 		}
+	}
+	s.purgeExpired(ctx)
+}
+
+func (s *Service) purgeExpired(ctx context.Context) {
+	if s.retentionDays <= 0 {
+		return
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -s.retentionDays)
+	total := int64(0)
+	for {
+		var entries []recbin.Entry
+		if err := s.db.WithContext(ctx).Where("deleted_at < ?", cutoff).
+			Order("id").Limit(retentionBatch).Find(&entries).Error; err != nil {
+			s.warn("recycle: 读取过期回收记录失败", zap.Error(err))
+			return
+		}
+		if len(entries) == 0 {
+			break
+		}
+		resolved := int64(0)
+		for _, e := range entries {
+			if err := s.Purge(ctx, e.ID, true); err != nil && !isNotFoundErr(err) {
+				s.warn("recycle: 彻底删除过期数据失败", zap.String("type", e.Type), zap.Int64("refId", int64(e.RefID)), zap.Error(err))
+				continue
+			}
+			resolved++
+			total++
+		}
+		if resolved == 0 || len(entries) < retentionBatch {
+			break
+		}
+	}
+	if total > 0 && s.log != nil {
+		s.log.Info("recycle: 已按保留期彻底删除数据", zap.Int("days", s.retentionDays), zap.Int64("count", total))
 	}
 }
 

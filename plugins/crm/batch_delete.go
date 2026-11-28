@@ -13,11 +13,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core/datascope"
 	"nexadmin/core/response"
-	"nexadmin/pkg/recbin"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/recbin"
 )
 
 // scopedIDs 返回 ids 中当前操作者数据范围可见的那部分（owner 列裁剪，与单条校验同源）。
@@ -82,8 +83,15 @@ func (s *Service) DeleteCustomers(ctx context.Context, sc *datascope.Scope, ids 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, id := range free {
 			var c Customer
-			if err := tx.Take(&c, int64(id)).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Take(&c, int64(id)).Error; err != nil {
 				return err
+			}
+			var n int64
+			if err := tx.Model(&Opportunity{}).Where("customer_id = ?", int64(id)).Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				continue
 			}
 			if err := tx.Delete(&Customer{}, int64(id)).Error; err != nil {
 				return err
@@ -97,6 +105,9 @@ func (s *Service) DeleteCustomers(ctx context.Context, sc *datascope.Scope, ids 
 	})
 	if err != nil {
 		return 0, 0, err
+	}
+	if deleted == 0 {
+		return 0, int64(len(ids)), response.Conflict("crm.customer_in_use")
 	}
 	return deleted, int64(len(ids)) - deleted, nil
 }

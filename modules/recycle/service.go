@@ -7,24 +7,35 @@ import (
 	"strings"
 	"time"
 
+	mysqldrv "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
-	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/recbin"
 )
 
 // Service 是回收站的业务层。
 type Service struct {
-	db  *gorm.DB
-	log *zap.Logger
+	db            *gorm.DB
+	log           *zap.Logger
+	loc           *time.Location
+	retentionDays int
 }
 
 // NewService 装配回收站服务（模块注册用；真库用例与二开装配同样走这里）。
-func NewService(db *gorm.DB, log *zap.Logger) *Service { return &Service{db: db, log: log} }
+func NewService(db *gorm.DB, log *zap.Logger, tz string, retentionDays int) *Service {
+	loc, err := time.LoadLocation(tz)
+	if err != nil || tz == "" {
+		loc = time.UTC
+	}
+	return &Service{db: db, log: log, loc: loc, retentionDays: retentionDays}
+}
 
 // Item 与前端 RecycleItem 一致。
 type Item struct {
@@ -59,15 +70,15 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]Item, int64, error)
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+r.Replace(f.Keyword)+"%")
 	}
-	// 时间范围：from/to 是日期字符串，先校验再换算成 UTC 当天边界，非法值当没有这个筛选。
+	// 时间范围：日期按站点时区解释，再换算成 UTC 比较（删除时间落库是 UTC）。
 	if f.From != "" {
-		if from, err := time.ParseInLocation("2006-01-02", f.From, time.UTC); err == nil {
-			tx = tx.Where("deleted_at >= ?", from)
+		if from, err := time.ParseInLocation("2006-01-02", f.From, s.loc); err == nil {
+			tx = tx.Where("deleted_at >= ?", from.UTC())
 		}
 	}
 	if f.To != "" {
-		if to, err := time.ParseInLocation("2006-01-02", f.To, time.UTC); err == nil {
-			tx = tx.Where("deleted_at < ?", to.AddDate(0, 0, 1))
+		if to, err := time.ParseInLocation("2006-01-02", f.To, s.loc); err == nil {
+			tx = tx.Where("deleted_at < ?", to.AddDate(0, 0, 1).UTC())
 		}
 	}
 	tx = tx.Session(&gorm.Session{})
@@ -126,9 +137,9 @@ func (s *Service) userNames(ctx context.Context, rows []recbin.Entry) map[string
 	return out
 }
 
-func (s *Service) entry(ctx context.Context, id idgen.ID) (*recbin.Entry, string, error) {
+func (s *Service) entry(ctx context.Context, db *gorm.DB, id idgen.ID) (*recbin.Entry, string, error) {
 	var e recbin.Entry
-	if err := s.db.WithContext(ctx).First(&e, "id = ?", int64(id)).Error; err != nil {
+	if err := db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&e, "id = ?", int64(id)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, "", response.NotFound("error.not_found")
 		}
@@ -169,6 +180,19 @@ func srcScope(e *recbin.Entry) (string, []any) {
 	return "id = ? AND tenant_id = ? AND deleted_at IS NOT NULL", []any{ref, int64(e.TenantID)}
 }
 
+// lockSource 锁定仍处于软删除状态的源行，保证还原与彻底删除在同一源行上串行。
+func (s *Service) lockSource(ctx context.Context, tx *gorm.DB, e *recbin.Entry, table string) (bool, error) {
+	where, args := srcScope(e)
+	var rows []struct {
+		ID idgen.ID `gorm:"column:id"`
+	}
+	if err := tx.WithContext(ctx).Table(table).Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where(where, args...).Find(&rows).Error; err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
+}
+
 // keyConflict 在还原前显式检查业务唯一键是否已被别的未删行占用。
 //
 // role / post / dict 的唯一索引在接软删除时降级成了普通索引（见 recbin.Keys 的说明），
@@ -177,8 +201,11 @@ func srcScope(e *recbin.Entry) (string, []any) {
 // 计数字段都不用改。user 走 keyUserConflict（两把 OR 关系的键，Keys 表达不了，见 recbin.Keys 说明）；
 // notice 不检查：数据库仍按它的索引决定冲突，撞码时由还原 UPDATE 抛重复键兜底。
 func (s *Service) keyConflict(ctx context.Context, tx *gorm.DB, e *recbin.Entry, table string) error {
-	if e.Type == recbin.TypeUser {
+	switch e.Type {
+	case recbin.TypeUser:
 		return s.keyUserConflict(ctx, tx, e, table)
+	case recbin.TypeCustomer:
+		return s.keyCustomerConflict(ctx, tx, e, table)
 	}
 	cols := recbin.Keys[e.Type]
 	if len(cols) == 0 {
@@ -246,36 +273,47 @@ func (s *Service) keyUserConflict(ctx context.Context, tx *gorm.DB, e *recbin.En
 	return nil
 }
 
+func (s *Service) keyCustomerConflict(ctx context.Context, tx *gorm.DB, e *recbin.Entry, table string) error {
+	var src []struct {
+		Type  string `gorm:"column:type"`
+		Phone string `gorm:"column:phone"`
+		TaxNo string `gorm:"column:tax_no"`
+	}
+	if err := tx.WithContext(ctx).Table(table).Select("type", "phone", "tax_no").
+		Where("id = ?", int64(e.RefID)).Scan(&src).Error; err != nil {
+		return err
+	}
+	if len(src) == 0 {
+		return nil
+	}
+	dup := tx.WithContext(ctx).Table(table).
+		Where("deleted_at IS NULL AND id <> ? AND tenant_id = ?", int64(e.RefID), int64(e.TenantID))
+	switch {
+	case src[0].Type == "person" && src[0].Phone != "":
+		dup = dup.Where("phone = ?", src[0].Phone)
+	case src[0].Type == "company" && src[0].TaxNo != "":
+		dup = dup.Where("tax_no = ?", src[0].TaxNo)
+	default:
+		return nil
+	}
+	var n int64
+	if err := dup.Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return response.Conflict("recycle.restore_conflict")
+	}
+	return nil
+}
+
 // Restore 还原：清掉源表的 deleted_at，并移出回收站。
-// 原生 SQL 不经过租户 scope，所以租户级源表显式带 tenant_id（取回收记录自己的租户），
-// 平台级源表按 srcScope 去掉这个谓词；撞业务唯一键由 keyConflict 在写之前查出来。
-//
-// 源行已不存在（RowsAffected==0）时：返回 404，并且仍然清掉这条回收记录。
-// 取舍：只返回 404 而保留记录，用户会反复点到同一条永远失败的记录，列表无法自愈；
-// 而返回成功会谎报“已还原”。源数据没了，记录本身没有任何还原 / 彻底删除的价值，所以两者都做：
-// 在事务里删除记录并提交，事务外再返回 404（不能在事务回调里返回错误，否则清理会被一并回滚）。
+// 源行已不存在时清理回收记录并提交，再返回 404，避免留下永远无法还原的记录。
 func (s *Service) Restore(ctx context.Context, id idgen.ID, platform bool) error {
-	e, table, err := s.entry(ctx, id)
-	if err != nil {
-		return err
-	}
-	if err := guardPlatform(e, platform); err != nil {
-		return err
-	}
 	gone := false
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.keyConflict(ctx, tx, e, table); err != nil {
-			return err
-		}
-		where, args := srcScope(e)
-		// 表名来自 recbin.Tables 白名单；条件值全部走参数绑定。
-		res := tx.Table(table).Where(where, args...).Update("deleted_at", nil)
-		if res.Error != nil {
-			// 仍带唯一索引的源表（user / notice）重复键会从这里抛出
-			return response.Conflict("recycle.restore_conflict").Wrap(res.Error)
-		}
-		gone = res.RowsAffected == 0
-		return tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		gone, err = s.restore(ctx, tx, id, platform)
+		return err
 	})
 	if err != nil {
 		return err
@@ -286,35 +324,45 @@ func (s *Service) Restore(ctx context.Context, id idgen.ID, platform bool) error
 	return nil
 }
 
-// Purge 彻底删除：真正删掉源表的行（只删仍处于软删除状态的），并移出回收站。
-// 源行已不存在（RowsAffected==0）时与 Restore 同样处理：清掉回收记录并提交，再返回 404（取舍见 Restore）。
-func (s *Service) Purge(ctx context.Context, id idgen.ID, platform bool) error {
-	e, table, err := s.entry(ctx, id)
+func (s *Service) restore(ctx context.Context, tx *gorm.DB, id idgen.ID, platform bool) (bool, error) {
+	e, table, err := s.entry(ctx, tx, id)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := guardPlatform(e, platform); err != nil {
-		return err
+		return false, err
 	}
+	exists, err := s.lockSource(ctx, tx, e, table)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return true, tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+	}
+	if err := s.keyConflict(ctx, tx, e, table); err != nil {
+		return false, err
+	}
+	where, args := srcScope(e)
+	res := tx.WithContext(ctx).Table(table).Where(where, args...).Update("deleted_at", nil)
+	if res.Error != nil {
+		if isDuplicateKeyErr(res.Error) {
+			return false, response.Conflict("recycle.restore_conflict").Wrap(res.Error)
+		}
+		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return true, tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+	}
+	return false, tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+}
+
+// Purge 彻底删除：真正删掉源表的行，并移出回收站。
+func (s *Service) Purge(ctx context.Context, id idgen.ID, platform bool) error {
 	gone := false
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		ref := int64(e.RefID)
-		// 关联表按 recbin.Children 一并物理清掉：软删除时保留它们（还原才是完整的），
-		// 彻底删除时必须清，否则留下指向已不存在之行的关联（公告的发布对象与已读、
-		// 角色的菜单/数据范围/用户关联、岗位的用户关联、字典类型下的条目——含条目自己已被软删的）。
-		for _, c := range recbin.Children[e.Type] {
-			if err := tx.Table(c.Table).Where(c.Column+" = ?", ref).Delete(nil).Error; err != nil {
-				return err
-			}
-		}
-		where, args := srcScope(e)
-		// 表名来自 recbin.Tables 白名单；条件值全部走参数绑定。
-		res := tx.Table(table).Where(where, args...).Delete(nil)
-		if res.Error != nil {
-			return res.Error
-		}
-		gone = res.RowsAffected == 0
-		return tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		gone, err = s.purge(ctx, tx, id, platform)
+		return err
 	})
 	if err != nil {
 		return err
@@ -323,51 +371,147 @@ func (s *Service) Purge(ctx context.Context, id idgen.ID, platform bool) error {
 		return errSourceGone()
 	}
 	return nil
+}
+
+func (s *Service) purge(ctx context.Context, tx *gorm.DB, id idgen.ID, platform bool) (bool, error) {
+	e, table, err := s.entry(ctx, tx, id)
+	if err != nil {
+		return false, err
+	}
+	if err := guardPlatform(e, platform); err != nil {
+		return false, err
+	}
+	exists, err := s.lockSource(ctx, tx, e, table)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return true, tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+	}
+	ref := int64(e.RefID)
+	for _, c := range recbin.Children[e.Type] {
+		if err := tx.WithContext(ctx).Table(c.Table).Where(c.Column+" = ?", ref).Delete(nil).Error; err != nil {
+			return false, err
+		}
+	}
+	where, args := srcScope(e)
+	res := tx.WithContext(ctx).Table(table).Where(where, args...).Delete(nil)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return true, tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
+	}
+	return false, tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error
 }
 
 // BatchResult 是批量还原 / 批量彻底删除的回执。
-// 批量动作不因个别条目失败而整体失败：冲突与源行消失如实计数，让界面刷新后自见分晓。
 type BatchResult struct {
-	Restored int64 `json:"restored,omitempty"`
-	Purged   int64 `json:"purged,omitempty"`
-	Conflict int64 `json:"conflict,omitempty"`
-	Gone     int64 `json:"gone,omitempty"`
+	Restored int64             `json:"restored,omitempty"`
+	Purged   int64             `json:"purged,omitempty"`
+	Conflict int64             `json:"conflict,omitempty"`
+	Gone     int64             `json:"gone,omitempty"`
+	Items    []BatchItemResult `json:"items,omitempty"`
 }
 
-// RestoreBatch 批量还原。
+type BatchItemResult struct {
+	ID     idgen.ID `json:"id"`
+	Result string   `json:"result"`
+}
+
+func (r *BatchResult) add(id idgen.ID, result string) {
+	r.Items = append(r.Items, BatchItemResult{ID: id, Result: result})
+	switch result {
+	case "restored":
+		r.Restored++
+	case "purged":
+		r.Purged++
+	case "conflict":
+		r.Conflict++
+	case "gone":
+		r.Gone++
+	}
+}
+
+// RestoreBatch 批量还原；预期冲突按条计数，未预期错误回滚整批。
 func (s *Service) RestoreBatch(ctx context.Context, ids []idgen.ID, platform bool) (*BatchResult, error) {
 	res := &BatchResult{}
-	for _, id := range ids {
-		err := s.Restore(ctx, id, platform)
-		switch {
-		case err == nil:
-			res.Restored++
-		case isConflict(err):
-			res.Conflict++
-		case isNotFoundErr(err):
-			res.Gone++
-		default:
-			return nil, err // 非预期错误（库故障）立刻失败，不静默吞掉
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, id := range ids {
+			var gone bool
+			// PostgreSQL 的语句错误会中止整个事务，预期冲突须先回滚到保存点才能继续。
+			err := tx.Transaction(func(itemTx *gorm.DB) error {
+				var err error
+				gone, err = s.restore(ctx, itemTx, id, platform)
+				return err
+			})
+			switch {
+			case err == nil && gone:
+				res.add(id, "gone")
+			case err == nil:
+				res.add(id, "restored")
+			case isConflict(err):
+				res.add(id, "conflict")
+			case isNotFoundErr(err):
+				res.add(id, "gone")
+			case isForbiddenErr(err):
+				res.add(id, "forbidden")
+			default:
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }
 
-// PurgeBatch 批量彻底删除。
+// PurgeBatch 批量彻底删除；未预期错误回滚整批。
 func (s *Service) PurgeBatch(ctx context.Context, ids []idgen.ID, platform bool) (*BatchResult, error) {
 	res := &BatchResult{}
-	for _, id := range ids {
-		err := s.Purge(ctx, id, platform)
-		switch {
-		case err == nil:
-			res.Purged++
-		case isNotFoundErr(err):
-			res.Gone++
-		default:
-			return nil, err
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, id := range ids {
+			var gone bool
+			err := tx.Transaction(func(itemTx *gorm.DB) error {
+				var err error
+				gone, err = s.purge(ctx, itemTx, id, platform)
+				return err
+			})
+			switch {
+			case err == nil && gone:
+				res.add(id, "gone")
+			case err == nil:
+				res.add(id, "purged")
+			case isNotFoundErr(err):
+				res.add(id, "gone")
+			case isForbiddenErr(err):
+				res.add(id, "forbidden")
+			default:
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
+}
+
+func isDuplicateKeyErr(err error) bool {
+	var mysqlErr *mysqldrv.MySQLError
+	if errors.As(err, &mysqlErr) {
+		return mysqlErr.Number == 1062
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func isForbiddenErr(err error) bool {
+	var be *response.Error
+	return errors.As(err, &be) && be.Status == 403
 }
 
 func isConflict(err error) bool {

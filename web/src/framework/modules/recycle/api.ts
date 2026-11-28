@@ -4,15 +4,21 @@ import type { Page } from '@/framework/request/types'
 
 // 与后端 recbin.Tables 的登记保持一致：只列真正会进回收站的类型，
 // 多列的筛选项永远查不到数据，只会让人以为那种数据丢了。
-export const RECYCLE_TYPES = ['user', 'notice', 'role', 'dictType', 'dictData', 'post'] as const
+export const RECYCLE_TYPES = ['user', 'notice', 'role', 'dictType', 'dictData', 'post', 'customer'] as const
 export type RecycleType = (typeof RECYCLE_TYPES)[number]
 
-/** 批量还原 / 批量彻底删除的回执：冲突与源行消失按条计数。 */
+export interface RecycleBatchItemResult {
+  id: string
+  result: 'restored' | 'purged' | 'conflict' | 'gone' | 'forbidden'
+}
+
+/** 批量还原 / 批量彻底删除的回执：保留汇总计数，并可用 items 定位未处理条目。 */
 export interface RecycleBatchResult {
   restored?: number
   purged?: number
   conflict?: number
   gone?: number
+  items?: RecycleBatchItemResult[]
 }
 
 export interface RecycleItem {

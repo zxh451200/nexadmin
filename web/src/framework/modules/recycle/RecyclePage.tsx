@@ -26,6 +26,7 @@ import {
   useRecycleList,
   useRestore,
   useRestoreBatch,
+  type RecycleBatchItemResult,
   type RecycleBatchResult,
   type RecycleItem,
 } from './api'
@@ -49,7 +50,10 @@ export default function RecyclePage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   // 表头排序：默认删除时间倒序（与后端回退一致），改排序回第一页
-  const { sort, desc, sortProp } = useHeaderSort('deleted_at', true, () => setPage(1))
+  const { sort, desc, sortProp } = useHeaderSort('deleted_at', true, () => {
+    setPage(1)
+    setSelected([])
+  })
   const [selected, setSelected] = useState<string[]>([])
 
   const { data, isLoading, isError, isFetching, refetch } = useRecycleList({
@@ -77,15 +81,35 @@ export default function RecyclePage() {
     }
   }
 
-  // 批量回执：冲突与源行消失按条计数，让用户知道有多少条没成、为什么列表少了行。
-  const report = (res: RecycleBatchResult | undefined, okKey: string) => {
+  // 批量回执：保留汇总计数，并按逐条结果列出未成功条目，避免用户只看到数量却不知道是哪几条。
+  const report = (res: RecycleBatchResult | undefined, okKey: string, rows: RecycleItem[]) => {
+    const failedItems = (result: RecycleBatchItemResult['result']) =>
+      res?.items?.filter((item) => item.result === result) ?? []
+    const formatNames = (items: RecycleBatchItemResult[]) => {
+      if (!items.length) return ''
+      const names = items.map((item) => rows.find((row) => row.id === item.id)?.name ?? item.id)
+      const visible = names.slice(0, 3)
+      if (names.length > visible.length) {
+        visible.push(t('recycle.batch.more', { count: names.length - visible.length }))
+      }
+      return t('recycle.batch.details', { names: visible.join(t('recycle.batch.separator')) })
+    }
+    const conflictItems = failedItems('conflict')
+    const goneItems = failedItems('gone')
+    const forbiddenItems = failedItems('forbidden')
+    const conflictCount = res?.conflict ?? conflictItems.length
+    const goneCount = res?.gone ?? goneItems.length
     const parts: string[] = []
     if (res?.restored) parts.push(t('recycle.batch.restored', { count: res.restored }))
     if (res?.purged) parts.push(t('recycle.batch.purged', { count: res.purged }))
-    if (res?.conflict) parts.push(t('recycle.batch.conflict', { count: res.conflict }))
-    if (res?.gone) parts.push(t('recycle.batch.gone', { count: res.gone }))
-    if (parts.length) toast.success(parts.join('，'))
-    else toast.success(t(okKey))
+    if (conflictCount) parts.push(t('recycle.batch.conflict', { count: conflictCount, names: formatNames(conflictItems) }))
+    if (goneCount) parts.push(t('recycle.batch.gone', { count: goneCount, names: formatNames(goneItems) }))
+    if (forbiddenItems.length) parts.push(t('recycle.batch.forbidden', { count: forbiddenItems.length, names: formatNames(forbiddenItems) }))
+    if (parts.length) {
+      const message = parts.join(t('recycle.batch.separator'))
+      if (conflictCount || goneCount || forbiddenItems.length) toast.warning(message)
+      else toast.success(message)
+    } else toast.success(t(okKey))
     setSelected([])
   }
 
@@ -100,18 +124,20 @@ export default function RecyclePage() {
   }
 
   const onRestoreBatch = async (rows: RecycleItem[]) => {
+    if (!rows.length) return
     if (!(await confirm({ description: t('recycle.confirm.restoreBatch', { count: rows.length }) }))) return
     try {
-      report(await restoreBatch.mutateAsync(rows.map((r) => r.id)), 'recycle.restored')
+      report(await restoreBatch.mutateAsync(rows.map((r) => r.id)), 'recycle.restored', rows)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
   }
 
   const onPurgeBatch = async (rows: RecycleItem[]) => {
+    if (!rows.length) return
     if (!(await confirm({ destructive: true, description: t('recycle.confirm.purgeBatch', { count: rows.length }) }))) return
     try {
-      report(await purgeBatch.mutateAsync(rows.map((r) => r.id)), 'recycle.purged')
+      report(await purgeBatch.mutateAsync(rows.map((r) => r.id)), 'recycle.purged', rows)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
@@ -158,6 +184,7 @@ export default function RecyclePage() {
           setTypeApplied(type.length ? type.join(',') : undefined)
           setAppliedRange({ from: from || undefined, to: to || undefined })
           setPage(1)
+          setSelected([])
         }}
         onReset={() => {
           setDraft('')
@@ -168,6 +195,7 @@ export default function RecyclePage() {
           setTo('')
           setAppliedRange({})
           setPage(1)
+          setSelected([])
         }}
       >
         <Input aria-label={t('recycle.filter.keyword')} className="md:w-64"
@@ -219,13 +247,13 @@ export default function RecyclePage() {
         batchActions={(_ids) => (
           <>
             <Can perm="recycle:restore">
-              <Button type="button" variant="outline" size="sm" disabled={blocked(selectedRows)} onClick={() => void onRestoreBatch(selectedRows)}>
+              <Button type="button" variant="outline" size="sm" disabled={!selectedRows.length || blocked(selectedRows)} onClick={() => void onRestoreBatch(selectedRows)}>
                 <RotateCcw aria-hidden="true" />
                 {t('recycle.action.restore')}
               </Button>
             </Can>
             <Can perm="recycle:delete">
-              <Button type="button" variant="destructive" size="sm" disabled={blocked(selectedRows)} onClick={() => void onPurgeBatch(selectedRows)}>
+              <Button type="button" variant="destructive" size="sm" disabled={!selectedRows.length || blocked(selectedRows)} onClick={() => void onPurgeBatch(selectedRows)}>
                 <Trash2 aria-hidden="true" />
                 {t('recycle.action.purge')}
               </Button>
@@ -253,6 +281,7 @@ export default function RecyclePage() {
           onChange: (p, s) => {
             setPage(p)
             setPageSize(s)
+            setSelected([])
           },
         }}
       />

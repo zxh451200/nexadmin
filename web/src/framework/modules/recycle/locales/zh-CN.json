@@ -3,7 +3,7 @@
     "menu": "回收站",
     "description": "删掉的数据先留在这里，可以还原，也可以彻底删除；彻底删除后找不回来",
     "col": { "name": "名称", "type": "类型", "deletedBy": "删除人", "deletedAt": "删除时间" },
-    "type": { "all": "全部类型", "user": "用户", "notice": "公告", "role": "角色", "dictType": "字典类型", "dictData": "字典条目", "post": "岗位" },
+    "type": { "all": "全部类型", "user": "用户", "notice": "公告", "role": "角色", "dictType": "字典类型", "dictData": "字典条目", "post": "岗位", "customer": "客户" },
     "filter": { "keyword": "关键词", "keywordPlaceholder": "名称", "type": "数据类型", "from": "删除起始日期", "to": "删除截止日期" },
     "action": { "restore": "还原", "purge": "彻底删除" },
     "confirm": {
@@ -15,8 +15,12 @@
     "batch": {
       "restored": "已还原 {{count}} 条",
       "purged": "已彻底删除 {{count}} 条",
-      "conflict": "{{count}} 条冲突（同名数据已重建）",
-      "gone": "{{count}} 条源数据已不存在，记录已清理"
+      "conflict": "{{count}} 条业务键冲突（相同编码或身份信息已存在）{{names}}",
+      "gone": "{{count}} 条源数据已不存在，记录已清理{{names}}",
+      "forbidden": "{{count}} 条无权限，未处理{{names}}",
+      "details": "：{{names}}",
+      "separator": "、",
+      "more": "等 {{count}} 条"
     },
     "restored": "已还原",
     "purged": "已彻底删除"

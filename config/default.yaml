@@ -142,6 +142,8 @@ storage:
     multipart_threshold_mb: 16    # 超过则走分片上传
 message:
   retention_days: 90
+recycle:
+  retention_days: 0      # 回收数据保留天数，每天清理一次；<=0 = 不自动彻底删除
 job:                        # 异步任务运行器（导出中心等）
   workers: 2                # 并发 worker 数
   keep_days: 7              # 任务记录与结果文件保留天数，到期连文件一并清理

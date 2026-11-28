@@ -78,6 +78,10 @@ type Config struct {
 	Message struct {
 		RetentionDays int `mapstructure:"retention_days"`
 	} `mapstructure:"message"`
+	// Recycle 是回收站（modules/recycle）：retention_days 为回收数据保留天数，<=0 表示不自动彻底删除。
+	Recycle struct {
+		RetentionDays int `mapstructure:"retention_days"`
+	} `mapstructure:"recycle"`
 	// Job 是异步任务运行器（core/job）：并发 worker 数、结果文件保留天数、每用户进行中任务上限；0 = 用默认值。
 	Job struct {
 		Workers    int `mapstructure:"workers"`

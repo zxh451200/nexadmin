@@ -172,6 +172,7 @@ System Settings → Storage & integrations → Notification channels stores emai
 | `storage.s3.part_size_mb` | int | `8` | Part size, minimum 5 | Large-file tuning |
 | `storage.s3.multipart_threshold_mb` | int | `16` | Above this size, multipart upload kicks in | Large-file tuning |
 | `message.retention_days` | int | `90` | Read-message retention in days, cleaned daily; `<=0` disables cleanup | Adjusting retention |
+| `recycle.retention_days` | int | `0` | Recycle-bin retention in days. Expired source rows and their related rows are purged daily; `<=0` disables automatic purging. Cleanup results go to the application log. Restart after changing this setting | Automatically purging recycled data |
 | `job.workers` | int | `2` | Async task (export center etc.) worker concurrency; `<=0` uses the default | With many export jobs |
 | `job.keep_days` | int | `7` | Task record and result file retention; files cleaned together at expiry | Adjusting retention |
 | `job.max_per_user` | int | `3` | Per-user in-flight (queued + running) task cap | Anti-abuse tuning |
