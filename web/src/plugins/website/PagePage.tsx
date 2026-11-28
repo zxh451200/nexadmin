@@ -422,7 +422,7 @@ export default function PagePage() {
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => { setEditing(row); setFormOpen(true) }}>
               <Pencil aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.page.copy')} onClick={() => void onCopy(row)}>
+            <Button variant="ghost" size="icon" className="size-10 md:size-8" aria-label={t('plugin_website.page.copy')} onClick={() => void onCopy(row)}>
               <Copy aria-hidden="true" />
             </Button>
             <Can perm="website:nav">

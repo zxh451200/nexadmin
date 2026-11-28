@@ -1298,7 +1298,7 @@ export default function ProductPage() {
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.preview')} onClick={() => void onPreview(row)}>
               <Eye aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.product.copy')} onClick={() => void onCopy(row)}>
+            <Button variant="ghost" size="icon" className="size-10 md:size-8" aria-label={t('plugin_website.product.copy')} onClick={() => void onCopy(row)}>
               <Copy aria-hidden="true" />
             </Button>
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openAt(row)}>

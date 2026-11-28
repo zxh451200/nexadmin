@@ -57,6 +57,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       type="button"
       variant="ghost"
       size="icon"
+      className="size-10 md:size-8"
       aria-label={label}
       title={label}
       onClick={() => {

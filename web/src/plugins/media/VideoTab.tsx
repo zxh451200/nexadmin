@@ -160,7 +160,7 @@ export function VideoTab() {
           <Button variant="ghost" size="icon" aria-label={t('plugin_media.video.play')} onClick={() => setPlaying(r)}>
             <Play aria-hidden="true" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label={t('plugin_media.video.copyLink')} title={t('plugin_media.video.copyLink')} onClick={() => void copyLink(r)}>
+          <Button variant="ghost" size="icon" className="size-10 md:size-8" aria-label={t('plugin_media.video.copyLink')} title={t('plugin_media.video.copyLink')} onClick={() => void copyLink(r)}>
             <Link2 aria-hidden="true" />
           </Button>
           <a

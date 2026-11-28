@@ -227,10 +227,10 @@ func (s *Service) DeviceStats(ctx context.Context) (*DeviceStats, error) {
 	var st DeviceStats
 	// 停用是 enabled=false，不会写成 status='disabled'：按 status 统计会让停用数永远是 0。
 	err := s.db.WithContext(ctx).Model(&Device{}).Select(
-		"COUNT(*) AS total",
-		"COALESCE(SUM(CASE WHEN enabled = ? AND status = ? THEN 1 ELSE 0 END), 0) AS online",
-		"COALESCE(SUM(CASE WHEN enabled = ? AND status = ? THEN 1 ELSE 0 END), 0) AS offline",
-		"COALESCE(SUM(CASE WHEN enabled = ? THEN 1 ELSE 0 END), 0) AS disabled",
+		"COUNT(*) AS total, "+
+			"COALESCE(SUM(CASE WHEN enabled = ? AND status = ? THEN 1 ELSE 0 END), 0) AS online, "+
+			"COALESCE(SUM(CASE WHEN enabled = ? AND status = ? THEN 1 ELSE 0 END), 0) AS offline, "+
+			"COALESCE(SUM(CASE WHEN enabled = ? THEN 1 ELSE 0 END), 0) AS disabled",
 		true, StatusOnline, true, StatusOffline, false,
 	).Scan(&st).Error
 	return &st, err

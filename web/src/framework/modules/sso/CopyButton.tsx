@@ -21,7 +21,7 @@ export function CopyButton({ text, label }: { text: string; label?: string }) {
   }
 
   return (
-    <Button type="button" variant="ghost" size="icon" aria-label={label ?? t('sso.copy')} onClick={copy}>
+    <Button type="button" variant="ghost" size="icon" className="size-10 md:size-8" aria-label={label ?? t('sso.copy')} onClick={copy}>
       {done ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
     </Button>
   )

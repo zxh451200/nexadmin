@@ -2617,7 +2617,9 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
 
 /* 复制按钮放在独立侧栏，避免窄屏上超长代码行延伸到按钮下面。 */
 .docs-code-wrap {
-  display: grid; grid-template-columns: minmax(0, 1fr) 44px;
+  --docs-copy-size: 28px;
+  --docs-copy-gap: 8px;
+  display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--docs-copy-size) + var(--docs-copy-gap));
   background: #0d1117; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px;
   overflow: hidden;
 }
@@ -2627,13 +2629,16 @@ html[data-scheme="light"] .feature:hover { box-shadow: 0 18px 44px -24px rgba(0,
 }
 .docs-code-copy {
   position: static; align-self: start; justify-self: end;
-  margin: 8px 8px 0 0;
+  margin: 8px var(--docs-copy-gap) 0 0;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; padding: 0;
+  width: var(--docs-copy-size); height: var(--docs-copy-size); padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px;
   background: rgba(255, 255, 255, 0.06); color: #b8c0cc;
   cursor: pointer; opacity: 0.72;
   transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+}
+@media (hover: none), (pointer: coarse) {
+  .docs-code-wrap { --docs-copy-size: 44px; }
 }
 .docs-code-wrap:hover .docs-code-copy,
 .docs-code-copy:focus-visible { opacity: 1; color: #f7f8f8; background: rgba(255, 255, 255, 0.13); border-color: rgba(255, 255, 255, 0.22); }

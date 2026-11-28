@@ -707,10 +707,8 @@ function SettingsFormBody({
           {tab === 'seo' ? (
             <>
               {sharedInput('siteOrigin', undefined, t('plugin_website.hint.siteOrigin'))}
-              <div className="grid gap-4 md:grid-cols-2">
-                {localizedField('seoKeywords')}
-                {sharedInput('titleSuffix', undefined, t('plugin_website.hint.titleSuffix'))}
-              </div>
+              {localizedField('seoKeywords')}
+              {sharedInput('titleSuffix', undefined, t('plugin_website.hint.titleSuffix'))}
               <SharedFieldShell labelKey="plugin_website.fields.ogImageUrl" hint={t('plugin_website.hint.ogImageUrl')}>
                 <ImageUrlField
                   value={shared.ogImageUrl}

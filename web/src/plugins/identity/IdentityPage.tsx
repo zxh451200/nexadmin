@@ -121,7 +121,7 @@ export default function IdentityPage() {
         s.type === 'cas' && s.entryUrl ? (
           <div className="flex min-w-0 items-center gap-1">
             <code className="min-w-0 [overflow-wrap:anywhere] rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{s.entryUrl}</code>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_identity.copyEntry')} title={t('plugin_identity.copyEntry')} onClick={() => void copy(s.entryUrl ?? '')}>
+            <Button variant="ghost" size="icon" className="size-10 md:size-8" aria-label={t('plugin_identity.copyEntry')} title={t('plugin_identity.copyEntry')} onClick={() => void copy(s.entryUrl ?? '')}>
               <Copy aria-hidden="true" />
             </Button>
           </div>
